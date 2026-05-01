@@ -206,7 +206,7 @@ sleep 1
 mkdir -p "\$TELEMT_HOME/run" "\$TELEMT_HOME/log"
 nginx -c "\$TELEMT_HOME/nginx/nginx.conf"
 ulimit -n 65535 2>/dev/null || true
-"\$TELEMT_HOME/bin/telemt" "\$TELEMT_HOME/telemt.toml" >> "\$TELEMT_HOME/log/telemt.log" 2>&1 &
+RUST_LOG=warn "\$TELEMT_HOME/bin/telemt" "\$TELEMT_HOME/telemt.toml" >/dev/null 2>&1 &
 echo \$! > "\$TELEMT_HOME/run/telemt.pid"
 EOF
   chmod 700 "$TELEMT_HOME/bin/restart.sh"
@@ -270,7 +270,7 @@ write_nginx_config() {
   cat > "$TELEMT_HOME/nginx/nginx.conf" <<EOF
 $stream_load
 worker_processes 1;
-error_log $TELEMT_HOME/log/nginx-error.log notice;
+error_log /dev/null crit;
 pid $TELEMT_HOME/run/nginx.pid;
 
 events {
@@ -280,13 +280,15 @@ events {
 http {
     include /usr/local/etc/nginx/mime.types;
     default_type application/octet-stream;
-    access_log $TELEMT_HOME/log/nginx-access.log;
+    access_log off;
     sendfile on;
     keepalive_timeout 65;
 
     server {
         listen 127.0.0.1:8443 ssl;
         server_name ${PUBLIC_HOST};
+        access_log off;
+        error_log /dev/null crit;
 
         root $TELEMT_HOME/www;
         index index.html;
@@ -422,8 +424,9 @@ else
 fi
 
 echo
-echo "=== RECENT TELEMT LOG ==="
-tail -n 80 "\$TELEMT_HOME/log/telemt.log" 2>/dev/null || true
+echo "=== RUNTIME LOGGING ==="
+echo "nginx access logs: disabled"
+echo "telemt runtime logs: disabled"
 EOF
   chmod 700 /usr/local/sbin/telemt-report
 }
@@ -436,11 +439,13 @@ persist_tinycore_files() {
 
   touch "$BOOTLOCAL"
   chmod 755 "$BOOTLOCAL"
-  if ! grep -Fq "$TELEMT_HOME/bin/restart.sh" "$BOOTLOCAL"; then
+  if grep -Fq "$TELEMT_HOME/bin/restart.sh" "$BOOTLOCAL"; then
+    sed -i "s|.*$TELEMT_HOME/bin/restart.sh.*|$TELEMT_HOME/bin/restart.sh >/dev/null 2>\\&1 \\&|" "$BOOTLOCAL" 2>/dev/null || true
+  else
     cat >> "$BOOTLOCAL" <<EOF
 
 # Telemt autostart
-$TELEMT_HOME/bin/restart.sh >> $TELEMT_HOME/log/bootlocal.log 2>&1 &
+$TELEMT_HOME/bin/restart.sh >/dev/null 2>&1 &
 EOF
   fi
 
@@ -615,6 +620,7 @@ fi
 
 step "Configure nginx"
 write_nginx_config
+rm -f "$TELEMT_HOME/log/telemt.log" "$TELEMT_HOME/log/nginx-access.log" "$TELEMT_HOME/log/nginx-error.log" 2>/dev/null || true
 
 step "Start Telemt"
 "$TELEMT_HOME/bin/restart.sh"

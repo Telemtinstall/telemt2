@@ -168,7 +168,9 @@ openssl
 7. Telemt API на `127.0.0.1:9091`.
 8. Firewall-правило, закрывающее `9091/tcp` снаружи.
 9. Fail2ban для SSH.
-10. SSH hardening:
+10. Отключение nginx access logs для маскировочного сайта.
+11. Отключение Docker runtime logs для Telemt-контейнера.
+12. SSH hardening:
 
 ```text
 PasswordAuthentication no
@@ -549,7 +551,9 @@ It also adds `1G` swap if swap is not already enabled.
 7. Telemt API on `127.0.0.1:9091`.
 8. Firewall rule blocking external access to `9091/tcp`.
 9. Fail2ban for SSH.
-10. SSH hardening:
+10. Disabled nginx access logs for the mask site.
+11. Disabled Docker runtime logs for the Telemt container.
+12. SSH hardening:
 
 ```text
 PasswordAuthentication no

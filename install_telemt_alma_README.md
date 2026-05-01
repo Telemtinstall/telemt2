@@ -23,6 +23,8 @@ Let's Encrypt сертификат
 автопродление сертификата
 firewalld
 fail2ban
+nginx access logs disabled
+Telemt Docker runtime logs disabled
 SSH hardening
 telemt-report
 ```
@@ -158,6 +160,8 @@ Let's Encrypt certificate
 certificate auto-renewal
 firewalld
 fail2ban
+nginx access logs disabled
+Telemt Docker runtime logs disabled
 SSH hardening
 telemt-report
 ```

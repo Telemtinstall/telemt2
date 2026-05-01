@@ -51,6 +51,8 @@ jq, optional
 iproute2, optional
 acme.sh
 native Telemt binary
+nginx access logs disabled
+Telemt runtime logs disabled
 ```
 
 ### Схема
@@ -212,6 +214,8 @@ jq, optional
 iproute2, optional
 acme.sh
 native Telemt binary
+nginx access logs disabled
+Telemt runtime logs disabled
 ```
 
 ### Layout

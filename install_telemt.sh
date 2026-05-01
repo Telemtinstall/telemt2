@@ -491,6 +491,8 @@ server {
     listen 127.0.0.1:8443 ssl;
     http2 on;
     server_name ${PUBLIC_HOST};
+    access_log off;
+    error_log /var/log/nginx/${PUBLIC_HOST}.error.log crit;
 
     root /var/www/${PUBLIC_HOST};
     index index.html;
@@ -604,7 +606,7 @@ services:
     network_mode: host
     user: "65532:65532"
     environment:
-      RUST_LOG: "info"
+      RUST_LOG: "warn"
     volumes:
       - /opt/telemt-config:/etc/telemt:ro
     command: ["/etc/telemt/telemt.toml"]
@@ -618,6 +620,8 @@ services:
     pids_limit: 256
     mem_limit: 256m
     cpus: "0.50"
+    logging:
+      driver: "none"
     ulimits:
       nofile:
         soft: 65535
@@ -628,6 +632,51 @@ EOF
   compose_cmd pull
   compose_cmd up -d
   mark_done telemt_config
+fi
+
+if step_done log_hardening; then
+  step "Disable access and runtime logs (already done)"
+else
+  step "Disable access and runtime logs"
+  install -d -m 0755 /etc/nginx/conf.d
+  write_file_root /etc/nginx/conf.d/00-telemt-no-access-log.conf 0644 root:root <<'EOF'
+# Disable HTTP access logs for the Telemt mask site.
+access_log off;
+EOF
+  : > /var/log/nginx/access.log 2>/dev/null || true
+
+  if [[ -f /opt/telemt-config/docker-compose.yml ]]; then
+    old_log_path="$(docker inspect telemt --format '{{.LogPath}}' 2>/dev/null || true)"
+    if [[ -n "$old_log_path" && -f "$old_log_path" ]]; then
+      : > "$old_log_path" 2>/dev/null || true
+    fi
+    sed -i -E 's/RUST_LOG:[[:space:]]*"info"/RUST_LOG: "warn"/' /opt/telemt-config/docker-compose.yml
+    if ! grep -q 'driver:[[:space:]]*"none"' /opt/telemt-config/docker-compose.yml; then
+      tmp_compose="$(mktemp)"
+      awk '
+        /^    ulimits:/ && !done {
+          print "    logging:";
+          print "      driver: \"none\"";
+          done=1;
+        }
+        { print }
+        END {
+          if (!done) {
+            print "    logging:";
+            print "      driver: \"none\"";
+          }
+        }
+      ' /opt/telemt-config/docker-compose.yml > "$tmp_compose"
+      cat "$tmp_compose" > /opt/telemt-config/docker-compose.yml
+      rm -f "$tmp_compose"
+    fi
+    cd /opt/telemt-config
+    compose_cmd up -d --force-recreate
+  fi
+
+  nginx -t
+  systemctl reload nginx || systemctl restart nginx
+  mark_done log_hardening
 fi
 
 if step_done report_script; then
@@ -688,8 +737,16 @@ section "DOCKER TELEMT"
 if have docker && docker inspect "$CONTAINER" >/dev/null 2>&1; then docker inspect "$CONTAINER" --format 'name={{.Name}} image={{.Config.Image}} user={{.Config.User}} running={{.State.Running}} status={{.State.Status}} started={{.State.StartedAt}} restarts={{.RestartCount}} readonly={{.HostConfig.ReadonlyRootfs}} network={{.HostConfig.NetworkMode}}'; docker stats --no-stream "$CONTAINER" || true; fi
 section "SERVER RESOURCES"
 free -m 2>/dev/null | awk 'NR<=3{print}'; df -h / /var /opt 2>/dev/null | awk '!seen[$0]++'
-section "RECENT TELEMT WARNINGS"
-if have docker && docker inspect "$CONTAINER" >/dev/null 2>&1; then docker logs --since "$SINCE" "$CONTAINER" 2>&1 | grep -E 'User limit|exceeded connection limit|ME pool is NOT ready|ME pool is not ready|All ME servers|Upstream failed|ERROR|WARN' | tail -n 80 || printf 'no relevant warnings in last %s\n' "$SINCE"; fi
+section "TELEMT CONTAINER LOGGING"
+if have docker && docker inspect "$CONTAINER" >/dev/null 2>&1; then
+  log_driver="$(docker inspect "$CONTAINER" --format '{{.HostConfig.LogConfig.Type}}' 2>/dev/null || printf unknown)"
+  printf 'docker_log_driver: %s\n' "$log_driver"
+  if [ "$log_driver" = none ]; then
+    printf 'runtime logs are disabled to avoid storing client activity and filling disk\n'
+  else
+    docker logs --since "$SINCE" "$CONTAINER" 2>&1 | grep -E 'User limit|exceeded connection limit|ME pool is NOT ready|ME pool is not ready|All ME servers|Upstream failed|ERROR|WARN' | tail -n 80 || printf 'no relevant warnings in last %s\n' "$SINCE"
+  fi
+fi
 EOF
   mark_done report_script
 fi

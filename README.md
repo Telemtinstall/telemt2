@@ -56,6 +56,8 @@ certbot.timer auto-renewal
 nginx reload hook after certificate renewal
 fail2ban
 nftables rule blocking external 9091/tcp
+nginx HTTP access logs disabled
+Telemt Docker runtime logs disabled
 SSH password hardening
 1G swap if swap is missing
 ```
@@ -205,6 +207,8 @@ nginx stream SNI routing
 acme.sh standalone ACME
 /opt/bootlocal.sh autostart
 /opt/.filetool.lst persistence
+nginx access logs disabled
+Telemt runtime logs disabled
 ```
 
 `install_telemt_tinycore.sh` must run on the target Tiny Core server. It requires x86_64/CorePure64 or aarch64, configured persistent `/tce`, and open ports `80/tcp` and `443/tcp`.
