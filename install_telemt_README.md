@@ -349,7 +349,11 @@ add_key.sh рядом с install_telemt_batch.sh
 копирует install_telemt.sh на сервер
 запускает install_telemt.sh удалённо с выбранным доменом и настройками
 печатает результат по каждому домену
+после успешной установки читает /root/telemt-proxy-link.txt
+печатает итоговый список Proxy links
 ```
+
+Блок `Proxy links` содержит рабочие Telegram proxy-ссылки с секретами. Относитесь к ним как к паролям.
 
 Запуск:
 
@@ -726,7 +730,11 @@ if the key does not work, offers add_key.sh, password mode, or skip
 copies install_telemt.sh to the server
 runs install_telemt.sh remotely with the selected domain and settings
 prints per-domain results
+reads /root/telemt-proxy-link.txt after successful installs
+prints the final Proxy links list
 ```
+
+The `Proxy links` block contains live Telegram proxy links with secrets. Treat them like passwords.
 
 Run:
 

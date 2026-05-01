@@ -126,7 +126,11 @@ if key login fails, offer add_key.sh, password mode, or skip
 copy install_telemt.sh to each server
 run install_telemt.sh remotely with the selected domain/settings
 print a per-domain result summary
+read /root/telemt-proxy-link.txt after successful installs
+print the final Proxy links list
 ```
+
+The `Proxy links` output contains live Telegram proxy secrets. Treat it like credentials.
 
 Run:
 
