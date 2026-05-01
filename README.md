@@ -17,6 +17,7 @@ No private domains, real server IPs, logins, SSH private keys, or generated prox
 
 ```text
 install_telemt.sh          Main Telemt installer without WireGuard
+install_telemt_v2.sh       Batch installer that runs install_telemt.sh on many servers
 install_telemt_README.md   Full Russian and English documentation for install_telemt.sh
 add_key.sh                    Helper for creating/copying SSH public keys to a server
 ```
@@ -87,6 +88,49 @@ Full installer documentation:
 ```text
 install_telemt_README.md
 ```
+
+## install_telemt_v2.sh
+
+`install_telemt_v2.sh` is a batch orchestrator. It is meant to be run on your local admin machine, not on the target server.
+
+It does not duplicate Telemt installation logic. For every selected server it copies and runs the main `install_telemt.sh`.
+
+Workflow:
+
+```text
+ask for common SSH/install settings
+ask for proxy domains one by one
+stop domain input when an empty line is entered
+resolve A records for every domain
+if a domain has no A record, offer entering a replacement domain
+check SSH key login for every resolved server IP
+if key login fails, offer add_key.sh, password mode, or skip
+copy install_telemt.sh to each server
+run install_telemt.sh remotely with the selected domain/settings
+print a per-domain result summary
+```
+
+Run:
+
+```bash
+./install_telemt_v2.sh
+```
+
+Batch install expects one proxy domain per target server:
+
+```text
+Domain: proxy-one.example.com
+Domain: proxy-two.example.com
+Domain:
+```
+
+Optional environment variables:
+
+```bash
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_v2.sh
+```
+
+`install_telemt.sh` and `add_key.sh` remain fully standalone and can still be used without v2.
 
 ## add_key.sh
 

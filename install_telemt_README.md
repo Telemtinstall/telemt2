@@ -309,6 +309,52 @@ ssh root@<SERVER_PUBLIC_IP>
 bash /root/install_telemt.sh
 ```
 
+### Пакетная Установка install_telemt_v2.sh
+
+`install_telemt_v2.sh` запускается на локальной админской машине и устанавливает Telemt сразу на несколько серверов.
+
+Важно: v2 не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt.sh`: копирует его на каждый сервер и запускает удалённо.
+
+Что делает v2:
+
+```text
+спрашивает общие SSH/install настройки
+спрашивает домены по одному
+пользователь вводит домен, Enter, следующий домен, Enter
+пустая строка завершает ввод доменов
+проверяет A-запись каждого домена
+если A-записи нет, предлагает указать другой домен с A-записью
+проверяет SSH-вход по ключу на каждый сервер
+если ключ не работает, предлагает add_key.sh, password mode или skip
+копирует install_telemt.sh на сервер
+запускает install_telemt.sh удалённо с выбранным доменом и настройками
+печатает результат по каждому домену
+```
+
+Запуск:
+
+```bash
+./install_telemt_v2.sh
+```
+
+Пример ввода доменов:
+
+```text
+Domain: proxy-one.example.com
+Domain: proxy-two.example.com
+Domain:
+```
+
+Пустой `Domain:` завершает список.
+
+Опциональные переменные:
+
+```bash
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_v2.sh
+```
+
+`install_telemt.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без v2.
+
 ---
 
 ## English Description
@@ -619,3 +665,49 @@ scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
 bash /root/install_telemt.sh
 ```
+
+### Batch Installation install_telemt_v2.sh
+
+`install_telemt_v2.sh` runs on the local admin machine and installs Telemt on multiple servers.
+
+Important: v2 does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt.sh`: copies it to every server and runs it remotely.
+
+What v2 does:
+
+```text
+asks for common SSH/install settings
+asks for domains one by one
+the user enters domain, Enter, next domain, Enter
+an empty line finishes domain input
+checks the A record for every domain
+if no A record exists, offers entering another domain with an A record
+checks SSH key login for every server
+if the key does not work, offers add_key.sh, password mode, or skip
+copies install_telemt.sh to the server
+runs install_telemt.sh remotely with the selected domain and settings
+prints per-domain results
+```
+
+Run:
+
+```bash
+./install_telemt_v2.sh
+```
+
+Domain input example:
+
+```text
+Domain: proxy-one.example.com
+Domain: proxy-two.example.com
+Domain:
+```
+
+Empty `Domain:` finishes the list.
+
+Optional environment variables:
+
+```bash
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_v2.sh
+```
+
+`install_telemt.sh` and `add_key.sh` remain standalone scripts and can still be run without v2.
