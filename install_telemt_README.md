@@ -273,9 +273,9 @@ DNS ещё не указывает на сервер
 провайдерский firewall блокирует входящие подключения
 ```
 
-### Вспомогательный Инструмент add_key
+### Вспомогательный Инструмент add_key.sh
 
-`add_key` помогает подготовить SSH-доступ к серверу до запуска `install_telemt.sh`.
+`add_key.sh` помогает подготовить SSH-доступ к серверу до запуска `install_telemt.sh`.
 
 Что делает:
 
@@ -292,13 +292,13 @@ DNS ещё не указывает на сервер
 Запуск:
 
 ```bash
-./add_key
+./add_key.sh
 ```
 
 Запуск с параметрами через environment:
 
 ```bash
-SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key
+SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```
 
 После успешной проверки ключа можно копировать и запускать установщик:
@@ -584,9 +584,9 @@ port 443 is occupied by another service
 provider firewall blocks incoming connections
 ```
 
-### Auxiliary Tool add_key
+### Auxiliary Tool add_key.sh
 
-`add_key` helps prepare SSH access before running `install_telemt.sh`.
+`add_key.sh` helps prepare SSH access before running `install_telemt.sh`.
 
 What it does:
 
@@ -603,13 +603,13 @@ verifies that key login actually works
 Run:
 
 ```bash
-./add_key
+./add_key.sh
 ```
 
 Run with environment parameters:
 
 ```bash
-SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key
+SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```
 
 After key login is verified, copy and run the installer:

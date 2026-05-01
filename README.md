@@ -18,7 +18,7 @@ No private domains, real server IPs, logins, SSH private keys, or generated prox
 ```text
 install_telemt.sh          Main Telemt installer without WireGuard
 install_telemt_README.md   Full Russian and English documentation for install_telemt.sh
-add_key                    Helper for creating/copying SSH public keys to a server
+add_key.sh                    Helper for creating/copying SSH public keys to a server
 ```
 
 ## install_telemt.sh
@@ -88,9 +88,9 @@ Full installer documentation:
 install_telemt_README.md
 ```
 
-## add_key
+## add_key.sh
 
-`add_key` is an auxiliary helper for preparing SSH access before running the installer.
+`add_key.sh` is an auxiliary helper for preparing SSH access before running the installer.
 
 It can:
 
@@ -108,19 +108,19 @@ verify that key-only login works
 Basic usage:
 
 ```bash
-./add_key
+./add_key.sh
 ```
 
 Optional environment variables:
 
 ```bash
-SERVER_INPUT=<USER>@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key
+SERVER_INPUT=<USER>@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```
 
 Example with placeholders:
 
 ```bash
-SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=22 KEY_PATH=~/.ssh/id_ed25519 ./add_key
+SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=22 KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```
 
 After the helper verifies key login, run the installer on the server:
