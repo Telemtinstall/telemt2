@@ -95,6 +95,24 @@ install_telemt_README.md
 
 It does not duplicate Telemt installation logic. For every selected server it copies and runs the main `install_telemt.sh`.
 
+Supported local launch systems:
+
+```text
+macOS
+Debian/Ubuntu/Linux
+```
+
+Before doing anything, v2 checks local requirements:
+
+```text
+bash 3+
+ssh
+scp
+one DNS resolver: getent, dig, or host
+install_telemt.sh next to v2
+add_key.sh next to v2
+```
+
 Workflow:
 
 ```text

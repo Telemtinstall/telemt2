@@ -315,6 +315,26 @@ bash /root/install_telemt.sh
 
 Важно: v2 не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt.sh`: копирует его на каждый сервер и запускает удалённо.
 
+v2 можно запускать на локальной машине с:
+
+```text
+macOS
+Debian/Ubuntu/Linux
+```
+
+Перед началом v2 проверяет локальные зависимости:
+
+```text
+bash 3+
+ssh
+scp
+один DNS resolver: getent, dig или host
+install_telemt.sh рядом с v2
+add_key.sh рядом с v2
+```
+
+Если чего-то не хватает, скрипт остановится до любых подключений к серверам.
+
 Что делает v2:
 
 ```text
@@ -671,6 +691,26 @@ bash /root/install_telemt.sh
 `install_telemt_v2.sh` runs on the local admin machine and installs Telemt on multiple servers.
 
 Important: v2 does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt.sh`: copies it to every server and runs it remotely.
+
+v2 can be launched from a local machine running:
+
+```text
+macOS
+Debian/Ubuntu/Linux
+```
+
+Before starting, v2 checks local dependencies:
+
+```text
+bash 3+
+ssh
+scp
+one DNS resolver: getent, dig, or host
+install_telemt.sh next to v2
+add_key.sh next to v2
+```
+
+If something is missing, the script stops before connecting to any server.
 
 What v2 does:
 

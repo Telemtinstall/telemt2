@@ -117,6 +117,39 @@ require_files() {
   fi
 }
 
+preflight_local_machine() {
+  local os_name
+  local bash_major
+  local missing=()
+
+  os_name="$(uname -s 2>/dev/null || echo unknown)"
+  case "$os_name" in
+    Darwin|Linux) ;;
+    *)
+      die "Unsupported local OS: $os_name. Run v2 from macOS or Debian/Ubuntu/Linux."
+      ;;
+  esac
+
+  bash_major="${BASH_VERSINFO[0]:-0}"
+  if [[ "$bash_major" -lt 3 ]]; then
+    die "Bash 3+ is required. Current bash: ${BASH_VERSION:-unknown}"
+  fi
+
+  have ssh || missing+=("ssh")
+  have scp || missing+=("scp")
+
+  if ! have getent && ! have dig && ! have host; then
+    missing+=("getent/dig/host")
+  fi
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    die "Missing local tools: $(join_by ', ' "${missing[@]}")"
+  fi
+
+  echo "Local preflight OK: os=$os_name bash=${BASH_VERSION:-unknown}"
+  echo "Note: install_telemt_v2.sh is a local orchestrator. It will not install Telemt on this machine."
+}
+
 select_domain_ip() {
   local domain="$1"
   local -a records=()
@@ -411,6 +444,7 @@ show_plan() {
 main() {
   local i
 
+  preflight_local_machine
   require_files
 
   cat <<'EOF'
