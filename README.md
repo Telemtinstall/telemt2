@@ -1,6 +1,6 @@
 # Telemt Install Tools
 
-Utilities for installing and maintaining a Telemt MTProto proxy on fresh Debian/Ubuntu or AlmaLinux servers.
+Utilities for installing and maintaining a Telemt MTProto proxy on fresh Debian/Ubuntu, AlmaLinux, or Tiny Core Linux servers.
 
 This repository intentionally uses placeholders only:
 
@@ -22,6 +22,9 @@ install_telemt_README.md   Full Russian and English documentation for install_te
 install_telemt_alma.sh          AlmaLinux Telemt installer without WireGuard
 install_telemt_batch_alma.sh    Batch installer for AlmaLinux target servers
 install_telemt_alma_README.md   Russian and English documentation for AlmaLinux scripts
+install_telemt_tinycore.sh          Tiny Core Linux Telemt installer without Docker/systemd
+install_telemt_batch_tinycore.sh    Batch installer for Tiny Core target servers
+install_telemt_tinycore_README.md   Russian and English documentation for Tiny Core scripts
 add_key.sh                    Helper for creating/copying SSH public keys to a server
 ```
 
@@ -181,6 +184,43 @@ Full Alma documentation:
 
 ```text
 install_telemt_alma_README.md
+```
+
+## Tiny Core Linux Scripts
+
+The Tiny Core scripts are experimental and separate from the Debian/Ubuntu and AlmaLinux scripts:
+
+```text
+install_telemt_tinycore.sh
+install_telemt_batch_tinycore.sh
+install_telemt_tinycore_README.md
+```
+
+Tiny Core has no normal `systemd` or `apt/dnf` flow, so this version uses:
+
+```text
+tce-load extensions
+native Telemt linux-musl binary
+nginx stream SNI routing
+acme.sh standalone ACME
+/opt/bootlocal.sh autostart
+/opt/.filetool.lst persistence
+```
+
+`install_telemt_tinycore.sh` must run on the target Tiny Core server. It requires x86_64/CorePure64 or aarch64, configured persistent `/tce`, and open ports `80/tcp` and `443/tcp`.
+
+`install_telemt_batch_tinycore.sh` is only a local orchestrator for Tiny Core target servers. The machine running the batch script can be macOS, Debian, Ubuntu, AlmaLinux, or any other Linux with `bash`, `ssh`, `scp`, and a DNS lookup tool.
+
+Run Tiny Core batch mode:
+
+```bash
+./install_telemt_batch_tinycore.sh
+```
+
+Full Tiny Core documentation:
+
+```text
+install_telemt_tinycore_README.md
 ```
 
 ## add_key.sh
