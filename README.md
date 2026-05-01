@@ -1,6 +1,6 @@
 # Telemt Install Tools
 
-Utilities for installing and maintaining a Telemt MTProto proxy on a fresh Debian/Ubuntu server.
+Utilities for installing and maintaining a Telemt MTProto proxy on fresh Debian/Ubuntu or AlmaLinux servers.
 
 This repository intentionally uses placeholders only:
 
@@ -19,6 +19,9 @@ No private domains, real server IPs, logins, SSH private keys, or generated prox
 install_telemt.sh          Main Telemt installer without WireGuard
 install_telemt_batch.sh       Batch installer that runs install_telemt.sh on many servers
 install_telemt_README.md   Full Russian and English documentation for install_telemt.sh
+install_telemt_alma.sh          AlmaLinux Telemt installer without WireGuard
+install_telemt_batch_alma.sh    Batch installer for AlmaLinux target servers
+install_telemt_alma_README.md   Russian and English documentation for AlmaLinux scripts
 add_key.sh                    Helper for creating/copying SSH public keys to a server
 ```
 
@@ -153,6 +156,32 @@ CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telem
 ```
 
 `install_telemt.sh` and `add_key.sh` remain fully standalone and can still be used without batch mode.
+
+## AlmaLinux Scripts
+
+The AlmaLinux scripts are separate and do not replace the Debian/Ubuntu scripts:
+
+```text
+install_telemt_alma.sh
+install_telemt_batch_alma.sh
+install_telemt_alma_README.md
+```
+
+`install_telemt_alma.sh` must run on the target AlmaLinux server.
+
+`install_telemt_batch_alma.sh` is only a local orchestrator for AlmaLinux target servers. The machine running the batch script can be macOS, Debian, Ubuntu, AlmaLinux, or any other Linux with `bash`, `ssh`, `scp`, and a DNS lookup tool.
+
+Run Alma batch mode:
+
+```bash
+./install_telemt_batch_alma.sh
+```
+
+Full Alma documentation:
+
+```text
+install_telemt_alma_README.md
+```
 
 ## add_key.sh
 

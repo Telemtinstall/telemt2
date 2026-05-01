@@ -73,7 +73,9 @@ telemt-report 5m
 
 ### Пакетная установка AlmaLinux
 
-`install_telemt_batch_alma.sh` запускается на локальной админской машине, например macOS или Linux. Он не ставит Telemt локально.
+`install_telemt_batch_alma.sh` запускается на админской машине, например macOS, Debian, Ubuntu, AlmaLinux или любом другом Linux с `bash`, `ssh`, `scp` и DNS-утилитой. Он не ставит Telemt локально.
+
+AlmaLinux нужна только на целевых серверах, куда batch-скрипт копирует и запускает `install_telemt_alma.sh`.
 
 Что делает:
 
@@ -206,7 +208,9 @@ telemt-report 5m
 
 ### AlmaLinux batch install
 
-`install_telemt_batch_alma.sh` runs on the local admin machine, for example macOS or Linux. It does not install Telemt locally.
+`install_telemt_batch_alma.sh` runs on the admin machine, for example macOS, Debian, Ubuntu, AlmaLinux, or any other Linux with `bash`, `ssh`, `scp`, and a DNS lookup tool. It does not install Telemt locally.
+
+AlmaLinux is required only on the target servers where the batch script copies and runs `install_telemt_alma.sh`.
 
 What it does:
 
