@@ -126,7 +126,7 @@ preflight_local_machine() {
   case "$os_name" in
     Darwin|Linux) ;;
     *)
-      die "Unsupported local OS: $os_name. Run v2 from macOS or Debian/Ubuntu/Linux."
+      die "Unsupported local OS: $os_name. Run batch from macOS or Debian/Ubuntu/Linux."
       ;;
   esac
 
@@ -147,7 +147,7 @@ preflight_local_machine() {
   fi
 
   echo "Local preflight OK: os=$os_name bash=${BASH_VERSION:-unknown}"
-  echo "Note: install_telemt_v2.sh is a local orchestrator. It will not install Telemt on this machine."
+  echo "Note: install_telemt_batch.sh is a local orchestrator. It will not install Telemt on this machine."
 }
 
 select_domain_ip() {
@@ -448,7 +448,7 @@ main() {
   require_files
 
   cat <<'EOF'
-Telemt batch installer v2.
+Telemt batch installer.
 
 This script runs locally and installs Telemt on multiple target servers by
 copying and executing install_telemt.sh on each server.

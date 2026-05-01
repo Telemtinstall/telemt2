@@ -309,33 +309,33 @@ ssh root@<SERVER_PUBLIC_IP>
 bash /root/install_telemt.sh
 ```
 
-### Пакетная Установка install_telemt_v2.sh
+### Пакетная Установка install_telemt_batch.sh
 
-`install_telemt_v2.sh` запускается на локальной админской машине и устанавливает Telemt сразу на несколько серверов.
+`install_telemt_batch.sh` запускается на локальной админской машине и устанавливает Telemt сразу на несколько серверов.
 
-Важно: v2 не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt.sh`: копирует его на каждый сервер и запускает удалённо.
+Важно: пакетный скрипт не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt.sh`: копирует его на каждый сервер и запускает удалённо.
 
-v2 можно запускать на локальной машине с:
+Пакетный скрипт можно запускать на локальной машине с:
 
 ```text
 macOS
 Debian/Ubuntu/Linux
 ```
 
-Перед началом v2 проверяет локальные зависимости:
+Перед началом пакетный скрипт проверяет локальные зависимости:
 
 ```text
 bash 3+
 ssh
 scp
 один DNS resolver: getent, dig или host
-install_telemt.sh рядом с v2
-add_key.sh рядом с v2
+install_telemt.sh рядом с install_telemt_batch.sh
+add_key.sh рядом с install_telemt_batch.sh
 ```
 
 Если чего-то не хватает, скрипт остановится до любых подключений к серверам.
 
-Что делает v2:
+Что делает пакетный скрипт:
 
 ```text
 спрашивает общие SSH/install настройки
@@ -354,7 +354,7 @@ add_key.sh рядом с v2
 Запуск:
 
 ```bash
-./install_telemt_v2.sh
+./install_telemt_batch.sh
 ```
 
 Пример ввода доменов:
@@ -370,10 +370,10 @@ Domain:
 Опциональные переменные:
 
 ```bash
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_v2.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
 ```
 
-`install_telemt.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без v2.
+`install_telemt.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без пакетного режима.
 
 ---
 
@@ -686,33 +686,33 @@ ssh root@<SERVER_PUBLIC_IP>
 bash /root/install_telemt.sh
 ```
 
-### Batch Installation install_telemt_v2.sh
+### Batch Installation install_telemt_batch.sh
 
-`install_telemt_v2.sh` runs on the local admin machine and installs Telemt on multiple servers.
+`install_telemt_batch.sh` runs on the local admin machine and installs Telemt on multiple servers.
 
-Important: v2 does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt.sh`: copies it to every server and runs it remotely.
+Important: the batch script does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt.sh`: copies it to every server and runs it remotely.
 
-v2 can be launched from a local machine running:
+The batch script can be launched from a local machine running:
 
 ```text
 macOS
 Debian/Ubuntu/Linux
 ```
 
-Before starting, v2 checks local dependencies:
+Before starting, the batch script checks local dependencies:
 
 ```text
 bash 3+
 ssh
 scp
 one DNS resolver: getent, dig, or host
-install_telemt.sh next to v2
-add_key.sh next to v2
+install_telemt.sh next to install_telemt_batch.sh
+add_key.sh next to install_telemt_batch.sh
 ```
 
 If something is missing, the script stops before connecting to any server.
 
-What v2 does:
+What the batch script does:
 
 ```text
 asks for common SSH/install settings
@@ -731,7 +731,7 @@ prints per-domain results
 Run:
 
 ```bash
-./install_telemt_v2.sh
+./install_telemt_batch.sh
 ```
 
 Domain input example:
@@ -747,7 +747,7 @@ Empty `Domain:` finishes the list.
 Optional environment variables:
 
 ```bash
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_v2.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
 ```
 
-`install_telemt.sh` and `add_key.sh` remain standalone scripts and can still be run without v2.
+`install_telemt.sh` and `add_key.sh` remain standalone scripts and can still be run without batch mode.

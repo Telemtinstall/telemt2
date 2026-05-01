@@ -17,7 +17,7 @@ No private domains, real server IPs, logins, SSH private keys, or generated prox
 
 ```text
 install_telemt.sh          Main Telemt installer without WireGuard
-install_telemt_v2.sh       Batch installer that runs install_telemt.sh on many servers
+install_telemt_batch.sh       Batch installer that runs install_telemt.sh on many servers
 install_telemt_README.md   Full Russian and English documentation for install_telemt.sh
 add_key.sh                    Helper for creating/copying SSH public keys to a server
 ```
@@ -89,9 +89,9 @@ Full installer documentation:
 install_telemt_README.md
 ```
 
-## install_telemt_v2.sh
+## install_telemt_batch.sh
 
-`install_telemt_v2.sh` is a batch orchestrator. It is meant to be run on your local admin machine, not on the target server.
+`install_telemt_batch.sh` is a batch orchestrator. It is meant to be run on your local admin machine, not on the target server.
 
 It does not duplicate Telemt installation logic. For every selected server it copies and runs the main `install_telemt.sh`.
 
@@ -102,15 +102,15 @@ macOS
 Debian/Ubuntu/Linux
 ```
 
-Before doing anything, v2 checks local requirements:
+Before doing anything, the batch script checks local requirements:
 
 ```text
 bash 3+
 ssh
 scp
 one DNS resolver: getent, dig, or host
-install_telemt.sh next to v2
-add_key.sh next to v2
+install_telemt.sh next to install_telemt_batch.sh
+add_key.sh next to install_telemt_batch.sh
 ```
 
 Workflow:
@@ -131,7 +131,7 @@ print a per-domain result summary
 Run:
 
 ```bash
-./install_telemt_v2.sh
+./install_telemt_batch.sh
 ```
 
 Batch install expects one proxy domain per target server:
@@ -145,10 +145,10 @@ Domain:
 Optional environment variables:
 
 ```bash
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_v2.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
 ```
 
-`install_telemt.sh` and `add_key.sh` remain fully standalone and can still be used without v2.
+`install_telemt.sh` and `add_key.sh` remain fully standalone and can still be used without batch mode.
 
 ## add_key.sh
 
