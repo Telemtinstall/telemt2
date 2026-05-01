@@ -451,7 +451,7 @@ else
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>System Status</title>
+  <title>${PUBLIC_HOST}</title>
   <style>
     :root { color-scheme: light dark; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f7f9; color: #1d2733; }
@@ -472,7 +472,7 @@ else
 <body>
   <main>
     <section>
-      <h1>System Status</h1>
+      <h1>${PUBLIC_HOST}</h1>
       <p>Digital infrastructure, network diagnostics, and private systems maintenance.</p>
       <p>For service requests, scheduled access, or operational questions, contact your project administrator.</p>
       <div class="meta">

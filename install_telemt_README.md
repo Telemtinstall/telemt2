@@ -163,7 +163,7 @@ openssl
 2. Автопродление сертификата через `certbot.timer`.
 3. Deploy-hook для `reload nginx` после успешного продления.
 4. Nginx stream router на внешнем `443/tcp`.
-5. Маскировочный HTTPS-сайт на `127.0.0.1:8443`.
+5. Маскировочный HTTPS-сайт на `127.0.0.1:8443`; HTML-страница создаётся в `/var/www/<PROXY_DOMAIN>/index.html`, а её `<title>` и `<h1>` равны введённому домену.
 6. Telemt backend на `127.0.0.1:1443`.
 7. Telemt API на `127.0.0.1:9091`.
 8. Firewall-правило, закрывающее `9091/tcp` снаружи.
@@ -474,7 +474,7 @@ It also adds `1G` swap if swap is not already enabled.
 2. Automatic certificate renewal via `certbot.timer`.
 3. Deploy hook that reloads nginx after a successful renewal.
 4. Nginx stream router on public `443/tcp`.
-5. HTTPS mask site on `127.0.0.1:8443`.
+5. HTTPS mask site on `127.0.0.1:8443`; the HTML page is created at `/var/www/<PROXY_DOMAIN>/index.html`, and its `<title>` and `<h1>` are set to the entered domain.
 6. Telemt backend on `127.0.0.1:1443`.
 7. Telemt API on `127.0.0.1:9091`.
 8. Firewall rule blocking external access to `9091/tcp`.

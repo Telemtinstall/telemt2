@@ -53,6 +53,8 @@ SSH password hardening
 1G swap if swap is missing
 ```
 
+The generated nginx mask page is created under `/var/www/<PROXY_DOMAIN>/index.html`; its browser title and main heading use the domain entered during installation.
+
 Run it on the target server, not on your local computer:
 
 ```bash
