@@ -14,27 +14,15 @@ add_key.sh                          вспомогательный скрипт 
 
 ### Главные Отличия
 
-```text
-нет Docker
-нет systemd
-нет apt/dnf
-нет обычного certbot.timer
-зависимости ставятся через tce-load
-Telemt ставится как native musl binary из GitHub releases
-автозапуск делается через /opt/bootlocal.sh
-персистентность делается через /opt/.filetool.lst и filetool.sh -b
-сертификат выпускается через acme.sh standalone mode
-```
+В Tiny Core версии нет Docker, systemd, apt/dnf и обычного `certbot.timer`. Зависимости ставятся через `tce-load`, Telemt ставится как нативный `musl` бинарник из GitHub releases, автозапуск делается через `/opt/bootlocal.sh`, а persistence фиксируется через `/opt/.filetool.lst` и `filetool.sh -b`. Сертификат выпускается через `acme.sh` в standalone mode.
 
 ### Требования
 
-```text
-Tiny Core Linux x86_64/CorePure64 или aarch64
-настроенный persistent /tce
-root-доступ
-открытые 80/tcp и 443/tcp
-A-запись домена должна указывать на публичный IPv4 сервера
-```
+1. Tiny Core Linux `x86_64`/CorePure64 или `aarch64`.
+2. Настроенный persistent `/tce`.
+3. Root-доступ.
+4. Открытые `80/tcp` и `443/tcp`.
+5. `A`-запись домена должна указывать на публичный IPv4 сервера.
 
 ### Важно: только чистый сервер
 
@@ -46,22 +34,9 @@ A-запись домена должна указывать на публичн�
 
 ### Что Ставит
 
-```text
-bash
-curl
-ca-certificates
-openssl
-nginx
-socat
-jq, optional
-iproute2, optional
-acme.sh
-native Telemt binary
-nginx access logs disabled
-Telemt runtime logs disabled
-pinned Telemt release and sha256 verification
-pinned acme.sh version and sha256 verification
-```
+Скрипт ставит базовые зависимости (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), а также optional-компоненты `jq` и `iproute2`, если они доступны. Для сертификатов используется `acme.sh`, а Telemt ставится как нативный бинарник.
+
+При установке используются закреплённые версии Telemt и `acme.sh` с проверкой sha256. Nginx access logs и Telemt runtime logs отключаются.
 
 ### Схема
 
@@ -79,13 +54,7 @@ Internet
 
 ### Что Не Делает
 
-```text
-не меняет SSH port
-не отключает SSH password login
-не ставит fail2ban
-не использует Docker
-не использует systemd
-```
+Скрипт не меняет SSH-порт, не отключает SSH password login, не ставит `fail2ban`, не использует Docker и не зависит от systemd.
 
 SSH-hardening на Tiny Core лучше делать отдельно, потому что там часто используется не стандартный OpenSSH/systemd-layout.
 
@@ -98,14 +67,7 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
-Скрипт спросит:
-
-```text
-Proxy domain
-Let's Encrypt email, по умолчанию admin@<domain>
-SSH port, только для подсказок и batch-режима
-Max Telemt connections, по умолчанию 1000
-```
+Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, а также лимит подключений Telemt со значением по умолчанию `1000`.
 
 После установки:
 
@@ -142,17 +104,12 @@ chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 ./install_telemt_batch_tinycore.sh
 ```
 
-Пакетный скрипт:
+Как работает пакетная установка:
 
-```text
-спрашивает домены
-проверяет A-записи
-проверяет SSH-доступ
-копирует install_telemt_tinycore.sh на серверы
-запускает его удаленно
-после успешной установки читает /root/telemt-proxy-link.txt
-печатает итоговый список Proxy links
-```
+1. Скрипт принимает домены по одному и завершает ввод по пустой строке.
+2. Для каждого домена он проверяет `A`-запись и SSH-доступ.
+3. Когда доступ готов, скрипт копирует `install_telemt_tinycore.sh` на сервер и запускает его удалённо.
+4. После успешной установки он читает `/root/telemt-proxy-link.txt` и в конце печатает общий список `Proxy links`.
 
 Блок `Proxy links` содержит рабочие Telegram proxy-ссылки с секретами. Относитесь к ним как к паролям.
 
@@ -187,27 +144,15 @@ Status: experimental. Tiny Core is very different from conventional server distr
 
 ### Main Differences
 
-```text
-no Docker
-no systemd
-no apt/dnf
-no regular certbot.timer
-dependencies are installed via tce-load
-Telemt is installed as a native musl binary from GitHub releases
-autostart is handled through /opt/bootlocal.sh
-persistence is handled through /opt/.filetool.lst and filetool.sh -b
-certificates are issued through acme.sh standalone mode
-```
+The Tiny Core version has no Docker, systemd, apt/dnf, or regular `certbot.timer`. Dependencies are installed via `tce-load`, Telemt is installed as a native `musl` binary from GitHub releases, autostart is handled through `/opt/bootlocal.sh`, and persistence is saved through `/opt/.filetool.lst` and `filetool.sh -b`. Certificates are issued through `acme.sh` in standalone mode.
 
 ### Requirements
 
-```text
-Tiny Core Linux x86_64/CorePure64 or aarch64
-configured persistent /tce
-root access
-open 80/tcp and 443/tcp
-the domain A record must point to the server public IPv4
-```
+1. Tiny Core Linux `x86_64`/CorePure64 or `aarch64`.
+2. Configured persistent `/tce`.
+3. Root access.
+4. Open `80/tcp` and `443/tcp`.
+5. The domain `A` record must point to the server public IPv4.
 
 ### Important: Clean Server Only
 
@@ -219,22 +164,9 @@ By default, the installer uses pinned Telemt release `3.4.0` and pinned `acme.sh
 
 ### What It Installs
 
-```text
-bash
-curl
-ca-certificates
-openssl
-nginx
-socat
-jq, optional
-iproute2, optional
-acme.sh
-native Telemt binary
-nginx access logs disabled
-Telemt runtime logs disabled
-pinned Telemt release and sha256 verification
-pinned acme.sh version and sha256 verification
-```
+The script installs base dependencies (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), plus optional `jq` and `iproute2` when available. Certificates are handled by `acme.sh`, and Telemt is installed as a native binary.
+
+The installer uses a pinned Telemt release and pinned `acme.sh` version with sha256 verification. Nginx access logs and Telemt runtime logs are disabled.
 
 ### Layout
 
@@ -252,13 +184,7 @@ Internet
 
 ### What It Does Not Do
 
-```text
-does not change SSH port
-does not disable SSH password login
-does not install fail2ban
-does not use Docker
-does not use systemd
-```
+The script does not change the SSH port, does not disable SSH password login, does not install `fail2ban`, does not use Docker, and does not depend on systemd.
 
 SSH hardening is better handled separately on Tiny Core because deployments often use non-standard OpenSSH/Dropbear layouts.
 
@@ -271,14 +197,7 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
-The script asks for:
-
-```text
-Proxy domain
-Let's Encrypt email, default admin@<domain>
-SSH port, only for hints and batch mode
-Max Telemt connections, default 1000
-```
+The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, and max Telemt connections with default `1000`.
 
 After installation:
 
@@ -315,17 +234,12 @@ chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 ./install_telemt_batch_tinycore.sh
 ```
 
-The batch script:
+How the batch install works:
 
-```text
-asks for domains
-checks A records
-checks SSH access
-copies install_telemt_tinycore.sh to servers
-runs it remotely
-reads /root/telemt-proxy-link.txt after successful installs
-prints the final Proxy links list
-```
+1. The script accepts domains one by one and finishes input on an empty line.
+2. For every domain, it checks the `A` record and SSH access.
+3. When access is ready, it copies `install_telemt_tinycore.sh` to the server and runs it remotely.
+4. After a successful install, it reads `/root/telemt-proxy-link.txt` and prints the final `Proxy links` list.
 
 The `Proxy links` block contains live Telegram proxy links with secrets. Treat them like passwords.
 

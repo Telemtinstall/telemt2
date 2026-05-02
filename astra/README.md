@@ -324,43 +324,20 @@ chmod +x /root/install_telemt_astra.sh
 
 Важно: пакетный скрипт не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt_astra.sh`: копирует его на каждый сервер и запускает удалённо.
 
-Пакетный скрипт можно запускать на локальной машине с:
+Пакетный скрипт можно запускать на локальной админской машине с macOS или любым Linux.
 
-```text
-macOS
-любой Linux на админской машине
-```
-
-Перед началом пакетный скрипт проверяет локальные зависимости:
-
-```text
-bash 3+
-ssh
-scp
-один DNS resolver: getent, dig или host
-install_telemt_astra.sh рядом с install_telemt_batch_astra.sh
-../common/add_key.sh относительно каталога astra
-```
+Перед началом он проверяет локальные зависимости: `bash 3+`, `ssh`, `scp`, один DNS resolver (`getent`, `dig` или `host`), файл `install_telemt_astra.sh` рядом с `install_telemt_batch_astra.sh` и helper `../common/add_key.sh` относительно каталога `astra`.
 
 Если чего-то не хватает, скрипт остановится до любых подключений к серверам.
 
-Что делает пакетный скрипт:
+Как работает пакетная установка:
 
-```text
-спрашивает общие SSH/install настройки
-спрашивает домены по одному
-пользователь вводит домен, Enter, следующий домен, Enter
-пустая строка завершает ввод доменов
-проверяет A-запись каждого домена
-если A-записи нет, предлагает указать другой домен с A-записью
-проверяет SSH-вход по ключу на каждый сервер
-если ключ не работает, предлагает add_key.sh, password mode или skip
-копирует install_telemt_astra.sh на сервер
-запускает install_telemt_astra.sh удалённо с выбранным доменом и настройками
-печатает результат по каждому домену
-после успешной установки читает /root/telemt-proxy-link.txt
-печатает итоговый список Proxy links
-```
+1. Сначала скрипт спрашивает общие SSH/install-настройки.
+2. Затем он принимает домены по одному: пользователь вводит домен, нажимает Enter и вводит следующий. Пустая строка завершает список.
+3. Для каждого домена скрипт проверяет `A`-запись. Если записи нет, он предлагает указать другой домен, который уже смотрит на сервер.
+4. После DNS-проверки скрипт проверяет SSH-вход по ключу на каждый сервер. Если ключевой вход не работает, можно запустить `add_key.sh`, использовать password mode (вход по паролю) или пропустить сервер.
+5. Когда доступ готов, скрипт копирует `install_telemt_astra.sh` на сервер и запускает его удалённо с выбранным доменом и настройками.
+6. По каждому домену печатается отдельный результат. После успешной установки скрипт читает `/root/telemt-proxy-link.txt` и в конце выводит общий блок `Proxy links`.
 
 Блок `Proxy links` содержит рабочие Telegram proxy-ссылки с секретами. Относитесь к ним как к паролям.
 
@@ -716,43 +693,20 @@ chmod +x /root/install_telemt_astra.sh
 
 Important: the batch script does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt_astra.sh`: copies it to every server and runs it remotely.
 
-The batch script can be launched from a local machine running:
+The batch script can be launched from a local admin machine running macOS or any Linux distribution.
 
-```text
-macOS
-any Linux admin machine
-```
-
-Before starting, the batch script checks local dependencies:
-
-```text
-bash 3+
-ssh
-scp
-one DNS resolver: getent, dig, or host
-install_telemt_astra.sh next to install_telemt_batch_astra.sh
-../common/add_key.sh relative to the astra directory
-```
+Before starting, it checks local dependencies: `bash 3+`, `ssh`, `scp`, one DNS resolver (`getent`, `dig`, or `host`), `install_telemt_astra.sh` next to `install_telemt_batch_astra.sh`, and `../common/add_key.sh` relative to the `astra` directory.
 
 If something is missing, the script stops before connecting to any server.
 
-What the batch script does:
+How the batch install works:
 
-```text
-asks for common SSH/install settings
-asks for domains one by one
-the user enters domain, Enter, next domain, Enter
-an empty line finishes domain input
-checks the A record for every domain
-if no A record exists, offers entering another domain with an A record
-checks SSH key login for every server
-if the key does not work, offers add_key.sh, password mode, or skip
-copies install_telemt_astra.sh to the server
-runs install_telemt_astra.sh remotely with the selected domain and settings
-prints per-domain results
-reads /root/telemt-proxy-link.txt after successful installs
-prints the final Proxy links list
-```
+1. First, the script asks for common SSH/install settings.
+2. Then it accepts domains one by one: enter a domain, press Enter, and enter the next one. An empty line finishes the list.
+3. For every domain, the script checks the `A` record. If no record exists, it offers entering another domain that already points to the server.
+4. After DNS checks, it verifies SSH key login for every server. If key login does not work, you can run `add_key.sh`, use password mode, or skip the server.
+5. When access is ready, the script copies `install_telemt_astra.sh` to the server and runs it remotely with the selected domain and settings.
+6. The script prints a result for every domain. After each successful install, it reads `/root/telemt-proxy-link.txt` and prints the final `Proxy links` block at the end.
 
 The `Proxy links` block contains live Telegram proxy links with secrets. Treat them like passwords.
 

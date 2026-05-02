@@ -102,21 +102,9 @@ The shared SSH key helper is in `common/add_key.sh`; batch scripts find it autom
 
 ## Common Result
 
-The installers configure:
+The installers configure the full Telemt proxy stack: Telemt itself, nginx SNI routing, an HTTPS mask site, Let's Encrypt / ACME certificates with renewal, a local-only Telemt API, connection limits, and proxy link output.
 
-```text
-Telemt proxy
-nginx SNI routing
-HTTPS mask site
-Let's Encrypt / ACME certificate
-certificate renewal
-local-only Telemt API
-connection limit
-proxy link output
-disabled access/runtime logs where supported
-non-interactive batch execution through explicit environment variables
-safe nginx behavior: separate configs are added, and installation stops if 443 is already owned by another site
-```
+Where supported, they also disable nginx access logs and Telemt runtime logs, support non-interactive batch execution through explicit environment variables, and use safe nginx behavior: separate configs are added, and installation stops if `443/tcp` is already owned by another site.
 
 After a successful install, the generated proxy link is stored on the target server:
 

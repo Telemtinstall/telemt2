@@ -12,46 +12,22 @@ add_key.sh                      вспомогательный скрипт дл
 
 ### Что ставит install_telemt_alma.sh
 
-```text
-Docker CE + docker compose plugin
-Telemt в Docker
-nginx Stream SNI routing на 443/tcp
-маскировочный HTTPS-сайт на 127.0.0.1:8443
-Telemt backend на 127.0.0.1:1443
-Telemt API на 127.0.0.1:9091
-Let's Encrypt сертификат
-автопродление сертификата
-firewalld
-fail2ban
-nginx access logs disabled
-Telemt Docker runtime logs disabled
-SSH hardening
-telemt-report
-```
+Установщик поднимает весь стек Telemt для AlmaLinux: Docker CE с плагином Docker Compose, Telemt в Docker, nginx Stream SNI-маршрутизацию на `443/tcp`, маскировочный HTTPS-сайт на `127.0.0.1:8443`, Telemt backend на `127.0.0.1:1443` и локальный Telemt API на `127.0.0.1:9091`.
+
+Также он выпускает Let's Encrypt сертификат, включает автопродление, настраивает `firewalld`, `fail2ban`, SSH hardening, отключает nginx access logs и runtime-логи Docker-контейнера Telemt, а в конце добавляет утилиту `telemt-report`.
 
 ### Важные отличия AlmaLinux-версии
 
-```text
-пакеты ставятся через dnf
-EPEL включается для certbot/fail2ban
-Docker ставится из официального docker-ce repo
-nginx config: /etc/nginx/conf.d/<domain>.conf
-nginx stream config: /etc/nginx/stream-conf.d/telemt-sni.conf
-nginx.conf не перезаписывается: добавляется только include для stream-conf.d, если его ещё нет
-если 443/tcp уже занят чужим HTTPS-сервисом, установка останавливается
-firewall управляется через firewalld
-fail2ban использует firewalld actions
-SELinux настраивается для 8443 и nginx proxy connect
-```
+В AlmaLinux-версии пакеты ставятся через `dnf`, EPEL включается для `certbot` и `fail2ban`, а Docker ставится из официального `docker-ce` репозитория. Nginx site-конфиг создаётся как `/etc/nginx/conf.d/<domain>.conf`, stream-конфиг как `/etc/nginx/stream-conf.d/telemt-sni.conf`.
+
+Скрипт не перезаписывает `nginx.conf`: он только добавляет include для `stream-conf.d`, если такого include ещё нет. Если `443/tcp` уже занят чужим HTTPS-сервисом, установка останавливается. Firewall управляется через `firewalld`, `fail2ban` использует actions для firewalld, а SELinux настраивается для `8443` и nginx proxy connect.
 
 ### Что спрашивает
 
-```text
-Proxy domain
-Let's Encrypt email, по умолчанию admin@<domain>
-SSH port, по умолчанию 22
-Max Telemt connections, по умолчанию 1000
-```
+1. Домен прокси.
+2. Email для Let's Encrypt. По умолчанию используется `admin@<domain>`.
+3. SSH-порт. По умолчанию используется `22`.
+4. Лимит подключений Telemt. По умолчанию используется `1000`.
 
 Перед выпуском сертификата скрипт проверяет, что `A`-запись домена указывает на публичный IPv4 текущего сервера.
 
@@ -86,20 +62,14 @@ telemt-report 5m
 
 AlmaLinux нужна только на целевых серверах, куда batch-скрипт копирует и запускает `install_telemt_alma.sh`.
 
-Что делает:
+Как работает пакетная установка:
 
-```text
-проверяет локальные ssh/scp/DNS-инструменты
-просит общие SSH/install настройки
-просит домены по одному
-проверяет A-записи
-проверяет SSH-доступ по ключу
-если ключ не работает, предлагает add_key.sh, password mode или skip
-копирует install_telemt_alma.sh на каждый сервер
-запускает install_telemt_alma.sh удаленно
-после успешной установки читает /root/telemt-proxy-link.txt
-печатает итоговый список Proxy links
-```
+1. Сначала скрипт проверяет локальные `ssh`/`scp`/DNS-инструменты и спрашивает общие SSH/install-настройки.
+2. Затем он принимает домены по одному. Пустая строка завершает ввод.
+3. Для каждого домена скрипт проверяет `A`-запись и SSH-доступ по ключу.
+4. Если ключевой вход не работает, можно запустить `add_key.sh`, использовать password mode (вход по паролю) или пропустить сервер.
+5. Когда доступ готов, скрипт копирует `install_telemt_alma.sh` на каждый сервер и запускает его удалённо.
+6. После успешной установки скрипт читает `/root/telemt-proxy-link.txt` и в конце печатает общий список `Proxy links`.
 
 Запуск:
 
@@ -157,46 +127,22 @@ add_key.sh                      helper for copying an SSH public key
 
 ### What install_telemt_alma.sh installs
 
-```text
-Docker CE + docker compose plugin
-Telemt in Docker
-nginx Stream SNI routing on 443/tcp
-HTTPS mask site on 127.0.0.1:8443
-Telemt backend on 127.0.0.1:1443
-Telemt API on 127.0.0.1:9091
-Let's Encrypt certificate
-certificate auto-renewal
-firewalld
-fail2ban
-nginx access logs disabled
-Telemt Docker runtime logs disabled
-SSH hardening
-telemt-report
-```
+The installer brings up the full Telemt stack for AlmaLinux: Docker CE with the compose plugin, Telemt in Docker, nginx Stream SNI routing on `443/tcp`, an HTTPS mask site on `127.0.0.1:8443`, a Telemt backend on `127.0.0.1:1443`, and a local-only Telemt API on `127.0.0.1:9091`.
+
+It also issues a Let's Encrypt certificate, enables renewal, configures `firewalld`, `fail2ban`, and SSH hardening, disables nginx access logs and Telemt Docker runtime logs, and installs the `telemt-report` utility.
 
 ### AlmaLinux-specific differences
 
-```text
-packages are installed with dnf
-EPEL is enabled for certbot/fail2ban
-Docker is installed from the official docker-ce repo
-nginx config: /etc/nginx/conf.d/<domain>.conf
-nginx stream config: /etc/nginx/stream-conf.d/telemt-sni.conf
-nginx.conf is not overwritten: only a stream-conf.d include is appended if missing
-if 443/tcp is already owned by another HTTPS service, installation stops
-firewall is managed with firewalld
-fail2ban uses firewalld actions
-SELinux is configured for 8443 and nginx proxy connect
-```
+In the AlmaLinux version, packages are installed with `dnf`, EPEL is enabled for `certbot` and `fail2ban`, and Docker is installed from the official `docker-ce` repository. The nginx site config is created as `/etc/nginx/conf.d/<domain>.conf`, and the stream config is created as `/etc/nginx/stream-conf.d/telemt-sni.conf`.
+
+The script does not overwrite `nginx.conf`: it only adds the `stream-conf.d` include if it is missing. If `443/tcp` is already owned by another HTTPS service, installation stops. Firewall is managed with `firewalld`, `fail2ban` uses firewalld actions, and SELinux is configured for `8443` and nginx proxy connect.
 
 ### Prompts
 
-```text
-Proxy domain
-Let's Encrypt email, default admin@<domain>
-SSH port, default 22
-Max Telemt connections, default 1000
-```
+1. Proxy domain.
+2. Let's Encrypt email. The default is `admin@<domain>`.
+3. SSH port. The default is `22`.
+4. Max Telemt connections. The default is `1000`.
 
 Before issuing a certificate, the script checks that the domain `A` record points to the current server public IPv4.
 
@@ -231,20 +177,14 @@ telemt-report 5m
 
 AlmaLinux is required only on the target servers where the batch script copies and runs `install_telemt_alma.sh`.
 
-What it does:
+How the batch install works:
 
-```text
-checks local ssh/scp/DNS tools
-asks for common SSH/install settings
-asks for domains one by one
-checks A records
-checks SSH key login
-if the key does not work, offers add_key.sh, password mode, or skip
-copies install_telemt_alma.sh to each server
-runs install_telemt_alma.sh remotely
-reads /root/telemt-proxy-link.txt after successful installs
-prints the final Proxy links list
-```
+1. First, the script checks local `ssh`/`scp`/DNS tools and asks for common SSH/install settings.
+2. Then it accepts domains one by one. An empty line finishes input.
+3. For every domain, it checks the `A` record and SSH key login.
+4. If key login does not work, you can run `add_key.sh`, use password mode, or skip the server.
+5. When access is ready, the script copies `install_telemt_alma.sh` to each server and runs it remotely.
+6. After a successful install, it reads `/root/telemt-proxy-link.txt` and prints the final `Proxy links` list.
 
 Run:
 
