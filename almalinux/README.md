@@ -29,6 +29,27 @@ add_key.sh                      вспомогательный скрипт дл
 3. SSH-порт. По умолчанию используется `22`.
 4. Лимит подключений Telemt. По умолчанию используется `1000`.
 
+Пример полного диалога:
+
+```text
+Proxy domain: <PROXY_DOMAIN>
+Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
+SSH port, Enter keeps current/default [22]: <Enter>
+Max Telemt connections [1000]: <Enter>
+
+Install plan:
+  domain:       <PROXY_DOMAIN>
+  public IPv4:  <SERVER_PUBLIC_IP>
+  email:        admin@<PROXY_DOMAIN>
+  SSH port:     22
+  Telemt limit: 1000
+
+Type y or yes to continue:
+y
+```
+
+В примере пустой ответ означает “оставить значение по умолчанию”. После `y` начинается установка: `dnf` ставит системные пакеты, включается EPEL, ставятся Docker CE/Compose, nginx, certbot, fail2ban и firewalld, затем выпускается сертификат, создаются nginx/Telemt-конфиги, запускается контейнер и применяется SSH/firewall/SELinux hardening.
+
 Перед выпуском сертификата скрипт проверяет, что `A`-запись домена указывает на публичный IPv4 текущего сервера.
 
 ### Важно: только чистый сервер
@@ -70,6 +91,33 @@ AlmaLinux нужна только на целевых серверах, куда
 4. Если ключевой вход не работает, можно запустить `add_key.sh`, использовать password mode (вход по паролю) или пропустить сервер.
 5. Когда доступ готов, скрипт копирует `install_telemt_alma.sh` на каждый сервер и запускает его удалённо.
 6. После успешной установки скрипт читает `/root/telemt-proxy-link.txt` и в конце печатает общий список `Proxy links`.
+
+Пример диалога batch-режима:
+
+```text
+SSH user for installation [root]: root
+Current SSH port for connecting to servers [22]: <Enter>
+SSH port to configure on installed servers [22]: <Enter>
+Telemt max TCP connections [1000]: <Enter>
+Common Let's Encrypt email, empty = admin@domain []: <Enter>
+
+Domain: proxy-one.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain: proxy-two.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain:
+```
+
+Пустой ответ оставляет значение по умолчанию. Пустой `Domain:` завершает список серверов. Если SSH-вход по ключу не работает, появится выбор:
+
+```text
+1) Copy/install key with add_key.sh (recommended)
+2) Use SSH password for this installation
+3) Skip this server
+Choose [1/2/3]:
+```
+
+Вариант `1` запускает `add_key.sh` и может спросить SSH-пароль для копирования ключа. Вариант `2` использует парольные запросы SSH/SCP только для текущей установки. Вариант `3` пропускает сервер.
 
 Запуск:
 
@@ -144,6 +192,27 @@ The script does not overwrite `nginx.conf`: it only adds the `stream-conf.d` inc
 3. SSH port. The default is `22`.
 4. Max Telemt connections. The default is `1000`.
 
+Full dialogue example:
+
+```text
+Proxy domain: <PROXY_DOMAIN>
+Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
+SSH port, Enter keeps current/default [22]: <Enter>
+Max Telemt connections [1000]: <Enter>
+
+Install plan:
+  domain:       <PROXY_DOMAIN>
+  public IPv4:  <SERVER_PUBLIC_IP>
+  email:        admin@<PROXY_DOMAIN>
+  SSH port:     22
+  Telemt limit: 1000
+
+Type y or yes to continue:
+y
+```
+
+In this example, an empty answer means “keep the default”. After `y`, installation starts: `dnf` installs system packages, EPEL is enabled, Docker CE/Compose, nginx, certbot, fail2ban, and firewalld are installed, then the certificate is issued, nginx/Telemt configs are written, the container starts, and SSH/firewall/SELinux hardening is applied.
+
 Before issuing a certificate, the script checks that the domain `A` record points to the current server public IPv4.
 
 ### Important: Clean Server Only
@@ -185,6 +254,33 @@ How the batch install works:
 4. If key login does not work, you can run `add_key.sh`, use password mode, or skip the server.
 5. When access is ready, the script copies `install_telemt_alma.sh` to each server and runs it remotely.
 6. After a successful install, it reads `/root/telemt-proxy-link.txt` and prints the final `Proxy links` list.
+
+Batch mode dialogue example:
+
+```text
+SSH user for installation [root]: root
+Current SSH port for connecting to servers [22]: <Enter>
+SSH port to configure on installed servers [22]: <Enter>
+Telemt max TCP connections [1000]: <Enter>
+Common Let's Encrypt email, empty = admin@domain []: <Enter>
+
+Domain: proxy-one.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain: proxy-two.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain:
+```
+
+An empty answer keeps the default. An empty `Domain:` finishes the server list. If SSH key login does not work, the script shows:
+
+```text
+1) Copy/install key with add_key.sh (recommended)
+2) Use SSH password for this installation
+3) Skip this server
+Choose [1/2/3]:
+```
+
+Option `1` runs `add_key.sh` and may ask for the SSH password to copy the key. Option `2` uses interactive SSH/SCP password prompts only for the current installation. Option `3` skips the server.
 
 Run:
 

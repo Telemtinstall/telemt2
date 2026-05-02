@@ -96,6 +96,27 @@ admin@<PROXY_DOMAIN>
 
 После показа плана установки скрипт спросит подтверждение. Можно ввести `y`, `yes` или `YES`.
 
+Пример полного диалога:
+
+```text
+Proxy domain: <PROXY_DOMAIN>
+Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
+SSH port, Enter keeps current/default [22]: <Enter>
+Max Telemt connections [1000]: <Enter>
+
+Install plan:
+  domain:       <PROXY_DOMAIN>
+  public IPv4:  <SERVER_PUBLIC_IP>
+  email:        admin@<PROXY_DOMAIN>
+  SSH port:     22
+  Telemt limit: 1000
+
+Type y or yes to continue:
+y
+```
+
+В примере пустой ответ означает “оставить значение по умолчанию”. После `y` начинается установка: `apt` обновляет пакеты, ставятся Docker/Compose, nginx, nginx stream module, certbot, fail2ban, nftables, jq, curl и openssl, затем выпускается сертификат, создаются nginx/Telemt-конфиги, запускается контейнер и применяется SSH/firewall hardening.
+
 ### Проверки перед установкой
 
 Скрипт определяет публичный IPv4 сервера и проверяет DNS:
@@ -288,7 +309,7 @@ DNS ещё не указывает на сервер
 
 Как он работает:
 
-1. Спрашивает адрес сервера, SSH-порт, пользователя, путь к локальному ключу и комментарий для нового ключа.
+1. Спрашивает адрес сервера, SSH-порт, пользователя и комментарий для нового ключа. Локальный ключ берётся из `KEY_PATH`, а если переменная не задана, используется `~/.ssh/id_ed25519`.
 2. Создаёт локальный `ed25519` ключ, если выбранного ключа ещё нет. Если приватный ключ есть, а `.pub` файл отсутствует, восстанавливает публичный ключ.
 3. Проверяет `known_hosts`: показывает SHA256 fingerprint host key перед добавлением или остановится при несовпадении с `EXPECTED_HOST_KEY_SHA256`.
 4. На Unix/Linux сервере добавляет публичный ключ в `authorized_keys`; если основной способ не сработал, пробует `ssh-copy-id`.
@@ -301,6 +322,19 @@ DNS ещё не указывает на сервер
 chmod +x ../common/add_key.sh
 ../common/add_key.sh
 ```
+
+Он спросит:
+
+```text
+Введите IP/hostname сервера (можно user@host): root@<SERVER_PUBLIC_IP>
+Введите SSH-порт [22]: <SSH_PORT>
+Введите email/comment для ключа [<LOCAL_USER>@<LOCAL_HOST>]: admin@<PROXY_DOMAIN>
+Введите имя пользователя на сервере [root]: root
+Доверять этому host key и добавить его в known_hosts? [y/N]: y
+root@<SERVER_PUBLIC_IP>'s password: <SSH_PASSWORD>
+```
+
+Пароль нужен только чтобы один раз зайти на сервер и записать публичный ключ. После этого скрипт копирует ключ в `authorized_keys` и проверяет вход без пароля.
 
 Запуск с параметрами через environment:
 
@@ -338,6 +372,33 @@ chmod +x /root/install_telemt_astra.sh
 4. После DNS-проверки скрипт проверяет SSH-вход по ключу на каждый сервер. Если ключевой вход не работает, можно запустить `add_key.sh`, использовать password mode (вход по паролю) или пропустить сервер.
 5. Когда доступ готов, скрипт копирует `install_telemt_astra.sh` на сервер и запускает его удалённо с выбранным доменом и настройками.
 6. По каждому домену печатается отдельный результат. После успешной установки скрипт читает `/root/telemt-proxy-link.txt` и в конце выводит общий блок `Proxy links`.
+
+Пример диалога batch-режима:
+
+```text
+SSH user for installation [root]: root
+Current SSH port for connecting to servers [22]: <Enter>
+SSH port to configure on installed servers [22]: <Enter>
+Telemt max TCP connections [1000]: <Enter>
+Common Let's Encrypt email, empty = admin@domain []: <Enter>
+
+Domain: proxy-one.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain: proxy-two.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain:
+```
+
+Пустой ответ оставляет значение по умолчанию. Пустой `Domain:` завершает список серверов. Если SSH-вход по ключу не работает, появится выбор:
+
+```text
+1) Copy/install key with add_key.sh (recommended)
+2) Use SSH password for this installation
+3) Skip this server
+Choose [1/2/3]:
+```
+
+Вариант `1` запускает `add_key.sh` и может спросить SSH-пароль для копирования ключа. Вариант `2` использует парольные запросы SSH/SCP только для текущей установки. Вариант `3` пропускает сервер.
 
 Блок `Proxy links` содержит рабочие Telegram proxy-ссылки с секретами. Относитесь к ним как к паролям.
 
@@ -464,6 +525,27 @@ Press Enter to keep `22`, or type a different port.
 Press Enter to keep `1000`, or type another number.
 
 After showing the installation plan, the script asks for confirmation. You can type `y`, `yes`, or `YES`.
+
+Full dialogue example:
+
+```text
+Proxy domain: <PROXY_DOMAIN>
+Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
+SSH port, Enter keeps current/default [22]: <Enter>
+Max Telemt connections [1000]: <Enter>
+
+Install plan:
+  domain:       <PROXY_DOMAIN>
+  public IPv4:  <SERVER_PUBLIC_IP>
+  email:        admin@<PROXY_DOMAIN>
+  SSH port:     22
+  Telemt limit: 1000
+
+Type y or yes to continue:
+y
+```
+
+In this example, an empty answer means “keep the default”. After `y`, installation starts: `apt` updates packages, installs Docker/Compose, nginx, nginx stream module, certbot, fail2ban, nftables, jq, curl, and openssl, then issues the certificate, writes nginx/Telemt configs, starts the container, and applies SSH/firewall hardening.
 
 ### Preflight Checks
 
@@ -657,7 +739,7 @@ provider firewall blocks incoming connections
 
 How it works:
 
-1. It asks for the server address, SSH port, username, local key path, and comment for a new key.
+1. It asks for the server address, SSH port, username, and comment for a new key. The local key is taken from `KEY_PATH`; if the variable is not set, `~/.ssh/id_ed25519` is used.
 2. It creates a local `ed25519` key if the selected key does not exist. If the private key exists but `.pub` is missing, it rebuilds the public key.
 3. It checks `known_hosts`: it shows the SHA256 host key fingerprint before adding it, or stops if it does not match `EXPECTED_HOST_KEY_SHA256`.
 4. On Unix/Linux servers, it adds the public key to `authorized_keys`; if the primary method fails, it tries `ssh-copy-id`.
@@ -670,6 +752,19 @@ Run:
 chmod +x ../common/add_key.sh
 ../common/add_key.sh
 ```
+
+It asks:
+
+```text
+Введите IP/hostname сервера (можно user@host): root@<SERVER_PUBLIC_IP>
+Введите SSH-порт [22]: <SSH_PORT>
+Введите email/comment для ключа [<LOCAL_USER>@<LOCAL_HOST>]: admin@<PROXY_DOMAIN>
+Введите имя пользователя на сервере [root]: root
+Доверять этому host key и добавить его в known_hosts? [y/N]: y
+root@<SERVER_PUBLIC_IP>'s password: <SSH_PASSWORD>
+```
+
+The password is needed only for the one-time login that writes the public key to the server. After that, the script copies the key into `authorized_keys` and verifies passwordless login.
 
 Run with environment parameters:
 
@@ -707,6 +802,33 @@ How the batch install works:
 4. After DNS checks, it verifies SSH key login for every server. If key login does not work, you can run `add_key.sh`, use password mode, or skip the server.
 5. When access is ready, the script copies `install_telemt_astra.sh` to the server and runs it remotely with the selected domain and settings.
 6. The script prints a result for every domain. After each successful install, it reads `/root/telemt-proxy-link.txt` and prints the final `Proxy links` block at the end.
+
+Batch mode dialogue example:
+
+```text
+SSH user for installation [root]: root
+Current SSH port for connecting to servers [22]: <Enter>
+SSH port to configure on installed servers [22]: <Enter>
+Telemt max TCP connections [1000]: <Enter>
+Common Let's Encrypt email, empty = admin@domain []: <Enter>
+
+Domain: proxy-one.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain: proxy-two.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain:
+```
+
+An empty answer keeps the default. An empty `Domain:` finishes the server list. If SSH key login does not work, the script shows:
+
+```text
+1) Copy/install key with add_key.sh (recommended)
+2) Use SSH password for this installation
+3) Skip this server
+Choose [1/2/3]:
+```
+
+Option `1` runs `add_key.sh` and may ask for the SSH password to copy the key. Option `2` uses interactive SSH/SCP password prompts only for the current installation. Option `3` skips the server.
 
 The `Proxy links` block contains live Telegram proxy links with secrets. Treat them like passwords.
 

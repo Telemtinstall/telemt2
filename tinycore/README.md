@@ -69,6 +69,28 @@ chmod +x /root/install_telemt_tinycore.sh
 
 Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, а также лимит подключений Telemt со значением по умолчанию `1000`.
 
+Пример полного диалога:
+
+```text
+Proxy domain: <PROXY_DOMAIN>
+Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
+SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
+Max Telemt connections [1000]: <Enter>
+
+Install plan:
+  target OS:    Tiny Core Linux
+  domain:       <PROXY_DOMAIN>
+  email:        admin@<PROXY_DOMAIN>
+  SSH port:     22 (not changed by this installer)
+  Telemt limit: 1000
+  release:      3.4.0
+
+Type y or yes to continue:
+y
+```
+
+В примере пустой ответ означает “оставить значение по умолчанию”. После `y` начинается установка: через `tce-load` ставятся зависимости, настраивается nginx stream, скачивается и проверяется Telemt native binary, устанавливается `acme.sh`, выпускается сертификат, создаются конфиги, autostart и persistence через `/opt/.filetool.lst`.
+
 После установки:
 
 ```text
@@ -110,6 +132,31 @@ chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 2. Для каждого домена он проверяет `A`-запись и SSH-доступ.
 3. Когда доступ готов, скрипт копирует `install_telemt_tinycore.sh` на сервер и запускает его удалённо.
 4. После успешной установки он читает `/root/telemt-proxy-link.txt` и в конце печатает общий список `Proxy links`.
+
+Пример диалога batch-режима:
+
+```text
+SSH user for installation [root]: root
+Current SSH port for connecting to servers [22]: <Enter>
+SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
+Telemt max TCP connections [1000]: <Enter>
+Common Let's Encrypt email, empty = admin@domain []: <Enter>
+
+Domain: proxy-one.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain:
+```
+
+Пустой ответ оставляет значение по умолчанию. Пустой `Domain:` завершает список серверов. Если SSH-вход по ключу не работает, появится выбор:
+
+```text
+1) Copy/install key with add_key.sh (recommended)
+2) Use SSH password for this installation
+3) Skip this server
+Choose [1/2/3]:
+```
+
+Вариант `1` запускает `add_key.sh` и может спросить SSH-пароль для копирования ключа. Вариант `2` использует парольные запросы SSH/SCP только для текущей установки. Вариант `3` пропускает сервер.
 
 Блок `Proxy links` содержит рабочие Telegram proxy-ссылки с секретами. Относитесь к ним как к паролям.
 
@@ -199,6 +246,28 @@ chmod +x /root/install_telemt_tinycore.sh
 
 The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, and max Telemt connections with default `1000`.
 
+Full dialogue example:
+
+```text
+Proxy domain: <PROXY_DOMAIN>
+Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
+SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
+Max Telemt connections [1000]: <Enter>
+
+Install plan:
+  target OS:    Tiny Core Linux
+  domain:       <PROXY_DOMAIN>
+  email:        admin@<PROXY_DOMAIN>
+  SSH port:     22 (not changed by this installer)
+  Telemt limit: 1000
+  release:      3.4.0
+
+Type y or yes to continue:
+y
+```
+
+In this example, an empty answer means “keep the default”. After `y`, installation starts: dependencies are installed through `tce-load`, nginx stream is configured, the Telemt native binary is downloaded and verified, `acme.sh` is installed, the certificate is issued, and configs, autostart, and persistence through `/opt/.filetool.lst` are written.
+
 After installation:
 
 ```text
@@ -240,6 +309,31 @@ How the batch install works:
 2. For every domain, it checks the `A` record and SSH access.
 3. When access is ready, it copies `install_telemt_tinycore.sh` to the server and runs it remotely.
 4. After a successful install, it reads `/root/telemt-proxy-link.txt` and prints the final `Proxy links` list.
+
+Batch mode dialogue example:
+
+```text
+SSH user for installation [root]: root
+Current SSH port for connecting to servers [22]: <Enter>
+SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
+Telemt max TCP connections [1000]: <Enter>
+Common Let's Encrypt email, empty = admin@domain []: <Enter>
+
+Domain: proxy-one.example.com
+Server IP to use [<SERVER_PUBLIC_IP>]: <Enter>
+Domain:
+```
+
+An empty answer keeps the default. An empty `Domain:` finishes the server list. If SSH key login does not work, the script shows:
+
+```text
+1) Copy/install key with add_key.sh (recommended)
+2) Use SSH password for this installation
+3) Skip this server
+Choose [1/2/3]:
+```
+
+Option `1` runs `add_key.sh` and may ask for the SSH password to copy the key. Option `2` uses interactive SSH/SCP password prompts only for the current installation. Option `3` skips the server.
 
 The `Proxy links` block contains live Telegram proxy links with secrets. Treat them like passwords.
 
