@@ -59,6 +59,52 @@ SSH key helper   -> common/
 
 Each OS directory has its own `README.md` with Russian and English instructions.
 
+## Download From GitHub / Скачать С GitHub
+
+RU: Если нужен один установщик, его можно скачать прямо на сервер через `wget` или `curl`:
+
+```bash
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+chmod +x /root/install_telemt.sh
+```
+
+```bash
+curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+chmod +x /root/install_telemt.sh
+```
+
+RU: Если нужен `git`, скачайте только нужный каталог:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set debian-ubuntu
+cp debian-ubuntu/install_telemt.sh /root/
+chmod +x /root/install_telemt.sh
+```
+
+EN: To download a single installer directly on the server, use `wget` or `curl`:
+
+```bash
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+chmod +x /root/install_telemt.sh
+```
+
+```bash
+curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+chmod +x /root/install_telemt.sh
+```
+
+EN: If you want to use `git`, download only the needed directory:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set debian-ubuntu
+cp debian-ubuntu/install_telemt.sh /root/
+chmod +x /root/install_telemt.sh
+```
+
 ## Batch Mode
 
 Batch scripts are local orchestrators. They can run on an admin machine such as macOS, Debian, Ubuntu, AlmaLinux, or another Linux host with:

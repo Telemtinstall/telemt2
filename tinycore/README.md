@@ -58,10 +58,42 @@ Internet
 
 SSH-hardening на Tiny Core лучше делать отдельно, потому что там часто используется не стандартный OpenSSH/systemd-layout.
 
-### Запуск На Одном Сервере
+### Как скачать файл на сервер
+
+Если файл уже есть на вашем компьютере, скопируйте его через `scp`:
 
 ```bash
 scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
+```
+
+Если файл нужно скачать прямо с GitHub на сервере:
+
+```bash
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+```
+
+То же самое через `curl`:
+
+```bash
+curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+```
+
+Если нужен именно `git`, скачайте только каталог Tiny Core:
+
+```bash
+tce-load -wi git
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set tinycore
+cp tinycore/install_telemt_tinycore.sh /root/
+chmod +x /root/install_telemt_tinycore.sh
+```
+
+### Запуск На Одном Сервере
+
+```bash
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
@@ -235,10 +267,42 @@ The script does not change the SSH port, does not disable SSH password login, do
 
 SSH hardening is better handled separately on Tiny Core because deployments often use non-standard OpenSSH/Dropbear layouts.
 
-### Single-Server Install
+### How To Download The File To The Server
+
+If the file is already on your computer, copy it with `scp`:
 
 ```bash
 scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
+```
+
+If you want to download it directly from GitHub on the server:
+
+```bash
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+```
+
+The same with `curl`:
+
+```bash
+curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+```
+
+If you specifically want to use `git`, download only the Tiny Core directory:
+
+```bash
+tce-load -wi git
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set tinycore
+cp tinycore/install_telemt_tinycore.sh /root/
+chmod +x /root/install_telemt_tinycore.sh
+```
+
+### Single-Server Install
+
+```bash
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh

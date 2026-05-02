@@ -15,6 +15,20 @@
 
 Скрипт не отключает SSH-пароли и не меняет конфиг SSH-сервера. Этим занимается основной установщик Telemt после проверки, что ключевой вход уже работает.
 
+Как скачать `add_key.sh` с GitHub:
+
+```bash
+wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/common/add_key.sh
+chmod +x ./add_key.sh
+```
+
+Или через `curl`:
+
+```bash
+curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/common/add_key.sh
+chmod +x ./add_key.sh
+```
+
 Запуск:
 
 ```bash
@@ -116,6 +130,20 @@ How it works:
 6. At the end, the script verifies passwordless key login. If verification fails, it reports the error so you do not start the Telemt installer on a server with unfinished SSH access.
 
 The script does not disable SSH passwords and does not modify the SSH server config. The main Telemt installer does that later, after key login has been verified.
+
+How to download `add_key.sh` from GitHub:
+
+```bash
+wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/common/add_key.sh
+chmod +x ./add_key.sh
+```
+
+Or with `curl`:
+
+```bash
+curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/common/add_key.sh
+chmod +x ./add_key.sh
+```
 
 Run:
 

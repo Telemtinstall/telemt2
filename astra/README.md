@@ -37,12 +37,45 @@ Internet
 
 Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewall, SSH hardening, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
 
+### Как скачать файл на сервер
+
+Если файл уже есть на вашем компьютере, скопируйте его через `scp`:
+
+```bash
+scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
+```
+
+Если файл нужно скачать прямо с GitHub на сервере:
+
+```bash
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+```
+
+То же самое через `curl`:
+
+```bash
+curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+```
+
+Если нужен именно `git`, скачайте только каталог Astra:
+
+```bash
+apt-get update
+apt-get install -y git
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set astra
+cp astra/install_telemt_astra.sh /root/
+chmod +x /root/install_telemt_astra.sh
+```
+
 ### Как запускать
 
 Скрипт нужно запускать на целевом сервере, а не на локальном компьютере.
 
 ```bash
-scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_astra.sh
 /root/install_telemt_astra.sh
@@ -465,12 +498,45 @@ Only external port `443` is exposed. Telemt does not listen on the public networ
 
 Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewall, SSH hardening, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
+### How To Download The File To The Server
+
+If the file is already on your computer, copy it with `scp`:
+
+```bash
+scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
+```
+
+If you want to download it directly from GitHub on the server:
+
+```bash
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+```
+
+The same with `curl`:
+
+```bash
+curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+```
+
+If you specifically want to use `git`, download only the Astra directory:
+
+```bash
+apt-get update
+apt-get install -y git
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set astra
+cp astra/install_telemt_astra.sh /root/
+chmod +x /root/install_telemt_astra.sh
+```
+
 ### How To Run
 
 Run the script on the target server, not on your local computer.
 
 ```bash
-scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_astra.sh
 /root/install_telemt_astra.sh

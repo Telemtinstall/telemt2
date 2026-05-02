@@ -56,10 +56,42 @@ y
 
 Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewalld, SSH hardening, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
 
-### Запуск на одном сервере
+### Как скачать файл на сервер
+
+Если файл уже есть на вашем компьютере, скопируйте его через `scp`:
 
 ```bash
 scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
+```
+
+Если файл нужно скачать прямо с GitHub на сервере:
+
+```bash
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+```
+
+То же самое через `curl`:
+
+```bash
+curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+```
+
+Если нужен именно `git`, скачайте только каталог AlmaLinux:
+
+```bash
+dnf install -y git
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set almalinux
+cp almalinux/install_telemt_alma.sh /root/
+chmod +x /root/install_telemt_alma.sh
+```
+
+### Запуск на одном сервере
+
+```bash
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_alma.sh
 /root/install_telemt_alma.sh
@@ -219,10 +251,42 @@ Before issuing a certificate, the script checks that the domain `A` record point
 
 Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewalld, SSH hardening, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
-### Single-server install
+### How To Download The File To The Server
+
+If the file is already on your computer, copy it with `scp`:
 
 ```bash
 scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
+```
+
+If you want to download it directly from GitHub on the server:
+
+```bash
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+```
+
+The same with `curl`:
+
+```bash
+curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+```
+
+If you specifically want to use `git`, download only the AlmaLinux directory:
+
+```bash
+dnf install -y git
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+cd /tmp/telemt
+git sparse-checkout set almalinux
+cp almalinux/install_telemt_alma.sh /root/
+chmod +x /root/install_telemt_alma.sh
+```
+
+### Single-server install
+
+```bash
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_alma.sh
 /root/install_telemt_alma.sh
