@@ -33,6 +33,10 @@ Internet
 4. Порты `80/tcp` и `443/tcp` должны быть доступны с интернета.
 5. В `/root/.ssh/authorized_keys` должен быть SSH-ключ, потому что скрипт отключает SSH-пароли.
 
+### Важно: только чистый сервер
+
+Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewall, SSH hardening, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
+
 ### Как запускать
 
 Скрипт нужно запускать на целевом сервере, а не на локальном компьютере.
@@ -423,6 +427,10 @@ Only external port `443` is exposed. Telemt does not listen on the public networ
 
 4. Ports `80/tcp` and `443/tcp` must be reachable from the internet.
 5. `/root/.ssh/authorized_keys` must contain your SSH public key because the script disables SSH password login.
+
+### Important: Clean Server Only
+
+Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewall, SSH hardening, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
 ### How To Run
 

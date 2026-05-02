@@ -13,6 +13,12 @@ This repository intentionally uses placeholders only:
 
 No private domains, real server IPs, logins, SSH private keys, or generated proxy secrets should be committed here.
 
+## Clean Server Only / Только Чистый Сервер
+
+RU: Запускайте установщики только на новом чистом VPS/server без чужих сайтов, панелей управления и сетевых сервисов. Скрипты настраивают nginx, firewall, SSH hardening, Docker/Telemt и сертификаты; для этого им нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если на сервере уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. В таком случае используйте отдельную машину или интегрируйте Telemt вручную.
+
+EN: Run the installers only on a new clean VPS/server without existing websites, control panels, or network services. The scripts configure nginx, firewall, SSH hardening, Docker/Telemt, and certificates; they need free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
+
 ## Structure
 
 ```text

@@ -36,6 +36,10 @@ root-доступ
 A-запись домена должна указывать на публичный IPv4 сервера
 ```
 
+### Важно: только чистый сервер
+
+Используйте новый Tiny Core сервер без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx stream, Telemt, acme.sh, autostart и persistence; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если на сервере уже есть web/proxy/VPN/mail-сервисы, возможны конфликты портов и потеря настроек после reboot из-за persistence. Для таких случаев лучше отдельная машина или ручная интеграция.
+
 Официальный Telemt сейчас публикует `linux-musl` бинарники для `x86_64` и `aarch64`. Поэтому 32-bit Tiny Core x86 этим скриптом не поддерживается.
 
 По умолчанию используется pinned Telemt release `3.4.0` и pinned `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для другого release нужно передать свои `TELEMT_RELEASE`, `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
@@ -204,6 +208,10 @@ root access
 open 80/tcp and 443/tcp
 the domain A record must point to the server public IPv4
 ```
+
+### Important: Clean Server Only
+
+Use a new Tiny Core server without existing websites, control panels, or network services. The installer configures nginx stream, Telemt, acme.sh, autostart, and persistence; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If web/proxy/VPN/mail services already exist, port conflicts and reboot persistence issues are possible. Use a separate machine or integrate manually.
 
 Official Telemt currently publishes `linux-musl` binaries for `x86_64` and `aarch64`. 32-bit Tiny Core x86 is not supported by this script.
 

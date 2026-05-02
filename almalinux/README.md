@@ -55,6 +55,10 @@ Max Telemt connections, по умолчанию 1000
 
 Перед выпуском сертификата скрипт проверяет, что `A`-запись домена указывает на публичный IPv4 текущего сервера.
 
+### Важно: только чистый сервер
+
+Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewalld, SSH hardening, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
+
 ### Запуск на одном сервере
 
 ```bash
@@ -195,6 +199,10 @@ Max Telemt connections, default 1000
 ```
 
 Before issuing a certificate, the script checks that the domain `A` record points to the current server public IPv4.
+
+### Important: Clean Server Only
+
+Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewalld, SSH hardening, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
 ### Single-server install
 
