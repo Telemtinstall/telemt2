@@ -1,8 +1,8 @@
-# install_telemt.sh
+# install_telemt_astra.sh
 
 ## Русское описание
 
-`install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом сервере без WireGuard.
+`install_telemt_astra.sh` автоматически поднимает Telemt MTProto proxy на новом сервере Astra Linux без WireGuard.
 
 Целевая схема после установки:
 
@@ -22,7 +22,7 @@ Internet
 
 ### Что нужно до запуска
 
-1. Новый VPS/server с Debian или Ubuntu.
+1. Новый VPS/server с Astra Linux.
 2. Root-доступ по SSH.
 3. Домен, уже направленный A-записью на публичный IPv4 сервера:
 
@@ -38,16 +38,16 @@ Internet
 Скрипт нужно запускать на целевом сервере, а не на локальном компьютере.
 
 ```bash
-scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
+scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
 Рекомендуемый способ для долгой установки, чтобы пережить обрыв SSH:
 
 ```bash
 tmux new -s telemt-install
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
 Если SSH оборвался, вернуться в сессию:
@@ -126,7 +126,7 @@ admin@<PROXY_DOMAIN>
 Если SSH-сессия оборвалась или команда прервалась, зайдите на сервер снова и запустите:
 
 ```bash
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
 Скрипт повторно спросит параметры, подставит сохранённые значения по умолчанию и пропустит шаги, которые уже были успешно завершены.
@@ -134,7 +134,7 @@ bash /root/install_telemt.sh
 Чтобы начать установку заново без учёта state-файла:
 
 ```bash
-RESET_INSTALL_STATE=1 bash /root/install_telemt.sh
+RESET_INSTALL_STATE=1 bash /root/install_telemt_astra.sh
 ```
 
 Это сбрасывает только маркеры прогресса и сохранённые параметры установщика. Уже созданные системные файлы, сертификаты, Docker-образы и конфиги не удаляются.
@@ -277,7 +277,7 @@ DNS ещё не указывает на сервер
 
 ### Вспомогательный Инструмент add_key.sh
 
-`add_key.sh` помогает подготовить SSH-доступ к серверу до запуска `install_telemt.sh`.
+`add_key.sh` помогает подготовить SSH-доступ к серверу до запуска `install_telemt_astra.sh`.
 
 Что делает:
 
@@ -294,34 +294,34 @@ DNS ещё не указывает на сервер
 Запуск:
 
 ```bash
-./add_key.sh
+../common/add_key.sh
 ```
 
 Запуск с параметрами через environment:
 
 ```bash
-SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
+SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ../common/add_key.sh
 ```
 
 После успешной проверки ключа можно копировать и запускать установщик:
 
 ```bash
-scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
+scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
-### Пакетная Установка install_telemt_batch.sh
+### Пакетная Установка install_telemt_batch_astra.sh
 
-`install_telemt_batch.sh` запускается на локальной админской машине и устанавливает Telemt сразу на несколько серверов.
+`install_telemt_batch_astra.sh` запускается на локальной админской машине и устанавливает Telemt сразу на несколько серверов.
 
-Важно: пакетный скрипт не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt.sh`: копирует его на каждый сервер и запускает удалённо.
+Важно: пакетный скрипт не содержит отдельной копии логики установки Telemt. Он использует основной `install_telemt_astra.sh`: копирует его на каждый сервер и запускает удалённо.
 
 Пакетный скрипт можно запускать на локальной машине с:
 
 ```text
 macOS
-Debian/Ubuntu/Linux
+любой Linux на админской машине
 ```
 
 Перед началом пакетный скрипт проверяет локальные зависимости:
@@ -331,8 +331,8 @@ bash 3+
 ssh
 scp
 один DNS resolver: getent, dig или host
-install_telemt.sh рядом с install_telemt_batch.sh
-add_key.sh рядом с install_telemt_batch.sh
+install_telemt_astra.sh рядом с install_telemt_batch_astra.sh
+../common/add_key.sh относительно каталога astra
 ```
 
 Если чего-то не хватает, скрипт остановится до любых подключений к серверам.
@@ -348,8 +348,8 @@ add_key.sh рядом с install_telemt_batch.sh
 если A-записи нет, предлагает указать другой домен с A-записью
 проверяет SSH-вход по ключу на каждый сервер
 если ключ не работает, предлагает add_key.sh, password mode или skip
-копирует install_telemt.sh на сервер
-запускает install_telemt.sh удалённо с выбранным доменом и настройками
+копирует install_telemt_astra.sh на сервер
+запускает install_telemt_astra.sh удалённо с выбранным доменом и настройками
 печатает результат по каждому домену
 после успешной установки читает /root/telemt-proxy-link.txt
 печатает итоговый список Proxy links
@@ -360,7 +360,7 @@ add_key.sh рядом с install_telemt_batch.sh
 Запуск:
 
 ```bash
-./install_telemt_batch.sh
+./install_telemt_batch_astra.sh
 ```
 
 Пример ввода доменов:
@@ -376,16 +376,16 @@ Domain:
 Опциональные переменные:
 
 ```bash
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch_astra.sh
 ```
 
-`install_telemt.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без пакетного режима.
+`install_telemt_astra.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без пакетного режима.
 
 ---
 
 ## English Description
 
-`install_telemt.sh` automatically installs a Telemt MTProto proxy on a new server without WireGuard.
+`install_telemt_astra.sh` automatically installs a Telemt MTProto proxy on a new server without WireGuard.
 
 Target architecture after installation:
 
@@ -405,7 +405,7 @@ Only external port `443` is exposed. Telemt does not listen on the public networ
 
 ### Requirements Before Running
 
-1. A fresh Debian or Ubuntu VPS/server.
+1. A fresh Astra Linux VPS/server.
 2. Root SSH access.
 3. A domain with an A record already pointing to the server public IPv4:
 
@@ -421,16 +421,16 @@ Only external port `443` is exposed. Telemt does not listen on the public networ
 Run the script on the target server, not on your local computer.
 
 ```bash
-scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
+scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
 Recommended method for long installations, so the process survives SSH disconnects:
 
 ```bash
 tmux new -s telemt-install
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
 If SSH disconnects, reattach:
@@ -509,7 +509,7 @@ The Telemt secret is stored separately:
 If the SSH session disconnects or the command is interrupted, log into the server again and run:
 
 ```bash
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
 The script will ask for parameters again, use saved values as defaults, and skip steps that were already completed successfully.
@@ -517,7 +517,7 @@ The script will ask for parameters again, use saved values as defaults, and skip
 To restart the installer without using the progress state:
 
 ```bash
-RESET_INSTALL_STATE=1 bash /root/install_telemt.sh
+RESET_INSTALL_STATE=1 bash /root/install_telemt_astra.sh
 ```
 
 This resets only installer progress markers and saved installer parameters. Existing system files, certificates, Docker images, and configs are not deleted.
@@ -660,7 +660,7 @@ provider firewall blocks incoming connections
 
 ### Auxiliary Tool add_key.sh
 
-`add_key.sh` helps prepare SSH access before running `install_telemt.sh`.
+`add_key.sh` helps prepare SSH access before running `install_telemt_astra.sh`.
 
 What it does:
 
@@ -677,34 +677,34 @@ verifies that key login actually works
 Run:
 
 ```bash
-./add_key.sh
+../common/add_key.sh
 ```
 
 Run with environment parameters:
 
 ```bash
-SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
+SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ../common/add_key.sh
 ```
 
 After key login is verified, copy and run the installer:
 
 ```bash
-scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
+scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt.sh
+bash /root/install_telemt_astra.sh
 ```
 
-### Batch Installation install_telemt_batch.sh
+### Batch Installation install_telemt_batch_astra.sh
 
-`install_telemt_batch.sh` runs on the local admin machine and installs Telemt on multiple servers.
+`install_telemt_batch_astra.sh` runs on the local admin machine and installs Telemt on multiple Astra Linux servers.
 
-Important: the batch script does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt.sh`: copies it to every server and runs it remotely.
+Important: the batch script does not contain a separate copy of the Telemt installation logic. It uses the main `install_telemt_astra.sh`: copies it to every server and runs it remotely.
 
 The batch script can be launched from a local machine running:
 
 ```text
 macOS
-Debian/Ubuntu/Linux
+any Linux admin machine
 ```
 
 Before starting, the batch script checks local dependencies:
@@ -714,8 +714,8 @@ bash 3+
 ssh
 scp
 one DNS resolver: getent, dig, or host
-install_telemt.sh next to install_telemt_batch.sh
-add_key.sh next to install_telemt_batch.sh
+install_telemt_astra.sh next to install_telemt_batch_astra.sh
+../common/add_key.sh relative to the astra directory
 ```
 
 If something is missing, the script stops before connecting to any server.
@@ -731,8 +731,8 @@ checks the A record for every domain
 if no A record exists, offers entering another domain with an A record
 checks SSH key login for every server
 if the key does not work, offers add_key.sh, password mode, or skip
-copies install_telemt.sh to the server
-runs install_telemt.sh remotely with the selected domain and settings
+copies install_telemt_astra.sh to the server
+runs install_telemt_astra.sh remotely with the selected domain and settings
 prints per-domain results
 reads /root/telemt-proxy-link.txt after successful installs
 prints the final Proxy links list
@@ -743,7 +743,7 @@ The `Proxy links` block contains live Telegram proxy links with secrets. Treat t
 Run:
 
 ```bash
-./install_telemt_batch.sh
+./install_telemt_batch_astra.sh
 ```
 
 Domain input example:
@@ -759,7 +759,7 @@ Empty `Domain:` finishes the list.
 Optional environment variables:
 
 ```bash
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch_astra.sh
 ```
 
-`install_telemt.sh` and `add_key.sh` remain standalone scripts and can still be run without batch mode.
+`install_telemt_astra.sh` and `add_key.sh` remain standalone scripts and can still be run without batch mode.

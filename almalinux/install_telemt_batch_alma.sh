@@ -6,9 +6,11 @@ set -Eeuo pipefail
 # resolves A records, checks SSH access, optionally calls add_key.sh,
 # then copies and runs install_telemt_alma.sh on each AlmaLinux target server.
 
-INSTALLER_FILE="${INSTALLER_FILE:-./install_telemt_alma.sh}"
-INSTALLER_README_FILE="${INSTALLER_README_FILE:-./install_telemt_alma_README.md}"
-ADD_KEY_FILE="${ADD_KEY_FILE:-./add_key.sh}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+INSTALLER_FILE="${INSTALLER_FILE:-$SCRIPT_DIR/install_telemt_alma.sh}"
+INSTALLER_README_FILE="${INSTALLER_README_FILE:-$SCRIPT_DIR/README.md}"
+ADD_KEY_FILE="${ADD_KEY_FILE:-$SCRIPT_DIR/../common/add_key.sh}"
 
 SSH_USER="${SSH_USER:-root}"
 CONNECT_SSH_PORT="${CONNECT_SSH_PORT:-22}"
