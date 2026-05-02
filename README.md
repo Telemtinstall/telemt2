@@ -70,21 +70,25 @@ Examples:
 
 ```bash
 cd debian-ubuntu
+chmod +x install_telemt_batch.sh ../common/add_key.sh
 ./install_telemt_batch.sh
 ```
 
 ```bash
 cd astra
+chmod +x install_telemt_batch_astra.sh ../common/add_key.sh
 ./install_telemt_batch_astra.sh
 ```
 
 ```bash
 cd almalinux
+chmod +x install_telemt_batch_alma.sh ../common/add_key.sh
 ./install_telemt_batch_alma.sh
 ```
 
 ```bash
 cd tinycore
+chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 ./install_telemt_batch_tinycore.sh
 ```
 

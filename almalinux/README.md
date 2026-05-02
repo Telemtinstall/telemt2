@@ -58,7 +58,8 @@ Max Telemt connections, по умолчанию 1000
 ```bash
 scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+/root/install_telemt_alma.sh
 ```
 
 После установки ссылка будет сохранена на сервере:
@@ -97,6 +98,7 @@ AlmaLinux нужна только на целевых серверах, куда
 Запуск:
 
 ```bash
+chmod +x install_telemt_batch_alma.sh ../common/add_key.sh
 ./install_telemt_batch_alma.sh
 ```
 
@@ -195,7 +197,8 @@ Before issuing a certificate, the script checks that the domain `A` record point
 ```bash
 scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+/root/install_telemt_alma.sh
 ```
 
 The generated link is stored on the server:
@@ -234,6 +237,7 @@ prints the final Proxy links list
 Run:
 
 ```bash
+chmod +x install_telemt_batch_alma.sh ../common/add_key.sh
 ./install_telemt_batch_alma.sh
 ```
 

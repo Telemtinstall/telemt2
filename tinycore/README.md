@@ -86,7 +86,8 @@ SSH-hardening на Tiny Core лучше делать отдельно, пото�
 ```bash
 scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-sh /root/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+/root/install_telemt_tinycore.sh
 ```
 
 Скрипт спросит:
@@ -129,6 +130,7 @@ Tiny Core нужен только на целевых серверах.
 Запуск:
 
 ```bash
+chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 ./install_telemt_batch_tinycore.sh
 ```
 
@@ -249,7 +251,8 @@ SSH hardening is better handled separately on Tiny Core because deployments ofte
 ```bash
 scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-sh /root/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+/root/install_telemt_tinycore.sh
 ```
 
 The script asks for:
@@ -292,6 +295,7 @@ Tiny Core is required only on the target servers.
 Run:
 
 ```bash
+chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 ./install_telemt_batch_tinycore.sh
 ```
 

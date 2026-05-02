@@ -20,18 +20,21 @@
 Запуск:
 
 ```bash
+chmod +x ./add_key.sh
 ./add_key.sh
 ```
 
 Из OS-каталога:
 
 ```bash
+chmod +x ../common/add_key.sh
 ../common/add_key.sh
 ```
 
 С параметрами:
 
 ```bash
+chmod +x ./add_key.sh
 SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```
 
@@ -55,17 +58,20 @@ verify key-only login
 Run:
 
 ```bash
+chmod +x ./add_key.sh
 ./add_key.sh
 ```
 
 From an OS directory:
 
 ```bash
+chmod +x ../common/add_key.sh
 ../common/add_key.sh
 ```
 
 With parameters:
 
 ```bash
+chmod +x ./add_key.sh
 SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```

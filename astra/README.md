@@ -40,14 +40,16 @@ Internet
 ```bash
 scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh
 ```
 
 Рекомендуемый способ для долгой установки, чтобы пережить обрыв SSH:
 
 ```bash
 tmux new -s telemt-install
-bash /root/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh
 ```
 
 Если SSH оборвался, вернуться в сессию:
@@ -294,12 +296,14 @@ DNS ещё не указывает на сервер
 Запуск:
 
 ```bash
+chmod +x ../common/add_key.sh
 ../common/add_key.sh
 ```
 
 Запуск с параметрами через environment:
 
 ```bash
+chmod +x ../common/add_key.sh
 SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ../common/add_key.sh
 ```
 
@@ -308,7 +312,8 @@ SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_e
 ```bash
 scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh
 ```
 
 ### Пакетная Установка install_telemt_batch_astra.sh
@@ -360,6 +365,7 @@ install_telemt_astra.sh рядом с install_telemt_batch_astra.sh
 Запуск:
 
 ```bash
+chmod +x install_telemt_batch_astra.sh ../common/add_key.sh
 ./install_telemt_batch_astra.sh
 ```
 
@@ -376,6 +382,7 @@ Domain:
 Опциональные переменные:
 
 ```bash
+chmod +x install_telemt_batch_astra.sh ../common/add_key.sh
 CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch_astra.sh
 ```
 
@@ -423,14 +430,16 @@ Run the script on the target server, not on your local computer.
 ```bash
 scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh
 ```
 
 Recommended method for long installations, so the process survives SSH disconnects:
 
 ```bash
 tmux new -s telemt-install
-bash /root/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh
 ```
 
 If SSH disconnects, reattach:
@@ -677,12 +686,14 @@ verifies that key login actually works
 Run:
 
 ```bash
+chmod +x ../common/add_key.sh
 ../common/add_key.sh
 ```
 
 Run with environment parameters:
 
 ```bash
+chmod +x ../common/add_key.sh
 SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ../common/add_key.sh
 ```
 
@@ -691,7 +702,8 @@ After key login is verified, copy and run the installer:
 ```bash
 scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 ssh root@<SERVER_PUBLIC_IP>
-bash /root/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh
 ```
 
 ### Batch Installation install_telemt_batch_astra.sh
@@ -743,6 +755,7 @@ The `Proxy links` block contains live Telegram proxy links with secrets. Treat t
 Run:
 
 ```bash
+chmod +x install_telemt_batch_astra.sh ../common/add_key.sh
 ./install_telemt_batch_astra.sh
 ```
 
@@ -759,6 +772,7 @@ Empty `Domain:` finishes the list.
 Optional environment variables:
 
 ```bash
+chmod +x install_telemt_batch_astra.sh ../common/add_key.sh
 CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch_astra.sh
 ```
 
