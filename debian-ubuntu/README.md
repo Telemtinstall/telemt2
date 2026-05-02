@@ -286,17 +286,14 @@ DNS ещё не указывает на сервер
 
 `add_key.sh` помогает подготовить SSH-доступ к серверу до запуска `install_telemt.sh`.
 
-Что делает:
+Как он работает:
 
-```text
-создаёт локальный ed25519 SSH-ключ, если выбранный ключ отсутствует
-восстанавливает .pub файл из приватного ключа, если .pub отсутствует
-спрашивает адрес сервера, SSH-порт, пользователя и comment/email для ключа
-добавляет public key в authorized_keys на Unix/Linux сервере
-пробует ssh-copy-id как fallback
-поддерживает импорт ключей на MikroTik RouterOS
-проверяет, что вход по ключу реально работает
-```
+1. Спрашивает адрес сервера, SSH-порт, пользователя, путь к локальному ключу и комментарий для нового ключа.
+2. Создаёт локальный `ed25519` ключ, если выбранного ключа ещё нет. Если приватный ключ есть, а `.pub` файл отсутствует, восстанавливает публичный ключ.
+3. Проверяет `known_hosts`: показывает SHA256 fingerprint host key перед добавлением или остановится при несовпадении с `EXPECTED_HOST_KEY_SHA256`.
+4. На Unix/Linux сервере добавляет публичный ключ в `authorized_keys`; если основной способ не сработал, пробует `ssh-copy-id`.
+5. Для MikroTik RouterOS использует отдельный импорт ключа.
+6. В конце проверяет, что вход по ключу без пароля действительно работает.
 
 Запуск:
 
@@ -681,17 +678,14 @@ provider firewall blocks incoming connections
 
 `add_key.sh` helps prepare SSH access before running `install_telemt.sh`.
 
-What it does:
+How it works:
 
-```text
-creates a local ed25519 SSH key if the selected key does not exist
-rebuilds the .pub file from the private key if .pub is missing
-asks for server address, SSH port, username, and key comment/email
-adds the public key to authorized_keys on Unix/Linux servers
-tries ssh-copy-id as a fallback
-supports MikroTik RouterOS key import
-verifies that key login actually works
-```
+1. It asks for the server address, SSH port, username, local key path, and comment for a new key.
+2. It creates a local `ed25519` key if the selected key does not exist. If the private key exists but `.pub` is missing, it rebuilds the public key.
+3. It checks `known_hosts`: it shows the SHA256 host key fingerprint before adding it, or stops if it does not match `EXPECTED_HOST_KEY_SHA256`.
+4. On Unix/Linux servers, it adds the public key to `authorized_keys`; if the primary method fails, it tries `ssh-copy-id`.
+5. For MikroTik RouterOS, it uses a separate key import flow.
+6. At the end, it verifies that passwordless key login really works.
 
 Run:
 
