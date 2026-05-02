@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALLER_FILE="${INSTALLER_FILE:-$SCRIPT_DIR/install_telemt_tinycore.sh}"
 INSTALLER_README_FILE="${INSTALLER_README_FILE:-$SCRIPT_DIR/README.md}"
 ADD_KEY_FILE="${ADD_KEY_FILE:-$SCRIPT_DIR/../common/add_key.sh}"
+REMOTE_INSTALLER_NAME="${REMOTE_INSTALLER_NAME:-$(basename "$INSTALLER_FILE")}"
 
 SSH_USER="${SSH_USER:-root}"
 CONNECT_SSH_PORT="${CONNECT_SSH_PORT:-22}"
@@ -26,6 +27,8 @@ IPS=()
 AUTH_MODES=()
 RESULTS=()
 PROXY_LINKS=()
+SSH_OPTS=()
+SCP_OPTS=()
 
 have() {
   command -v "$1" >/dev/null 2>&1
@@ -69,7 +72,22 @@ confirm() {
 }
 
 valid_domain() {
-  [[ "$1" =~ ^[A-Za-z0-9.-]+$ ]] && [[ "$1" == *.* ]]
+  local domain="$1"
+  [[ ${#domain} -le 253 ]] || return 1
+  [[ "$domain" == *.* ]] || return 1
+  [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$ ]]
+}
+
+valid_port() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 65535 ))
+}
+
+valid_limit() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 1000000 ))
+}
+
+shell_quote() {
+  printf '%q' "$1"
 }
 
 resolve_ipv4() {
@@ -221,9 +239,9 @@ collect_domains() {
   [[ "${#DOMAINS[@]}" -gt 0 ]] || die "No domains selected."
 }
 
-ssh_opts_key() {
+build_ssh_opts_key() {
   local port="$1"
-  local opts=(
+  SSH_OPTS=(
     -p "$port"
     -o "ConnectTimeout=${CONNECT_TIMEOUT}"
     -o "StrictHostKeyChecking=${STRICT_HOST_KEY_CHECKING}"
@@ -235,15 +253,13 @@ ssh_opts_key() {
   )
 
   if [[ -n "$KEY_PATH" && -f "$KEY_PATH" ]]; then
-    opts+=(-i "$KEY_PATH" -o IdentitiesOnly=yes)
+    SSH_OPTS+=(-i "$KEY_PATH" -o IdentitiesOnly=yes)
   fi
-
-  printf '%q ' "${opts[@]}"
 }
 
-ssh_opts_interactive() {
+build_ssh_opts_interactive() {
   local port="$1"
-  local opts=(
+  SSH_OPTS=(
     -p "$port"
     -o "ConnectTimeout=${CONNECT_TIMEOUT}"
     -o "StrictHostKeyChecking=${STRICT_HOST_KEY_CHECKING}"
@@ -251,16 +267,14 @@ ssh_opts_interactive() {
   )
 
   if [[ -n "$KEY_PATH" && -f "$KEY_PATH" ]]; then
-    opts+=(-i "$KEY_PATH")
+    SSH_OPTS+=(-i "$KEY_PATH")
   fi
-
-  printf '%q ' "${opts[@]}"
 }
 
-scp_opts_for_mode() {
+build_scp_opts_for_mode() {
   local port="$1"
   local mode="$2"
-  local opts=(
+  SCP_OPTS=(
     -P "$port"
     -o "ConnectTimeout=${CONNECT_TIMEOUT}"
     -o "StrictHostKeyChecking=${STRICT_HOST_KEY_CHECKING}"
@@ -268,11 +282,11 @@ scp_opts_for_mode() {
   )
 
   if [[ -n "$KEY_PATH" && -f "$KEY_PATH" ]]; then
-    opts+=(-i "$KEY_PATH")
+    SCP_OPTS+=(-i "$KEY_PATH")
   fi
 
   if [[ "$mode" == "key" ]]; then
-    opts+=(
+    SCP_OPTS+=(
       -o BatchMode=yes
       -o PreferredAuthentications=publickey
       -o PasswordAuthentication=no
@@ -280,18 +294,14 @@ scp_opts_for_mode() {
       -o IdentitiesOnly=yes
     )
   fi
-
-  printf '%q ' "${opts[@]}"
 }
 
 check_key_login() {
   local ip="$1"
   local target="${SSH_USER}@${ip}"
-  local opts
 
-  opts="$(ssh_opts_key "$CONNECT_SSH_PORT")"
-  # shellcheck disable=SC2086
-  ssh $opts "$target" 'printf KEY_LOGIN_OK' 2>/dev/null | grep -q KEY_LOGIN_OK
+  build_ssh_opts_key "$CONNECT_SSH_PORT"
+  ssh "${SSH_OPTS[@]}" "$target" 'printf KEY_LOGIN_OK' 2>/dev/null | grep -q KEY_LOGIN_OK
 }
 
 run_add_key_helper() {
@@ -365,16 +375,14 @@ copy_installer_files() {
   local ip="$1"
   local mode="$2"
   local target="${SSH_USER}@${ip}:/root/"
-  local opts
   local files=("$INSTALLER_FILE" "$ADD_KEY_FILE")
 
   if [[ -f "$INSTALLER_README_FILE" ]]; then
     files+=("$INSTALLER_README_FILE")
   fi
 
-  opts="$(scp_opts_for_mode "$CONNECT_SSH_PORT" "$mode")"
-  # shellcheck disable=SC2086
-  scp $opts "${files[@]}" "$target"
+  build_scp_opts_for_mode "$CONNECT_SSH_PORT" "$mode"
+  scp "${SCP_OPTS[@]}" "${files[@]}" "$target"
 }
 
 run_remote_installer() {
@@ -383,23 +391,21 @@ run_remote_installer() {
   local mode="$3"
   local email_answer="$LETSENCRYPT_EMAIL"
   local target="${SSH_USER}@${ip}"
-  local opts
+  local remote_cmd
 
   if [[ "$mode" == "key" ]]; then
-    opts="$(ssh_opts_key "$CONNECT_SSH_PORT")"
+    build_ssh_opts_key "$CONNECT_SSH_PORT"
   else
-    opts="$(ssh_opts_interactive "$CONNECT_SSH_PORT")"
+    build_ssh_opts_interactive "$CONNECT_SSH_PORT"
   fi
 
-  # Empty email keeps install_telemt_tinycore.sh default: admin@domain.
-  # shellcheck disable=SC2086
-  ssh $opts "$target" 'chmod +x /root/install_telemt_tinycore.sh /root/add_key.sh 2>/dev/null || true; sh /root/install_telemt_tinycore.sh' <<EOF
-$domain
-$email_answer
-$TARGET_SSH_PORT
-$TELEMT_MAX_TCP_CONNS
-y
-EOF
+  remote_cmd="chmod +x /root/${REMOTE_INSTALLER_NAME} /root/add_key.sh 2>/dev/null || true; "
+  remote_cmd+="PUBLIC_HOST=$(shell_quote "$domain") "
+  remote_cmd+="LETSENCRYPT_EMAIL=$(shell_quote "$email_answer") "
+  remote_cmd+="SSH_PORT=$(shell_quote "$TARGET_SSH_PORT") "
+  remote_cmd+="TELEMT_MAX_TCP_CONNS=$(shell_quote "$TELEMT_MAX_TCP_CONNS") "
+  remote_cmd+="ASSUME_YES=1 /root/${REMOTE_INSTALLER_NAME}"
+  ssh "${SSH_OPTS[@]}" "$target" "$remote_cmd"
 }
 
 fetch_proxy_links() {
@@ -407,19 +413,17 @@ fetch_proxy_links() {
   local ip="$2"
   local mode="$3"
   local target="${SSH_USER}@${ip}"
-  local opts
   local links=""
 
   if [[ "$mode" == "key" ]]; then
-    opts="$(ssh_opts_key "$TARGET_SSH_PORT")"
+    build_ssh_opts_key "$TARGET_SSH_PORT"
   else
-    opts="$(ssh_opts_interactive "$TARGET_SSH_PORT")"
+    build_ssh_opts_interactive "$TARGET_SSH_PORT"
   fi
 
   # Read the link generated by install_telemt_tinycore.sh. Fall back to the local API
   # in case the file was not written but Telemt is healthy.
-  # shellcheck disable=SC2086
-  links="$(ssh $opts "$target" 'if [ -s /root/telemt-proxy-link.txt ]; then cat /root/telemt-proxy-link.txt; else curl -fsS http://127.0.0.1:9091/v1/users 2>/dev/null | grep -o "tg://proxy[^\"]*" || true; fi' 2>/dev/null || true)"
+  links="$(ssh "${SSH_OPTS[@]}" "$target" 'if [ -s /root/telemt-proxy-link.txt ]; then cat /root/telemt-proxy-link.txt; else curl -fsS http://127.0.0.1:9091/v1/users 2>/dev/null | grep -o "tg://proxy[^\"]*" || true; fi' 2>/dev/null || true)"
 
   if [[ -n "$links" ]]; then
     while IFS= read -r link; do
@@ -499,9 +503,9 @@ EOF
   prompt_default TELEMT_MAX_TCP_CONNS "Telemt max TCP connections" "$TELEMT_MAX_TCP_CONNS"
   prompt_default LETSENCRYPT_EMAIL "Common Let's Encrypt email, empty = admin@domain" "$LETSENCRYPT_EMAIL"
 
-  [[ "$CONNECT_SSH_PORT" =~ ^[0-9]+$ ]] || die "Current SSH port must be numeric."
-  [[ "$TARGET_SSH_PORT" =~ ^[0-9]+$ ]] || die "Target SSH port must be numeric."
-  [[ "$TELEMT_MAX_TCP_CONNS" =~ ^[0-9]+$ ]] || die "Telemt limit must be numeric."
+  valid_port "$CONNECT_SSH_PORT" || die "Current SSH port must be a number from 1 to 65535."
+  valid_port "$TARGET_SSH_PORT" || die "Target SSH port must be a number from 1 to 65535."
+  valid_limit "$TELEMT_MAX_TCP_CONNS" || die "Telemt limit must be a number from 1 to 1000000."
 
   collect_domains
 

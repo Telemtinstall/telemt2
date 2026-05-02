@@ -38,6 +38,8 @@ A-запись домена должна указывать на публичн�
 
 Официальный Telemt сейчас публикует `linux-musl` бинарники для `x86_64` и `aarch64`. Поэтому 32-bit Tiny Core x86 этим скриптом не поддерживается.
 
+По умолчанию используется pinned Telemt release `3.4.0` и pinned `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для другого release нужно передать свои `TELEMT_RELEASE`, `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
+
 ### Что Ставит
 
 ```text
@@ -53,6 +55,8 @@ acme.sh
 native Telemt binary
 nginx access logs disabled
 Telemt runtime logs disabled
+pinned Telemt release and sha256 verification
+pinned acme.sh version and sha256 verification
 ```
 
 ### Схема
@@ -203,6 +207,8 @@ the domain A record must point to the server public IPv4
 
 Official Telemt currently publishes `linux-musl` binaries for `x86_64` and `aarch64`. 32-bit Tiny Core x86 is not supported by this script.
 
+By default, the installer uses pinned Telemt release `3.4.0` and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To use another release, pass your own `TELEMT_RELEASE`, `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
+
 ### What It Installs
 
 ```text
@@ -218,6 +224,8 @@ acme.sh
 native Telemt binary
 nginx access logs disabled
 Telemt runtime logs disabled
+pinned Telemt release and sha256 verification
+pinned acme.sh version and sha256 verification
 ```
 
 ### Layout

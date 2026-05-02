@@ -172,7 +172,8 @@ openssl
 9. Fail2ban для SSH.
 10. Отключение nginx access logs для маскировочного сайта.
 11. Отключение Docker runtime logs для Telemt-контейнера.
-12. SSH hardening:
+12. Безопасное поведение nginx: скрипт добавляет отдельный site/stream config и не удаляет существующие сайты. Если `443/tcp` уже занят чужим HTTPS-сервисом, установка останавливается до изменения frontend-а.
+13. SSH hardening:
 
 ```text
 PasswordAuthentication no
@@ -562,7 +563,8 @@ It also adds `1G` swap if swap is not already enabled.
 9. Fail2ban for SSH.
 10. Disabled nginx access logs for the mask site.
 11. Disabled Docker runtime logs for the Telemt container.
-12. SSH hardening:
+12. Safe nginx behavior: the installer adds separate site/stream configs and does not remove existing sites. If `443/tcp` is already owned by another HTTPS service, installation stops before changing the frontend.
+13. SSH hardening:
 
 ```text
 PasswordAuthentication no

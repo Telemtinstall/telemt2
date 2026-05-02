@@ -9,14 +9,19 @@ TELEMT_HOME="${TELEMT_HOME:-/opt/telemt}"
 ACME_HOME="${ACME_HOME:-/opt/acme.sh}"
 STATE_FILE="${STATE_FILE:-$TELEMT_HOME/.install_tinycore.state}"
 RESUME_CONFIG="${RESUME_CONFIG:-$TELEMT_HOME/install.conf}"
-TELEMT_RELEASE="${TELEMT_RELEASE:-latest}"
+TELEMT_RELEASE="${TELEMT_RELEASE:-3.4.0}"
+TELEMT_SHA256_X86_64="${TELEMT_SHA256_X86_64:-fa79e91a1e5b1b035000f1800f21dfbaf76e6b2fc269b5e9585b268b70c640e2}"
+TELEMT_SHA256_AARCH64="${TELEMT_SHA256_AARCH64:-5233e2ad91ed7e4c66b8d30ceef76e0b695ba6372f613ac8c75595342d85973e}"
+ACME_SH_VERSION="${ACME_SH_VERSION:-3.1.2}"
+ACME_SH_SHA256="${ACME_SH_SHA256:-c46b41a61c96f67d424e4b4e476907c964b81d53cf94358a9c1d363a4f99c3a4}"
+ASSUME_YES="${ASSUME_YES:-0}"
 
-PUBLIC_HOST=""
-PUBLIC_IP=""
-LETSENCRYPT_EMAIL=""
-SSH_PORT="22"
-TELEMT_MAX_TCP_CONNS="1000"
-TELEMT_SECRET=""
+PUBLIC_HOST="${PUBLIC_HOST:-}"
+PUBLIC_IP="${PUBLIC_IP:-}"
+LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
+SSH_PORT="${SSH_PORT:-22}"
+TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-1000}"
+TELEMT_SECRET="${TELEMT_SECRET:-}"
 BOOTLOCAL="/opt/bootlocal.sh"
 
 step_no=0
@@ -53,6 +58,56 @@ prompt_value() {
   fi
 }
 
+prompt_value_assume() {
+  label="$1"
+  default_value="$2"
+  if [ "$ASSUME_YES" = "1" ] && [ -n "$default_value" ]; then
+    printf '%s: %s\n' "$label" "$default_value"
+    REPLY="$default_value"
+  else
+    prompt_value "$label" "$default_value"
+  fi
+}
+
+valid_domain() {
+  domain="$1"
+  [ "${#domain}" -le 253 ] || return 1
+  printf '%s\n' "$domain" | awk -F. '
+    NF < 2 { exit 1 }
+    {
+      for (i = 1; i <= NF; i++) {
+        if (length($i) < 1 || length($i) > 63) exit 1
+        if ($i !~ /^[A-Za-z0-9]$/ && $i !~ /^[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9]$/) exit 1
+      }
+    }
+  '
+}
+
+valid_port() {
+  printf '%s\n' "$1" | grep -Eq '^[0-9]+$' && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+valid_limit() {
+  printf '%s\n' "$1" | grep -Eq '^[0-9]+$' && [ "$1" -ge 1 ] && [ "$1" -le 1000000 ]
+}
+
+is_public_ipv4() {
+  printf '%s\n' "$1" | awk -F. '
+    NF != 4 { exit 1 }
+    {
+      for (i = 1; i <= 4; i++) {
+        if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+      }
+      if ($1 == 10 || $1 == 127) exit 1
+      if ($1 == 169 && $2 == 254) exit 1
+      if ($1 == 172 && $2 >= 16 && $2 <= 31) exit 1
+      if ($1 == 192 && $2 == 168) exit 1
+      if ($1 == 100 && $2 >= 64 && $2 <= 127) exit 1
+      if ($1 >= 224) exit 1
+    }
+  '
+}
+
 step_done() {
   [ -f "$STATE_FILE" ] && grep -Fxq "$1" "$STATE_FILE"
 }
@@ -73,23 +128,39 @@ LETSENCRYPT_EMAIL='$LETSENCRYPT_EMAIL'
 SSH_PORT='$SSH_PORT'
 TELEMT_MAX_TCP_CONNS='$TELEMT_MAX_TCP_CONNS'
 TELEMT_RELEASE='$TELEMT_RELEASE'
+TELEMT_SHA256_X86_64='$TELEMT_SHA256_X86_64'
+TELEMT_SHA256_AARCH64='$TELEMT_SHA256_AARCH64'
+ACME_SH_VERSION='$ACME_SH_VERSION'
+ACME_SH_SHA256='$ACME_SH_SHA256'
 TELEMT_SECRET='$TELEMT_SECRET'
 EOF
   chmod 600 "$RESUME_CONFIG"
 }
 
 detect_public_ip() {
+  if is_public_ipv4 "$PUBLIC_IP"; then
+    return 0
+  fi
   PUBLIC_IP=""
+  if have curl; then
+    PUBLIC_IP="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
+    if is_public_ipv4 "$PUBLIC_IP"; then
+      return 0
+    fi
+  fi
+  if have wget; then
+    PUBLIC_IP="$(wget -qO- -T 8 https://api.ipify.org 2>/dev/null || true)"
+    if is_public_ipv4 "$PUBLIC_IP"; then
+      return 0
+    fi
+  fi
   if have ip; then
     PUBLIC_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)"
+    if is_public_ipv4 "$PUBLIC_IP"; then
+      return 0
+    fi
   fi
-  if [ -z "$PUBLIC_IP" ] && have curl; then
-    PUBLIC_IP="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
-  fi
-  if [ -z "$PUBLIC_IP" ] && have wget; then
-    PUBLIC_IP="$(wget -qO- -T 8 https://api.ipify.org 2>/dev/null || true)"
-  fi
-  echo "$PUBLIC_IP" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || die "Could not detect public IPv4."
+  die "Could not detect public IPv4. Set PUBLIC_IP explicitly after networking is ready and rerun."
 }
 
 resolve_ipv4() {
@@ -147,19 +218,22 @@ telemt_asset() {
 download_telemt() {
   asset="$(telemt_asset)"
   tmp_dir="/tmp/telemt-download.$$"
+  expected_sha=""
   mkdir -p "$tmp_dir"
 
-  if [ "$TELEMT_RELEASE" = "latest" ]; then
-    url="https://github.com/telemt/telemt/releases/latest/download/$asset"
-  else
-    url="https://github.com/telemt/telemt/releases/download/$TELEMT_RELEASE/$asset"
-  fi
+  case "$asset" in
+    telemt-x86_64-linux-musl.tar.gz) expected_sha="$TELEMT_SHA256_X86_64" ;;
+    telemt-aarch64-linux-musl.tar.gz) expected_sha="$TELEMT_SHA256_AARCH64" ;;
+  esac
+
+  [ -n "$expected_sha" ] || die "Missing pinned sha256 for $asset."
+
+  url="https://github.com/telemt/telemt/releases/download/$TELEMT_RELEASE/$asset"
 
   echo "download=$url"
   curl -fsSL "$url" -o "$tmp_dir/$asset"
-  if curl -fsSL "$url.sha256" -o "$tmp_dir/$asset.sha256"; then
-    (cd "$tmp_dir" && sha256sum -c "$asset.sha256") || die "Telemt sha256 check failed."
-  fi
+  printf '%s  %s\n' "$expected_sha" "$asset" > "$tmp_dir/$asset.sha256"
+  (cd "$tmp_dir" && sha256sum -c "$asset.sha256") || die "Telemt sha256 check failed."
 
   tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"
   bin_path="$(find "$tmp_dir" -type f -name telemt | head -n 1)"
@@ -173,7 +247,11 @@ download_telemt() {
 
 install_acme_sh() {
   mkdir -p "$ACME_HOME"
-  curl -fsSL https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh -o "$ACME_HOME/acme.sh"
+  tmp_acme="/tmp/acme.sh.$$"
+  curl -fsSL "https://raw.githubusercontent.com/acmesh-official/acme.sh/${ACME_SH_VERSION}/acme.sh" -o "$tmp_acme"
+  printf '%s  %s\n' "$ACME_SH_SHA256" "$tmp_acme" | sha256sum -c - || die "acme.sh sha256 check failed."
+  cp "$tmp_acme" "$ACME_HOME/acme.sh"
+  rm -f "$tmp_acme"
   chmod 700 "$ACME_HOME/acme.sh"
   "$ACME_HOME/acme.sh" --home "$ACME_HOME" --set-default-ca --server letsencrypt
 }
@@ -455,7 +533,7 @@ EOF
 # Telemt certificate renewal cron
 mkdir -p /var/spool/cron/crontabs
 touch /var/spool/cron/crontabs/root
-grep -Fq '$TELEMT_HOME/bin/renew-cert.sh' /var/spool/cron/crontabs/root 2>/dev/null || echo '17 3 * * * $TELEMT_HOME/bin/renew-cert.sh >> $TELEMT_HOME/log/acme-renew.log 2>&1' >> /var/spool/cron/crontabs/root
+grep -Fq '$TELEMT_HOME/bin/renew-cert.sh' /var/spool/cron/crontabs/root 2>/dev/null || echo '17 3 * * * $TELEMT_HOME/bin/renew-cert.sh >/dev/null 2>&1' >> /var/spool/cron/crontabs/root
 crond 2>/dev/null || true
 EOF
   fi
@@ -467,12 +545,21 @@ set -eu
 EOF
   chmod 700 "$TELEMT_HOME/bin/renew-cert.sh"
 
-  filetool.sh -b || true
+  mkdir -p /var/spool/cron/crontabs
+  touch /var/spool/cron/crontabs/root
+  grep -Fq "$TELEMT_HOME/bin/renew-cert.sh" /var/spool/cron/crontabs/root 2>/dev/null || \
+    echo "17 3 * * * $TELEMT_HOME/bin/renew-cert.sh >/dev/null 2>&1" >> /var/spool/cron/crontabs/root
+  crond 2>/dev/null || true
+
+  filetool.sh -b
 }
 
 write_proxy_link() {
-  curl -fsS http://127.0.0.1:9091/v1/users > /tmp/telemt-users.json
-  grep -o 'tg://proxy[^"]*' /tmp/telemt-users.json > /root/telemt-proxy-link.txt || true
+  tmp_users="$(mktemp)"
+  chmod 600 "$tmp_users"
+  curl -fsS http://127.0.0.1:9091/v1/users > "$tmp_users"
+  grep -o 'tg://proxy[^"]*' "$tmp_users" > /root/telemt-proxy-link.txt || true
+  rm -f "$tmp_users"
   chmod 600 /root/telemt-proxy-link.txt 2>/dev/null || true
 }
 
@@ -500,22 +587,23 @@ Before running:
 
 EOF
 
-prompt_value "Proxy domain" "$PUBLIC_HOST"
+prompt_value_assume "Proxy domain" "$PUBLIC_HOST"
 PUBLIC_HOST="$REPLY"
-echo "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || die "Domain must be a plain DNS name."
+valid_domain "$PUBLIC_HOST" || die "Domain must be a valid DNS name, for example proxy.example.com."
 
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@$PUBLIC_HOST}"
-prompt_value "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
+prompt_value_assume "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
 LETSENCRYPT_EMAIL="$REPLY"
 
-prompt_value "SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config" "$SSH_PORT"
+prompt_value_assume "SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config" "$SSH_PORT"
 SSH_PORT="$REPLY"
 
-prompt_value "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
+prompt_value_assume "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
 TELEMT_MAX_TCP_CONNS="$REPLY"
 
-echo "$SSH_PORT" | grep -Eq '^[0-9]+$' || die "SSH port must be numeric."
-echo "$TELEMT_MAX_TCP_CONNS" | grep -Eq '^[0-9]+$' || die "Connection limit must be numeric."
+printf '%s\n' "$LETSENCRYPT_EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' || die "Email must be a plain email address."
+valid_port "$SSH_PORT" || die "SSH port must be a number from 1 to 65535."
+valid_limit "$TELEMT_MAX_TCP_CONNS" || die "Connection limit must be a number from 1 to 1000000."
 
 if [ -z "$TELEMT_SECRET" ] && [ -f "$TELEMT_HOME/telemt-secret.env" ]; then
   # shellcheck disable=SC1090
@@ -536,11 +624,15 @@ Install plan:
 
 Type y or yes to continue:
 EOF
-read -r confirm
-case "$confirm" in
-  y|Y|yes|YES|Yes) ;;
-  *) die "Cancelled." ;;
-esac
+if [ "$ASSUME_YES" = "1" ]; then
+  echo "ASSUME_YES=1, continuing."
+else
+  read -r confirm
+  case "$confirm" in
+    y|Y|yes|YES|Yes) ;;
+    *) die "Cancelled." ;;
+  esac
+fi
 
 if step_done extensions; then
   step "Install Tiny Core extensions (already done)"
@@ -632,7 +724,7 @@ persist_tinycore_files
 
 step "Validation"
 write_proxy_link
-curl -kIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/" | head -n 12 || true
+curl -fsSIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/" | head -n 12 || true
 telemt-report 2m || true
 
 cat <<EOF

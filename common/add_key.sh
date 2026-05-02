@@ -6,23 +6,58 @@ CONFIG_FILE="${CONFIG_FILE:-./add_server_ssh.conf}"
 KEY_PATH="${KEY_PATH:-${HOME}/.ssh/id_ed25519}"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-8}"
 STRICT_HOST_KEY_CHECKING="${STRICT_HOST_KEY_CHECKING:-accept-new}"
-
-if [ -f "$CONFIG_FILE" ]; then
-  # shellcheck disable=SC1090
-  source "$CONFIG_FILE"
-fi
-
-SERVER_INPUT="${SERVER_INPUT:-${SERVER_IP:-${SERVER_HOST:-}}}"
+EXPECTED_HOST_KEY_SHA256="${EXPECTED_HOST_KEY_SHA256:-}"
+SERVER_IP="${SERVER_IP:-}"
 SERVER_HOST="${SERVER_HOST:-}"
 SERVER_PORT="${SERVER_PORT:-}"
 USERNAME="${USERNAME:-}"
 EMAIL="${EMAIL:-}"
 REMOTE_SYSTEM="${REMOTE_SYSTEM:-auto}"
+SERVER_INPUT="${SERVER_INPUT:-}"
 PARSED_PORT=""
 
 SSH_TARGET=""
 SSH_OPTS=()
 SCP_OPTS=()
+
+load_config_file() {
+  local line key value
+
+  [ -f "$CONFIG_FILE" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [ -n "$line" ] || continue
+    [[ "$line" == *=* ]] || continue
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    case "$value" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+
+    case "$key" in
+      SERVER_INPUT|SERVER_IP|SERVER_HOST|SERVER_PORT|USERNAME|EMAIL|REMOTE_SYSTEM|KEY_PATH|CONNECT_TIMEOUT|STRICT_HOST_KEY_CHECKING|EXPECTED_HOST_KEY_SHA256)
+        printf -v "$key" '%s' "$value"
+        ;;
+      *)
+        echo "Игнорирую неизвестный параметр в $CONFIG_FILE: $key"
+        ;;
+    esac
+  done < "$CONFIG_FILE"
+}
+
+load_config_file
+
+SERVER_INPUT="${SERVER_INPUT:-${SERVER_IP:-${SERVER_HOST:-}}}"
 
 confirm() {
   local prompt="${1:-Продолжить? [y/N]: }"
@@ -193,11 +228,29 @@ remove_known_host_entries() {
 
 scan_host_key() {
   local tmp_file
+  local fingerprints
 
   ensure_ssh_dir
   tmp_file="$(mktemp "${TMPDIR:-/tmp}/add-keyscan.XXXXXX")"
 
-  if ssh-keyscan -T "$CONNECT_TIMEOUT" -p "$SERVER_PORT" -H "$SERVER_HOST" > "$tmp_file" 2>/dev/null && [ -s "$tmp_file" ]; then
+  if ssh-keyscan -T "$CONNECT_TIMEOUT" -p "$SERVER_PORT" "$SERVER_HOST" > "$tmp_file" 2>/dev/null && [ -s "$tmp_file" ]; then
+    fingerprints="$(ssh-keygen -l -E sha256 -f "$tmp_file" 2>/dev/null || ssh-keygen -l -f "$tmp_file" 2>/dev/null || true)"
+    echo
+    echo "Host key fingerprints for $(known_host_name):"
+    echo "$fingerprints"
+    echo
+
+    if [ -n "$EXPECTED_HOST_KEY_SHA256" ]; then
+      if ! printf '%s\n' "$fingerprints" | grep -Fq "$EXPECTED_HOST_KEY_SHA256"; then
+        echo "Ошибка: host key fingerprint не совпал с EXPECTED_HOST_KEY_SHA256=$EXPECTED_HOST_KEY_SHA256"
+        rm -f "$tmp_file"
+        return 1
+      fi
+    elif ! confirm "Доверять этому host key и добавить его в known_hosts? [y/N]: "; then
+      rm -f "$tmp_file"
+      return 1
+    fi
+
     cat "$tmp_file" >> "${HOME}/.ssh/known_hosts"
     rm -f "$tmp_file"
     chmod 600 "${HOME}/.ssh/known_hosts" 2>/dev/null || true
@@ -239,8 +292,13 @@ check_host_key_conflict() {
       if scan_host_key; then
         echo "Новый host key добавлен в known_hosts для $(known_host_name)."
       else
-        echo "ssh-keyscan не получил host key. Продолжу через StrictHostKeyChecking=accept-new."
-        STRICT_HOST_KEY_CHECKING="accept-new"
+        echo "ssh-keyscan не получил или не подтвердил host key."
+        if confirm "Продолжить через StrictHostKeyChecking=accept-new? [y/N]: "; then
+          STRICT_HOST_KEY_CHECKING="accept-new"
+        else
+          echo "Операция отменена."
+          exit 1
+        fi
       fi
     else
       echo "Операция отменена."
@@ -251,8 +309,13 @@ check_host_key_conflict() {
     if scan_host_key; then
       echo "Host key добавлен в known_hosts для $(known_host_name)."
     else
-      echo "ssh-keyscan не ответил. Продолжу через StrictHostKeyChecking=accept-new."
-      STRICT_HOST_KEY_CHECKING="accept-new"
+      echo "ssh-keyscan не получил или не подтвердил host key."
+      if confirm "Продолжить через StrictHostKeyChecking=accept-new? [y/N]: "; then
+        STRICT_HOST_KEY_CHECKING="accept-new"
+      else
+        echo "Операция отменена."
+        exit 1
+      fi
     fi
   fi
 

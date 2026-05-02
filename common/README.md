@@ -11,6 +11,8 @@
 создать локальный ed25519 ключ, если выбранного ключа нет
 восстановить .pub из приватного ключа
 обработать changed/missing known_hosts
+показать SHA256 fingerprint host key перед добавлением
+поддержать EXPECTED_HOST_KEY_SHA256 для строгой проверки host key
 скопировать публичный ключ в authorized_keys на Unix/Linux
 использовать ssh-copy-id как fallback
 поддержать MikroTik RouterOS key import
@@ -38,6 +40,12 @@ chmod +x ./add_key.sh
 SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
 ```
 
+Строгая проверка host key:
+
+```bash
+EXPECTED_HOST_KEY_SHA256=SHA256:<FINGERPRINT> SERVER_INPUT=root@<SERVER_PUBLIC_IP> ./add_key.sh
+```
+
 ## EN
 
 `add_key.sh` is a shared helper for preparing SSH access before running a Telemt installer.
@@ -49,6 +57,8 @@ ask for server, SSH port, username, and key comment
 generate a local ed25519 key if the selected key does not exist
 repair a missing .pub file from the private key
 handle changed or missing known_hosts entries
+show the SHA256 host key fingerprint before adding it
+support EXPECTED_HOST_KEY_SHA256 for strict host key verification
 copy the public key to Unix/Linux authorized_keys
 try ssh-copy-id as a fallback
 support MikroTik RouterOS key import
@@ -74,4 +84,10 @@ With parameters:
 ```bash
 chmod +x ./add_key.sh
 SERVER_INPUT=root@<SERVER_PUBLIC_IP> SERVER_PORT=<SSH_PORT> KEY_PATH=~/.ssh/id_ed25519 ./add_key.sh
+```
+
+Strict host key verification:
+
+```bash
+EXPECTED_HOST_KEY_SHA256=SHA256:<FINGERPRINT> SERVER_INPUT=root@<SERVER_PUBLIC_IP> ./add_key.sh
 ```

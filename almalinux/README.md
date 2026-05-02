@@ -37,6 +37,8 @@ EPEL включается для certbot/fail2ban
 Docker ставится из официального docker-ce repo
 nginx config: /etc/nginx/conf.d/<domain>.conf
 nginx stream config: /etc/nginx/stream-conf.d/telemt-sni.conf
+nginx.conf не перезаписывается: добавляется только include для stream-conf.d, если его ещё нет
+если 443/tcp уже занят чужим HTTPS-сервисом, установка останавливается
 firewall управляется через firewalld
 fail2ban использует firewalld actions
 SELinux настраивается для 8443 и nginx proxy connect
@@ -176,6 +178,8 @@ EPEL is enabled for certbot/fail2ban
 Docker is installed from the official docker-ce repo
 nginx config: /etc/nginx/conf.d/<domain>.conf
 nginx stream config: /etc/nginx/stream-conf.d/telemt-sni.conf
+nginx.conf is not overwritten: only a stream-conf.d include is appended if missing
+if 443/tcp is already owned by another HTTPS service, installation stops
 firewall is managed with firewalld
 fail2ban uses firewalld actions
 SELinux is configured for 8443 and nginx proxy connect

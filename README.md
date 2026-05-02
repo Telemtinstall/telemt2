@@ -108,6 +108,8 @@ local-only Telemt API
 connection limit
 proxy link output
 disabled access/runtime logs where supported
+non-interactive batch execution through explicit environment variables
+safe nginx behavior: separate configs are added, and installation stops if 443 is already owned by another site
 ```
 
 After a successful install, the generated proxy link is stored on the target server:

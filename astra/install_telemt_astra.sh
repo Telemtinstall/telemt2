@@ -7,15 +7,17 @@ set -Eeuo pipefail
 
 TELEMT_IMAGE_DEFAULT="whn0thacked/telemt-docker@sha256:cf9b970f2d13937328372e903e40b971e4a5319cd005930453a89a80ba2365e4"
 
-PUBLIC_HOST=""
-PUBLIC_IP=""
-LETSENCRYPT_EMAIL=""
-SSH_PORT="22"
-TELEMT_MAX_TCP_CONNS="1000"
-TELEMT_IMAGE="$TELEMT_IMAGE_DEFAULT"
+PUBLIC_HOST="${PUBLIC_HOST:-}"
+PUBLIC_IP="${PUBLIC_IP:-}"
+LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
+SSH_PORT="${SSH_PORT:-22}"
+TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-1000}"
+TELEMT_IMAGE="${TELEMT_IMAGE:-$TELEMT_IMAGE_DEFAULT}"
+ASSUME_YES="${ASSUME_YES:-0}"
 BACKUP_ROOT="/root/telemt-astra-install-backups"
 STATE_FILE="/root/.install_telemt_astra.state"
 RESUME_CONFIG="/root/.install_telemt_astra.config"
+NGINX_ACTIVE_AT_START="${NGINX_ACTIVE_AT_START:-}"
 
 step_no=0
 BACKUP_DIR=""
@@ -54,6 +56,7 @@ SSH_PORT=$(printf '%q' "$SSH_PORT")
 TELEMT_MAX_TCP_CONNS=$(printf '%q' "$TELEMT_MAX_TCP_CONNS")
 TELEMT_IMAGE=$(printf '%q' "$TELEMT_IMAGE")
 BACKUP_DIR=$(printf '%q' "$BACKUP_DIR")
+NGINX_ACTIVE_AT_START=$(printf '%q' "$NGINX_ACTIVE_AT_START")
 EOF
   chmod 600 "$RESUME_CONFIG"
 }
@@ -63,6 +66,12 @@ prompt() {
   local label="$2"
   local default_value="${3:-}"
   local answer=""
+  local current_value="${!var:-}"
+
+  if [[ "$ASSUME_YES" == "1" && -n "$current_value" ]]; then
+    printf '%s: %s\n' "$label" "$current_value"
+    return 0
+  fi
 
   if [[ -n "$default_value" ]]; then
     printf '%s [%s]: ' "$label" "$default_value"
@@ -76,6 +85,39 @@ prompt() {
   else
     printf -v "$var" '%s' "$default_value"
   fi
+}
+
+valid_domain() {
+  local domain="$1"
+  [[ ${#domain} -le 253 ]] || return 1
+  [[ "$domain" == *.* ]] || return 1
+  [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$ ]]
+}
+
+valid_port() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 65535 ))
+}
+
+valid_limit() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 1000000 ))
+}
+
+is_public_ipv4() {
+  local ip="$1"
+  local a b c d
+  IFS=. read -r a b c d <<< "$ip"
+  [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  for octet in "$a" "$b" "$c" "$d"; do
+    (( octet >= 0 && octet <= 255 )) || return 1
+  done
+  (( a == 10 )) && return 1
+  (( a == 127 )) && return 1
+  (( a == 169 && b == 254 )) && return 1
+  (( a == 172 && b >= 16 && b <= 31 )) && return 1
+  (( a == 192 && b == 168 )) && return 1
+  (( a == 100 && b >= 64 && b <= 127 )) && return 1
+  (( a >= 224 )) && return 1
+  return 0
 }
 
 write_file_root() {
@@ -96,17 +138,74 @@ backup_path() {
 }
 
 detect_public_ip() {
+  local candidate=""
+  if is_public_ipv4 "$PUBLIC_IP"; then
+    return 0
+  fi
+  if have curl; then
+    candidate="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
+    if is_public_ipv4 "$candidate"; then
+      PUBLIC_IP="$candidate"
+      return 0
+    fi
+  fi
   if have ip; then
-    PUBLIC_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')"
+    candidate="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)"
+    if is_public_ipv4 "$candidate"; then
+      PUBLIC_IP="$candidate"
+      return 0
+    fi
   fi
-  if [[ -z "$PUBLIC_IP" ]] && have curl; then
-    PUBLIC_IP="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
-  fi
-  [[ "$PUBLIC_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Could not detect public IPv4. Set DNS after networking is ready and rerun."
+  die "Could not detect public IPv4. Set PUBLIC_IP explicitly after networking is ready and rerun."
 }
 
 resolve_ipv4() {
   getent ahostsv4 "$1" 2>/dev/null | awk '{print $1}' | sort -u
+}
+
+port_listening() {
+  local port="$1"
+  ss -H -lnt 2>/dev/null | awk -v p=":${port}" '$4 ~ p "$" {found=1} END {exit found ? 0 : 1}'
+}
+
+ensure_certbot_can_bind_http() {
+  if ! port_listening 80; then
+    return 0
+  fi
+
+  if [[ "$NGINX_ACTIVE_AT_START" == "0" ]]; then
+    systemctl stop nginx 2>/dev/null || true
+    return 0
+  fi
+
+  cat >&2 <<EOF
+ERROR: port 80 is already in use by an existing service.
+
+This installer uses certbot standalone HTTP-01 and will not stop an nginx
+instance that was already active before installation.
+
+Free port 80 temporarily, issue the certificate manually, or run on a clean VPS.
+EOF
+  exit 1
+}
+
+ensure_https_frontdoor_available() {
+  if ! port_listening 443; then
+    return 0
+  fi
+
+  if [[ -f /etc/nginx/modules-enabled/60-stream-sni.conf ]] && grep -q 'telemt_backend' /etc/nginx/modules-enabled/60-stream-sni.conf; then
+    return 0
+  fi
+
+  cat >&2 <<EOF
+ERROR: port 443 is already in use by an existing service.
+
+Telemt needs nginx stream to own 443/tcp. To avoid breaking existing websites,
+the installer stops here instead of replacing the current HTTPS frontend.
+Move the existing site behind nginx stream manually, or use a clean server.
+EOF
+  exit 1
 }
 
 compose_cmd() {
@@ -168,6 +267,14 @@ if [[ -f "$RESUME_CONFIG" ]]; then
   echo "Resume config found: $RESUME_CONFIG"
 fi
 
+if [[ -z "$NGINX_ACTIVE_AT_START" ]]; then
+  if systemctl is-active --quiet nginx 2>/dev/null; then
+    NGINX_ACTIVE_AT_START=1
+  else
+    NGINX_ACTIVE_AT_START=0
+  fi
+fi
+
 cat <<'EOF'
 Telemt Astra Linux installer, no WireGuard.
 
@@ -179,17 +286,18 @@ Before running:
 EOF
 
 prompt PUBLIC_HOST "Proxy domain" "$PUBLIC_HOST"
-[[ "$PUBLIC_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || die "Domain must be a plain DNS name."
+valid_domain "$PUBLIC_HOST" || die "Domain must be a valid DNS name, for example proxy.example.com."
 
 detect_public_ip
-LETSENCRYPT_EMAIL="admin@${PUBLIC_HOST}"
+LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${PUBLIC_HOST}}"
 
 prompt LETSENCRYPT_EMAIL "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
 prompt SSH_PORT "SSH port, Enter keeps current/default" "$SSH_PORT"
 prompt TELEMT_MAX_TCP_CONNS "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
 
-[[ "$SSH_PORT" =~ ^[0-9]+$ ]] || die "SSH port must be numeric."
-[[ "$TELEMT_MAX_TCP_CONNS" =~ ^[0-9]+$ ]] || die "Connection limit must be numeric."
+[[ "$LETSENCRYPT_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || die "Email must be a plain email address."
+valid_port "$SSH_PORT" || die "SSH port must be a number from 1 to 65535."
+valid_limit "$TELEMT_MAX_TCP_CONNS" || die "Connection limit must be a number from 1 to 1000000."
 
 step "DNS preflight"
 echo "server_public_ipv4=$PUBLIC_IP"
@@ -243,12 +351,16 @@ Install plan:
 
 Type y or yes to continue:
 EOF
-read -r confirm
-confirm="${confirm,,}"
-case "$confirm" in
-  y|yes) ;;
-  *) die "Cancelled." ;;
-esac
+if [[ "$ASSUME_YES" != "1" ]]; then
+  read -r confirm
+  confirm="${confirm,,}"
+  case "$confirm" in
+    y|yes) ;;
+    *) die "Cancelled." ;;
+  esac
+else
+  echo "ASSUME_YES=1, continuing."
+fi
 
 if [[ -z "$BACKUP_DIR" ]]; then
   BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
@@ -423,7 +535,8 @@ if step_done certbot; then
   step "Issue Let's Encrypt certificate (already done)"
 else
   step "Issue Let's Encrypt certificate"
-  systemctl stop nginx 2>/dev/null || true
+  ensure_https_frontdoor_available
+  ensure_certbot_can_bind_http
   certbot certonly --standalone --non-interactive --agree-tos --keep-until-expiring \
     --preferred-challenges http \
     --email "$LETSENCRYPT_EMAIL" \
@@ -443,7 +556,7 @@ if step_done nginx_config; then
   step "Configure nginx mask site and SNI routing (already done)"
 else
   step "Configure nginx mask site and SNI routing"
-  rm -f /etc/nginx/sites-enabled/default
+  ensure_https_frontdoor_available
   install -d -m 0755 /var/www/"$PUBLIC_HOST"
   write_file_root /var/www/"$PUBLIC_HOST"/index.html 0644 root:root <<EOF
 <!doctype html>
@@ -629,6 +742,7 @@ services:
 EOF
 
   cd /opt/telemt-config
+  compose_cmd config >/dev/null
   compose_cmd pull
   compose_cmd up -d
   mark_done telemt_config
@@ -650,27 +764,38 @@ EOF
     if [[ -n "$old_log_path" && -f "$old_log_path" ]]; then
       : > "$old_log_path" 2>/dev/null || true
     fi
-    sed -i -E 's/RUST_LOG:[[:space:]]*"info"/RUST_LOG: "warn"/' /opt/telemt-config/docker-compose.yml
-    if ! grep -q 'driver:[[:space:]]*"none"' /opt/telemt-config/docker-compose.yml; then
-      tmp_compose="$(mktemp)"
-      awk '
-        /^    ulimits:/ && !done {
-          print "    logging:";
-          print "      driver: \"none\"";
-          done=1;
-        }
-        { print }
-        END {
-          if (!done) {
-            print "    logging:";
-            print "      driver: \"none\"";
-          }
-        }
-      ' /opt/telemt-config/docker-compose.yml > "$tmp_compose"
-      cat "$tmp_compose" > /opt/telemt-config/docker-compose.yml
-      rm -f "$tmp_compose"
-    fi
+    write_file_root /opt/telemt-config/docker-compose.yml 0644 root:root <<EOF
+services:
+  telemt:
+    image: ${TELEMT_IMAGE}
+    container_name: telemt
+    restart: unless-stopped
+    network_mode: host
+    user: "65532:65532"
+    environment:
+      RUST_LOG: "warn"
+    volumes:
+      - /opt/telemt-config:/etc/telemt:ro
+    command: ["/etc/telemt/telemt.toml"]
+    security_opt:
+      - no-new-privileges=true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m
+    pids_limit: 256
+    mem_limit: 256m
+    cpus: "0.50"
+    logging:
+      driver: "none"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+EOF
     cd /opt/telemt-config
+    compose_cmd config >/dev/null
     compose_cmd up -d --force-recreate
   fi
 
@@ -744,7 +869,7 @@ if have docker && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   if [ "$log_driver" = none ]; then
     printf 'runtime logs are disabled to avoid storing client activity and filling disk\n'
   else
-    docker logs --since "$SINCE" "$CONTAINER" 2>&1 | grep -E 'User limit|exceeded connection limit|ME pool is NOT ready|ME pool is not ready|All ME servers|Upstream failed|ERROR|WARN' | tail -n 80 || printf 'no relevant warnings in last %s\n' "$SINCE"
+    printf 'runtime logs are not disabled; run the installer log_hardening step again\n'
   fi
 fi
 EOF
@@ -754,11 +879,14 @@ fi
 step "Validation"
 sleep 12
 ss -lntp | grep -E ':(443|8443|1443|9091|'"${SSH_PORT}"')\b' || true
-curl -fsS http://127.0.0.1:9091/v1/users > /tmp/telemt-users.json
-grep -q '"ok":true' /tmp/telemt-users.json
-grep -o 'tg://proxy[^"]*' /tmp/telemt-users.json > /root/telemt-proxy-link.txt || true
+tmp_users="$(mktemp)"
+chmod 600 "$tmp_users"
+trap 'rm -f "$tmp_users"' EXIT
+curl -fsS http://127.0.0.1:9091/v1/users > "$tmp_users"
+grep -q '"ok":true' "$tmp_users"
+grep -o 'tg://proxy[^"]*' "$tmp_users" > /root/telemt-proxy-link.txt || true
 chmod 600 /root/telemt-proxy-link.txt 2>/dev/null || true
-curl -kIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/" | head -n 12 || true
+curl -fsSIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/" | head -n 12 || true
 /usr/local/sbin/telemt-report 2m || true
 
 step "Done"
