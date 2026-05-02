@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Telemt installer for a fresh Astra Linux server, without WireGuard.
+# Telemt installer for a fresh Astra Linux server.
 # It asks for a domain, verifies DNS A -> this server IPv4 before Let's Encrypt,
 # then installs nginx SNI routing + Telemt + fail2ban + local API firewall.
 
@@ -276,7 +276,7 @@ if [[ -z "$NGINX_ACTIVE_AT_START" ]]; then
 fi
 
 cat <<'EOF'
-Telemt Astra Linux installer, no WireGuard.
+Telemt Astra Linux installer.
 
 Before running:
   1. Create DNS A record: <domain> -> this server IPv4.
@@ -891,7 +891,7 @@ curl -fsSIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/
 
 step "Done"
 cat <<EOF
-Installed Telemt on Astra Linux without WireGuard.
+Installed Telemt on Astra Linux.
 
 Proxy host: ${PUBLIC_HOST}:443
 Telemt limit: ${TELEMT_MAX_TCP_CONNS}

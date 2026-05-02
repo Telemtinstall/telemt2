@@ -2,7 +2,7 @@
 
 ## Русское описание
 
-`install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом сервере без WireGuard.
+`install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом сервере.
 
 Целевая схема после установки:
 
@@ -231,8 +231,6 @@ upstream = direct
 max_tcp_conns = <LIMIT>
 ```
 
-WireGuard не используется.
-
 ### Результат установки
 
 После успешного завершения будут созданы:
@@ -432,7 +430,7 @@ CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telem
 
 ## English Description
 
-`install_telemt.sh` automatically installs a Telemt MTProto proxy on a new server without WireGuard.
+`install_telemt.sh` automatically installs a Telemt MTProto proxy on a new server.
 
 Target architecture after installation:
 
@@ -660,8 +658,6 @@ use_middle_proxy = false
 upstream = direct
 max_tcp_conns = <LIMIT>
 ```
-
-WireGuard is not used.
 
 ### Installation Result
 
