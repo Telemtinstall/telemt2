@@ -12,9 +12,11 @@ SERVER_HOST="${SERVER_HOST:-}"
 SERVER_PORT="${SERVER_PORT:-}"
 USERNAME="${USERNAME:-}"
 EMAIL="${EMAIL:-}"
+EXTRA_KNOWN_HOSTS="${EXTRA_KNOWN_HOSTS:-}"
 REMOTE_SYSTEM="${REMOTE_SYSTEM:-auto}"
 SERVER_INPUT="${SERVER_INPUT:-}"
 PARSED_PORT=""
+HOST_ALIASES=""
 
 SSH_TARGET=""
 SSH_OPTS=()
@@ -45,7 +47,7 @@ load_config_file() {
     esac
 
     case "$key" in
-      SERVER_INPUT|SERVER_IP|SERVER_HOST|SERVER_PORT|USERNAME|EMAIL|REMOTE_SYSTEM|KEY_PATH|CONNECT_TIMEOUT|STRICT_HOST_KEY_CHECKING|EXPECTED_HOST_KEY_SHA256)
+      SERVER_INPUT|SERVER_IP|SERVER_HOST|SERVER_PORT|USERNAME|EMAIL|EXTRA_KNOWN_HOSTS|REMOTE_SYSTEM|KEY_PATH|CONNECT_TIMEOUT|STRICT_HOST_KEY_CHECKING|EXPECTED_HOST_KEY_SHA256)
         printf -v "$key" '%s' "$value"
         ;;
       *)
@@ -214,29 +216,136 @@ build_connection_options() {
 }
 
 known_host_name() {
+  known_host_name_for "$SERVER_HOST"
+}
+
+known_host_name_for() {
+  local host="$1"
+
   if [ "$SERVER_PORT" = "22" ]; then
-    printf '%s' "$SERVER_HOST"
+    printf '%s' "$host"
   else
-    printf '[%s]:%s' "$SERVER_HOST" "$SERVER_PORT"
+    printf '[%s]:%s' "$host" "$SERVER_PORT"
   fi
 }
 
+add_host_alias() {
+  local host="$1"
+  local existing
+
+  [ -n "$host" ] || return 0
+  [[ "$host" =~ [[:space:]] ]] && return 0
+
+  for existing in $HOST_ALIASES; do
+    [ "$existing" = "$host" ] && return 0
+  done
+
+  HOST_ALIASES="${HOST_ALIASES:+$HOST_ALIASES }$host"
+}
+
+is_ipv4() {
+  local ip="$1"
+  local a b c d
+
+  [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  IFS=. read -r a b c d <<< "$ip"
+  for part in "$a" "$b" "$c" "$d"; do
+    [[ "$part" =~ ^[0-9]+$ ]] || return 1
+    [ "$part" -ge 0 ] && [ "$part" -le 255 ] || return 1
+  done
+}
+
+is_fake_dns_ipv4() {
+  local ip="$1"
+  local a b _c _d
+
+  IFS=. read -r a b _c _d <<< "$ip"
+  [ "$a" = "198" ] && { [ "$b" = "18" ] || [ "$b" = "19" ]; }
+}
+
+maybe_add_resolved_ipv4_alias() {
+  local ip="$1"
+
+  is_ipv4 "$ip" || return 0
+  if is_fake_dns_ipv4 "$ip"; then
+    echo "DNS returned fake-IP $ip for $SERVER_HOST, skipping it."
+    echo "If you also connect by real IP, enter it in EXTRA_KNOWN_HOSTS."
+    return 0
+  fi
+  add_host_alias "$ip"
+}
+
+resolve_ipv4_aliases() {
+  local host="$1"
+  local ip
+
+  is_ipv4 "$host" && return 0
+
+  if command -v getent >/dev/null 2>&1; then
+    while read -r ip; do
+      maybe_add_resolved_ipv4_alias "$ip"
+    done < <(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u)
+  elif command -v dig >/dev/null 2>&1; then
+    while read -r ip; do
+      maybe_add_resolved_ipv4_alias "$ip"
+    done < <(dig +short A "$host" 2>/dev/null | sort -u)
+  elif command -v host >/dev/null 2>&1; then
+    while read -r ip; do
+      maybe_add_resolved_ipv4_alias "$ip"
+    done < <(host "$host" 2>/dev/null | awk '/has address/ {print $4}' | sort -u)
+  fi
+}
+
+add_extra_host_aliases() {
+  local value="$EXTRA_KNOWN_HOSTS"
+  local host
+
+  value="${value//,/ }"
+  for host in $value; do
+    add_host_alias "$host"
+  done
+}
+
+build_host_aliases() {
+  local alias
+
+  HOST_ALIASES=""
+  add_host_alias "$SERVER_HOST"
+  resolve_ipv4_aliases "$SERVER_HOST"
+  add_extra_host_aliases
+
+  echo "known_hosts aliases:"
+  for alias in $HOST_ALIASES; do
+    echo "  - $(known_host_name_for "$alias")"
+  done
+}
+
 remove_known_host_entries() {
-  ssh-keygen -R "$SERVER_HOST" >/dev/null 2>&1 || true
-  ssh-keygen -R "[$SERVER_HOST]:$SERVER_PORT" >/dev/null 2>&1 || true
+  local host
+
+  for host in $HOST_ALIASES; do
+    ssh-keygen -R "$host" >/dev/null 2>&1 || true
+    ssh-keygen -R "[$host]:$SERVER_PORT" >/dev/null 2>&1 || true
+  done
 }
 
 scan_host_key() {
   local tmp_file
   local fingerprints
+  local host
 
   ensure_ssh_dir
   tmp_file="$(mktemp "${TMPDIR:-/tmp}/add-keyscan.XXXXXX")"
 
-  if ssh-keyscan -T "$CONNECT_TIMEOUT" -p "$SERVER_PORT" "$SERVER_HOST" > "$tmp_file" 2>/dev/null && [ -s "$tmp_file" ]; then
+  : > "$tmp_file"
+  for host in $HOST_ALIASES; do
+    ssh-keyscan -T "$CONNECT_TIMEOUT" -p "$SERVER_PORT" "$host" >> "$tmp_file" 2>/dev/null || true
+  done
+
+  if [ -s "$tmp_file" ]; then
     fingerprints="$(ssh-keygen -l -E sha256 -f "$tmp_file" 2>/dev/null || ssh-keygen -l -f "$tmp_file" 2>/dev/null || true)"
     echo
-    echo "Host key fingerprints for $(known_host_name):"
+    echo "Host key fingerprints for known_hosts aliases:"
     echo "$fingerprints"
     echo
 
@@ -261,12 +370,13 @@ scan_host_key() {
   return 1
 }
 
-check_host_key_conflict() {
+check_one_host_key() {
+  local host="$1"
   local output
   local rc
   local target
 
-  target="${USERNAME}@${SERVER_HOST}"
+  target="${USERNAME}@${host}"
 
   set +e
   output=$(ssh \
@@ -283,14 +393,14 @@ check_host_key_conflict() {
 
   if echo "$output" | grep -q "REMOTE HOST IDENTIFICATION HAS CHANGED"; then
     echo
-    echo "Обнаружено изменение host key у сервера:"
+    echo "Обнаружено изменение host key у сервера $(known_host_name_for "$host"):"
     echo "$output"
     echo
 
-    if confirm "Удалить старый host key из known_hosts и записать новый? [y/N]: "; then
+    if confirm "Удалить старые host key для домена/IP из known_hosts и записать новые? [y/N]: "; then
       remove_known_host_entries
       if scan_host_key; then
-        echo "Новый host key добавлен в known_hosts для $(known_host_name)."
+        echo "Новые host key добавлены в known_hosts."
       else
         echo "ssh-keyscan не получил или не подтвердил host key."
         if confirm "Продолжить через StrictHostKeyChecking=accept-new? [y/N]: "; then
@@ -305,9 +415,9 @@ check_host_key_conflict() {
       exit 1
     fi
   elif echo "$output" | grep -Eqi "No .* host key is known|Host key verification failed|The authenticity of host"; then
-    echo "Host key сервера ещё не записан в known_hosts. Пробую добавить через ssh-keyscan..."
+    echo "Host key для $(known_host_name_for "$host") ещё не записан в known_hosts. Пробую добавить через ssh-keyscan..."
     if scan_host_key; then
-      echo "Host key добавлен в known_hosts для $(known_host_name)."
+      echo "Host key добавлен в known_hosts для домена/IP."
     else
       echo "ssh-keyscan не получил или не подтвердил host key."
       if confirm "Продолжить через StrictHostKeyChecking=accept-new? [y/N]: "; then
@@ -327,6 +437,14 @@ check_host_key_conflict() {
       exit 1
     fi
   fi
+}
+
+check_host_key_conflict() {
+  local host
+
+  for host in $HOST_ALIASES; do
+    check_one_host_key "$host"
+  done
 }
 
 backup_and_generate_key() {
@@ -772,8 +890,12 @@ main() {
   ask_with_default "EMAIL" "Введите email/comment для ключа" "$default_mail"
 
   ask_with_default "USERNAME" "Введите имя пользователя на сервере" "root"
+  if ! is_ipv4 "$SERVER_HOST"; then
+    ask_with_default "EXTRA_KNOWN_HOSTS" "Дополнительные known_hosts имена/IP через запятую (если будете подключаться и по IP)" "$EXTRA_KNOWN_HOSTS"
+  fi
 
   validate_inputs
+  build_host_aliases
   check_host_key_conflict
   generate_key_if_needed
   build_connection_options
