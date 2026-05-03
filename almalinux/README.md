@@ -12,22 +12,25 @@ add_key.sh                      вспомогательный скрипт дл
 
 ### Что ставит install_telemt_alma.sh
 
-Установщик поднимает весь стек Telemt для AlmaLinux: Docker CE с плагином Docker Compose, Telemt в Docker, nginx Stream SNI-маршрутизацию на `443/tcp`, маскировочный HTTPS-сайт на `127.0.0.1:8443`, Telemt backend на `127.0.0.1:1443` и локальный Telemt API на `127.0.0.1:9091`.
+Установщик поднимает весь стек Telemt для AlmaLinux: Docker CE с плагином Docker Compose, Telemt в Docker, HTTP -> HTTPS редирект на `80/tcp`, nginx Stream SNI-маршрутизацию на `443/tcp`, маскировочный HTTPS-сайт на `127.0.0.1:8443`, Telemt backend на `127.0.0.1:1443` и локальный Telemt API на `127.0.0.1:9091`.
 
-Также он выпускает Let's Encrypt сертификат, включает автопродление, настраивает `firewalld`, `fail2ban`, SSH hardening, отключает nginx access logs и runtime-логи Docker-контейнера Telemt, а в конце добавляет утилиту `telemt-report`.
+Также он выпускает Let's Encrypt сертификат, включает автопродление с certbot hooks для остановки/запуска nginx при standalone-renew, настраивает `firewalld`, SSH-port настройки, отключает nginx access logs и runtime-логи Docker-контейнера Telemt, а в конце добавляет утилиту `telemt-report`. Fail2ban и swap включаются только по отдельным вопросам.
 
 ### Важные отличия AlmaLinux-версии
 
-В AlmaLinux-версии пакеты ставятся через `dnf`, EPEL включается для `certbot` и `fail2ban`, а Docker ставится из официального `docker-ce` репозитория. Nginx site-конфиг создаётся как `/etc/nginx/conf.d/<domain>.conf`, stream-конфиг как `/etc/nginx/stream-conf.d/telemt-sni.conf`.
+В AlmaLinux-версии пакеты ставятся через `dnf`, EPEL включается для `certbot` и, если выбран fail2ban, для `fail2ban`, а Docker ставится из официального `docker-ce` репозитория. Nginx site-конфиг создаётся как `/etc/nginx/conf.d/<domain>.conf`, stream-конфиг как `/etc/nginx/stream-conf.d/telemt-sni.conf`.
 
-Скрипт не перезаписывает `nginx.conf`: он только добавляет include для `stream-conf.d`, если такого include ещё нет. Если `443/tcp` уже занят чужим HTTPS-сервисом, установка останавливается. Firewall управляется через `firewalld`, `fail2ban` использует actions для firewalld, а SELinux настраивается для `8443` и nginx proxy connect.
+Скрипт не перезаписывает `nginx.conf`: он только добавляет include для `stream-conf.d`, если такого include ещё нет. Если `443/tcp` уже занят чужим HTTPS-сервисом, установка останавливается. Firewall управляется через `firewalld`; если выбран fail2ban, он использует actions для firewalld. SELinux настраивается для `8443` и nginx proxy connect.
 
 ### Что спрашивает
 
 1. Домен прокси.
 2. Email для Let's Encrypt. По умолчанию используется `admin@<domain>`.
 3. SSH-порт. По умолчанию используется `22`.
-4. Лимит подключений Telemt. По умолчанию используется `1000`.
+4. Отключать ли SSH-пароли и оставить root только по ключу. По умолчанию `no`.
+5. Включать ли fail2ban для SSH. По умолчанию `no`.
+6. Добавлять ли swap `1G`, если swap нет. По умолчанию `no`.
+7. Лимит подключений Telemt. По умолчанию используется `1000`.
 
 Пример полного диалога:
 
@@ -35,6 +38,9 @@ add_key.sh                      вспомогательный скрипт дл
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default [22]: <Enter>
+Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Max Telemt connections [1000]: <Enter>
 
 Install plan:
@@ -42,19 +48,24 @@ Install plan:
   public IPv4:  <SERVER_PUBLIC_IP>
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22
+  SSH key-only: no
+  fail2ban SSH: no
+  add swap:     no
   Telemt limit: 1000
 
 Type y or yes to continue:
 y
 ```
 
-В примере пустой ответ означает “оставить значение по умолчанию”. После `y` начинается установка: `dnf` ставит системные пакеты, включается EPEL, ставятся Docker CE/Compose, nginx, certbot, fail2ban и firewalld, затем выпускается сертификат, создаются nginx/Telemt-конфиги, запускается контейнер и применяется SSH/firewall/SELinux hardening.
+В примере пустой ответ означает “оставить значение по умолчанию”. По умолчанию SSH-пароли не отключаются, fail2ban не включается и swap не добавляется. После `y` начинается установка: `dnf` ставит системные пакеты, включается EPEL, ставятся Docker CE/Compose, nginx, certbot и firewalld, затем выпускается сертификат, создаются nginx/Telemt-конфиги, запускается контейнер и применяется firewall/SELinux/SSH-port настройка.
 
 Перед выпуском сертификата скрипт проверяет, что `A`-запись домена указывает на публичный IPv4 текущего сервера.
 
+Если на вопрос `Disable SSH password login and keep root key-only?` ответить `yes`, скрипт проверит `/root/.ssh/authorized_keys`, затем попросит второе подтверждение. Без найденного ключа и второго `yes` парольный SSH-вход не отключается.
+
 ### Важно: только чистый сервер
 
-Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewalld, SSH hardening, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
+Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewalld, SSH-port, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Fail2ban включается только если выбрать `yes`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
 
 ### Как скачать файл на сервер
 
@@ -130,6 +141,8 @@ AlmaLinux нужна только на целевых серверах, куда
 SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Telemt max TCP connections [1000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
@@ -207,22 +220,25 @@ add_key.sh                      helper for copying an SSH public key
 
 ### What install_telemt_alma.sh installs
 
-The installer brings up the full Telemt stack for AlmaLinux: Docker CE with the compose plugin, Telemt in Docker, nginx Stream SNI routing on `443/tcp`, an HTTPS mask site on `127.0.0.1:8443`, a Telemt backend on `127.0.0.1:1443`, and a local-only Telemt API on `127.0.0.1:9091`.
+The installer brings up the full Telemt stack for AlmaLinux: Docker CE with the compose plugin, Telemt in Docker, an HTTP -> HTTPS redirect on `80/tcp`, nginx Stream SNI routing on `443/tcp`, an HTTPS mask site on `127.0.0.1:8443`, a Telemt backend on `127.0.0.1:1443`, and a local-only Telemt API on `127.0.0.1:9091`.
 
-It also issues a Let's Encrypt certificate, enables renewal, configures `firewalld`, `fail2ban`, and SSH hardening, disables nginx access logs and Telemt Docker runtime logs, and installs the `telemt-report` utility.
+It also issues a Let's Encrypt certificate, enables renewal with certbot hooks that stop/start nginx for standalone renewal, configures `firewalld`, SSH-port settings, disables nginx access logs and Telemt Docker runtime logs, and installs the `telemt-report` utility. Fail2ban and swap are enabled only when selected in the prompts.
 
 ### AlmaLinux-specific differences
 
-In the AlmaLinux version, packages are installed with `dnf`, EPEL is enabled for `certbot` and `fail2ban`, and Docker is installed from the official `docker-ce` repository. The nginx site config is created as `/etc/nginx/conf.d/<domain>.conf`, and the stream config is created as `/etc/nginx/stream-conf.d/telemt-sni.conf`.
+In the AlmaLinux version, packages are installed with `dnf`, EPEL is enabled for `certbot` and, if selected, `fail2ban`, and Docker is installed from the official `docker-ce` repository. The nginx site config is created as `/etc/nginx/conf.d/<domain>.conf`, and the stream config is created as `/etc/nginx/stream-conf.d/telemt-sni.conf`.
 
-The script does not overwrite `nginx.conf`: it only adds the `stream-conf.d` include if it is missing. If `443/tcp` is already owned by another HTTPS service, installation stops. Firewall is managed with `firewalld`, `fail2ban` uses firewalld actions, and SELinux is configured for `8443` and nginx proxy connect.
+The script does not overwrite `nginx.conf`: it only adds the `stream-conf.d` include if it is missing. If `443/tcp` is already owned by another HTTPS service, installation stops. Firewall is managed with `firewalld`; if fail2ban is selected, it uses firewalld actions. SELinux is configured for `8443` and nginx proxy connect.
 
 ### Prompts
 
 1. Proxy domain.
 2. Let's Encrypt email. The default is `admin@<domain>`.
 3. SSH port. The default is `22`.
-4. Max Telemt connections. The default is `1000`.
+4. Whether to disable SSH password login and keep root key-only. The default is `no`.
+5. Whether to enable fail2ban for SSH. The default is `no`.
+6. Whether to add `1G` swap if swap is missing. The default is `no`.
+7. Max Telemt connections. The default is `1000`.
 
 Full dialogue example:
 
@@ -230,6 +246,9 @@ Full dialogue example:
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default [22]: <Enter>
+Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Max Telemt connections [1000]: <Enter>
 
 Install plan:
@@ -237,19 +256,24 @@ Install plan:
   public IPv4:  <SERVER_PUBLIC_IP>
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22
+  SSH key-only: no
+  fail2ban SSH: no
+  add swap:     no
   Telemt limit: 1000
 
 Type y or yes to continue:
 y
 ```
 
-In this example, an empty answer means “keep the default”. After `y`, installation starts: `dnf` installs system packages, EPEL is enabled, Docker CE/Compose, nginx, certbot, fail2ban, and firewalld are installed, then the certificate is issued, nginx/Telemt configs are written, the container starts, and SSH/firewall/SELinux hardening is applied.
+In this example, an empty answer means “keep the default”. By default, SSH password login is not disabled, fail2ban is not enabled, and swap is not added. After `y`, installation starts: `dnf` installs system packages, EPEL is enabled, Docker CE/Compose, nginx, certbot, and firewalld are installed, then the certificate is issued, nginx/Telemt configs are written, the container starts, and firewall/SELinux/SSH-port settings are applied.
 
 Before issuing a certificate, the script checks that the domain `A` record points to the current server public IPv4.
 
+If you answer `yes` to `Disable SSH password login and keep root key-only?`, the script checks `/root/.ssh/authorized_keys`, then asks for a second confirmation. Without a detected key and the second `yes`, password SSH login is not disabled.
+
 ### Important: Clean Server Only
 
-Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewalld, SSH hardening, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
+Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewalld, SSH-port, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. Fail2ban is enabled only if you choose `yes`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
 ### How To Download The File To The Server
 
@@ -325,6 +349,8 @@ Batch mode dialogue example:
 SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Telemt max TCP connections [1000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 

@@ -3,7 +3,8 @@ set -Eeuo pipefail
 
 # Telemt installer for a fresh AlmaLinux server.
 # It asks for a domain, verifies DNS A -> this server IPv4 before Let's Encrypt,
-# then installs nginx SNI routing + Telemt + fail2ban + firewalld hardening.
+# then installs nginx SNI routing + Telemt + firewalld hardening.
+# SSH key-only login, fail2ban, and swap are opt-in prompts.
 
 TELEMT_IMAGE_DEFAULT="whn0thacked/telemt-docker@sha256:cf9b970f2d13937328372e903e40b971e4a5319cd005930453a89a80ba2365e4"
 
@@ -11,6 +12,10 @@ PUBLIC_HOST="${PUBLIC_HOST:-}"
 PUBLIC_IP="${PUBLIC_IP:-}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 SSH_PORT="${SSH_PORT:-22}"
+SSH_KEY_ONLY_LOGIN="${SSH_KEY_ONLY_LOGIN:-no}"
+SSH_KEY_ONLY_CONFIRM="${SSH_KEY_ONLY_CONFIRM:-no}"
+ENABLE_FAIL2BAN="${ENABLE_FAIL2BAN:-no}"
+ADD_SWAP="${ADD_SWAP:-no}"
 TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-1000}"
 TELEMT_IMAGE="${TELEMT_IMAGE:-$TELEMT_IMAGE_DEFAULT}"
 ASSUME_YES="${ASSUME_YES:-0}"
@@ -53,6 +58,10 @@ PUBLIC_HOST=$(printf '%q' "$PUBLIC_HOST")
 PUBLIC_IP=$(printf '%q' "$PUBLIC_IP")
 LETSENCRYPT_EMAIL=$(printf '%q' "$LETSENCRYPT_EMAIL")
 SSH_PORT=$(printf '%q' "$SSH_PORT")
+SSH_KEY_ONLY_LOGIN=$(printf '%q' "$SSH_KEY_ONLY_LOGIN")
+SSH_KEY_ONLY_CONFIRM=$(printf '%q' "$SSH_KEY_ONLY_CONFIRM")
+ENABLE_FAIL2BAN=$(printf '%q' "$ENABLE_FAIL2BAN")
+ADD_SWAP=$(printf '%q' "$ADD_SWAP")
 TELEMT_MAX_TCP_CONNS=$(printf '%q' "$TELEMT_MAX_TCP_CONNS")
 TELEMT_IMAGE=$(printf '%q' "$TELEMT_IMAGE")
 BACKUP_DIR=$(printf '%q' "$BACKUP_DIR")
@@ -85,6 +94,21 @@ prompt() {
   else
     printf -v "$var" '%s' "$default_value"
   fi
+}
+
+prompt_yes_no() {
+  local var="$1"
+  local label="$2"
+  local default_value="${3:-no}"
+  local value=""
+
+  prompt "$var" "$label" "$default_value"
+  value="${!var,,}"
+  case "$value" in
+    y|yes) printf -v "$var" '%s' "yes" ;;
+    n|no|"") printf -v "$var" '%s' "no" ;;
+    *) die "$label must be yes or no." ;;
+  esac
 }
 
 valid_domain() {
@@ -135,6 +159,22 @@ backup_path() {
   [[ -e "$path" || -L "$path" ]] || return 0
   mkdir -p "$BACKUP_DIR"
   cp -a "$path" "$BACKUP_DIR"/
+}
+
+root_authorized_key_exists() {
+  [[ -f /root/.ssh/authorized_keys ]] &&
+    grep -Eq '(^|[[:space:]])(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh.com|sk-ecdsa-sha2-nistp256@openssh.com)[[:space:]]' /root/.ssh/authorized_keys
+}
+
+remove_installer_key_only_config_if_present() {
+  local conf="/etc/ssh/sshd_config.d/00password.conf"
+  [[ -f "$conf" ]] || return 0
+  if grep -Eq '^PasswordAuthentication[[:space:]]+no' "$conf" &&
+     grep -Eq '^KbdInteractiveAuthentication[[:space:]]+no' "$conf" &&
+     grep -Eq '^PubkeyAuthentication[[:space:]]+yes' "$conf"; then
+    rm -f "$conf"
+    echo "Removed installer key-only SSH config; password login is left to the base sshd_config."
+  fi
 }
 
 detect_public_ip() {
@@ -225,7 +265,23 @@ ensure_compose() {
 }
 
 configure_certbot_renewal() {
-  install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy
+  install -d -m 0755 /etc/letsencrypt/renewal-hooks/pre /etc/letsencrypt/renewal-hooks/post /etc/letsencrypt/renewal-hooks/deploy
+  write_file_root /etc/letsencrypt/renewal-hooks/pre/stop-nginx-telemt.sh 0755 root:root <<'EOF'
+#!/usr/bin/env bash
+set -e
+
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+  systemctl stop nginx
+fi
+EOF
+  write_file_root /etc/letsencrypt/renewal-hooks/post/start-nginx-telemt.sh 0755 root:root <<'EOF'
+#!/usr/bin/env bash
+set -e
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl start nginx || systemctl restart nginx || true
+fi
+EOF
   write_file_root /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh 0755 root:root <<'EOF'
 #!/usr/bin/env bash
 set -e
@@ -272,6 +328,17 @@ EOF
   systemctl daemon-reload
   systemctl enable --now certbot-renew.timer
   systemctl list-timers certbot-renew.timer --no-pager || true
+}
+
+certbot_renewal_hooks_current() {
+  [[ -x /etc/letsencrypt/renewal-hooks/pre/stop-nginx-telemt.sh ]] &&
+    [[ -x /etc/letsencrypt/renewal-hooks/post/start-nginx-telemt.sh ]] &&
+    [[ -x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh ]]
+}
+
+nginx_http_redirect_current() {
+  [[ -f /etc/nginx/conf.d/"$PUBLIC_HOST".conf ]] &&
+    grep -Fq 'return 301 https://$host$request_uri;' /etc/nginx/conf.d/"$PUBLIC_HOST".conf
 }
 
 [[ "$(id -u)" -eq 0 ]] || die "Run as root."
@@ -344,11 +411,35 @@ LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${PUBLIC_HOST}}"
 
 prompt LETSENCRYPT_EMAIL "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
 prompt SSH_PORT "SSH port, Enter keeps current/default" "$SSH_PORT"
+prompt_yes_no SSH_KEY_ONLY_LOGIN "Disable SSH password login and keep root key-only? yes/no" "$SSH_KEY_ONLY_LOGIN"
+prompt_yes_no ENABLE_FAIL2BAN "Enable fail2ban for SSH? yes/no" "$ENABLE_FAIL2BAN"
+prompt_yes_no ADD_SWAP "Add 1G swap if missing? yes/no" "$ADD_SWAP"
 prompt TELEMT_MAX_TCP_CONNS "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
 
 [[ "$LETSENCRYPT_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || die "Email must be a plain email address."
 valid_port "$SSH_PORT" || die "SSH port must be a number from 1 to 65535."
 valid_limit "$TELEMT_MAX_TCP_CONNS" || die "Connection limit must be a number from 1 to 1000000."
+
+if [[ "$SSH_KEY_ONLY_LOGIN" == "yes" ]]; then
+  if ! root_authorized_key_exists; then
+    cat >&2 <<'EOF'
+
+SSH key-only login was requested, but no root SSH public key was found.
+
+Add your public key first:
+  /root/.ssh/authorized_keys
+
+Then rerun the installer and choose SSH key-only login again.
+EOF
+    exit 1
+  fi
+
+  prompt_yes_no SSH_KEY_ONLY_CONFIRM "Are you sure you want to close SSH password login? yes/no" "$SSH_KEY_ONLY_CONFIRM"
+  if [[ "$SSH_KEY_ONLY_CONFIRM" != "yes" ]]; then
+    SSH_KEY_ONLY_LOGIN="no"
+    echo "SSH password login will not be disabled."
+  fi
+fi
 
 step "DNS preflight"
 echo "server_public_ipv4=$PUBLIC_IP"
@@ -376,21 +467,6 @@ EOF
   exit 1
 fi
 
-if [[ ! -s /root/.ssh/authorized_keys && "${ALLOW_NO_ROOT_KEY:-0}" != "1" ]]; then
-  cat >&2 <<'EOF'
-
-SSH key check failed.
-
-This installer disables SSH password login. Add your public key to:
-  /root/.ssh/authorized_keys
-
-Then rerun the script. If you are intentionally running from a provider console,
-you can override this guard:
-  ALLOW_NO_ROOT_KEY=1 bash install_telemt_alma.sh
-EOF
-  exit 1
-fi
-
 cat <<EOF
 
 Install plan:
@@ -398,6 +474,9 @@ Install plan:
   public IPv4:  ${PUBLIC_IP}
   email:        ${LETSENCRYPT_EMAIL}
   SSH port:     ${SSH_PORT}
+  SSH key-only: ${SSH_KEY_ONLY_LOGIN}
+  fail2ban SSH: ${ENABLE_FAIL2BAN}
+  add swap:     ${ADD_SWAP}
   Telemt limit: ${TELEMT_MAX_TCP_CONNS}
 
 Type y or yes to continue:
@@ -436,23 +515,28 @@ else
   mark_done backup
 fi
 
-if step_done swap; then
-  step "Add 1G swap if missing (already done)"
-  swapon --show || true
-else
-  step "Add 1G swap if missing"
-  if ! swapon --show=NAME --noheadings 2>/dev/null | grep -q .; then
-    if [[ ! -e /swapfile ]]; then
-      fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024
-      chmod 600 /swapfile
-      mkswap /swapfile
+if [[ "$ADD_SWAP" == "yes" ]]; then
+  if step_done swap; then
+    step "Add 1G swap if missing (already done)"
+    swapon --show || true
+  else
+    step "Add 1G swap if missing"
+    if ! swapon --show=NAME --noheadings 2>/dev/null | grep -q .; then
+      if [[ ! -e /swapfile ]]; then
+        fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024
+        chmod 600 /swapfile
+        mkswap /swapfile
+      fi
+      swapon /swapfile || true
+      grep -qE '^[^#].*[[:space:]]/swapfile[[:space:]]' /etc/fstab 2>/dev/null || \
+        printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
     fi
-    swapon /swapfile || true
-    grep -qE '^[^#].*[[:space:]]/swapfile[[:space:]]' /etc/fstab 2>/dev/null || \
-      printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+    swapon --show || true
+    mark_done swap
   fi
+else
+  step "Add 1G swap if missing (skipped)"
   swapon --show || true
-  mark_done swap
 fi
 
 if step_done packages; then
@@ -462,7 +546,7 @@ else
   dnf makecache -y
   dnf install -y epel-release || true
   dnf install -y dnf-plugins-core ca-certificates curl openssl iproute \
-    firewalld nginx nginx-mod-stream certbot fail2ban jq \
+    firewalld nginx nginx-mod-stream certbot jq \
     policycoreutils-python-utils
   if ! have docker; then
     if ! dnf repolist --enabled | awk '{print $1}' | grep -Fxq docker-ce-stable; then
@@ -527,32 +611,45 @@ EOF
   mark_done secret
 fi
 
-if step_done ssh_hardening; then
-  step "Configure SSH hardening (already done)"
+if step_done ssh_hardening && [[ "$SSH_KEY_ONLY_LOGIN" == "yes" ]] &&
+   [[ -f /etc/ssh/sshd_config.d/00password.conf ]] &&
+   grep -Eq '^PasswordAuthentication[[:space:]]+no' /etc/ssh/sshd_config.d/00password.conf; then
+  step "Configure SSH settings (already done)"
 else
-  step "Configure SSH hardening"
+  step "Configure SSH settings"
   if grep -Eq '^[#[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config; then
     sed -i -E "s/^[#[:space:]]*Port[[:space:]]+.*/Port ${SSH_PORT}/" /etc/ssh/sshd_config
   else
     printf '\nPort %s\n' "$SSH_PORT" >> /etc/ssh/sshd_config
   fi
-  write_file_root /etc/ssh/sshd_config.d/00password.conf 0644 root:root <<EOF
+
+  if [[ "$SSH_KEY_ONLY_LOGIN" == "yes" ]]; then
+    root_authorized_key_exists || die "SSH key-only login requested, but /root/.ssh/authorized_keys has no supported public key."
+    write_file_root /etc/ssh/sshd_config.d/00password.conf 0644 root:root <<EOF
+# Managed by Telemt installer when SSH_KEY_ONLY_LOGIN=yes.
 PermitRootLogin prohibit-password
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 MaxAuthTries 3
 EOF
+  else
+    remove_installer_key_only_config_if_present
+    echo "SSH password login was left enabled/unchanged."
+  fi
+
   sshd -t
   systemctl restart sshd
   mark_done ssh_hardening
 fi
 
-if step_done fail2ban; then
-  step "Configure fail2ban (already done)"
-else
-  step "Configure fail2ban"
-  write_file_root /etc/fail2ban/jail.d/defaults-alma.conf 0644 root:root <<'EOF'
+if [[ "$ENABLE_FAIL2BAN" == "yes" ]]; then
+  if step_done fail2ban; then
+    step "Configure fail2ban (already done)"
+  else
+    step "Configure fail2ban"
+    dnf install -y fail2ban
+    write_file_root /etc/fail2ban/jail.d/defaults-alma.conf 0644 root:root <<'EOF'
 [DEFAULT]
 banaction = firewallcmd-ipset
 banaction_allports = firewallcmd-allports
@@ -562,7 +659,7 @@ backend = systemd
 journalmatch = _SYSTEMD_UNIT=sshd.service + _COMM=sshd
 enabled = true
 EOF
-  write_file_root /etc/fail2ban/jail.d/sshd.local 0644 root:root <<EOF
+    write_file_root /etc/fail2ban/jail.d/sshd.local 0644 root:root <<EOF
 [sshd]
 enabled = true
 port = ${SSH_PORT}
@@ -571,9 +668,13 @@ maxretry = 4
 findtime = 10m
 bantime = 1h
 EOF
-  systemctl enable --now fail2ban
-  systemctl restart fail2ban
-  mark_done fail2ban
+    systemctl enable --now fail2ban
+    systemctl restart fail2ban
+    mark_done fail2ban
+  fi
+else
+  step "Configure fail2ban (skipped)"
+  echo "fail2ban was left unchanged."
 fi
 
 if step_done certbot; then
@@ -589,7 +690,7 @@ else
   mark_done certbot
 fi
 
-if step_done certbot_renewal; then
+if step_done certbot_renewal && certbot_renewal_hooks_current; then
   step "Configure certificate auto-renewal (already done)"
 else
   step "Configure certificate auto-renewal"
@@ -597,7 +698,7 @@ else
   mark_done certbot_renewal
 fi
 
-if step_done nginx_config; then
+if step_done nginx_config && nginx_http_redirect_current; then
   step "Configure nginx mask site and SNI routing (already done)"
 else
   step "Configure nginx mask site and SNI routing"
@@ -665,6 +766,24 @@ EOF
   fi
 
   write_file_root /etc/nginx/conf.d/"$PUBLIC_HOST".conf 0644 root:root <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${PUBLIC_HOST};
+    access_log off;
+    error_log /var/log/nginx/${PUBLIC_HOST}.error.log crit;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/${PUBLIC_HOST};
+        default_type "text/plain";
+        try_files \$uri =404;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
 server {
     listen 127.0.0.1:8443 ssl http2;
     server_name ${PUBLIC_HOST};
@@ -949,6 +1068,7 @@ curl -fsS http://127.0.0.1:9091/v1/users > "$tmp_users"
 grep -q '"ok":true' "$tmp_users"
 grep -o 'tg://proxy[^"]*' "$tmp_users" > /root/telemt-proxy-link.txt || true
 chmod 600 /root/telemt-proxy-link.txt 2>/dev/null || true
+curl -fsSIs --resolve "${PUBLIC_HOST}:80:${PUBLIC_IP}" "http://${PUBLIC_HOST}/" | head -n 12 || true
 curl -fsSIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/" | head -n 12 || true
 /usr/local/sbin/telemt-report 2m || true
 

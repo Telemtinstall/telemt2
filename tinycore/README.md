@@ -14,7 +14,7 @@ add_key.sh                          вспомогательный скрипт 
 
 ### Главные Отличия
 
-В Tiny Core версии нет Docker, systemd, apt/dnf и обычного `certbot.timer`. Зависимости ставятся через `tce-load`, Telemt ставится как нативный `musl` бинарник из GitHub releases, автозапуск делается через `/opt/bootlocal.sh`, а persistence фиксируется через `/opt/.filetool.lst` и `filetool.sh -b`. Сертификат выпускается через `acme.sh` в standalone mode.
+В Tiny Core версии нет Docker, systemd, apt/dnf и обычного `certbot.timer`. Зависимости ставятся через `tce-load`, Telemt ставится как нативный `musl` бинарник из GitHub releases, автозапуск делается через `/opt/bootlocal.sh`, а persistence фиксируется через `/opt/.filetool.lst` и `filetool.sh -b`. Сертификат выпускается через `acme.sh` в standalone mode, для продления добавляются hooks остановки/запуска nginx.
 
 ### Требования
 
@@ -36,12 +36,15 @@ add_key.sh                          вспомогательный скрипт 
 
 Скрипт ставит базовые зависимости (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), а также optional-компоненты `jq` и `iproute2`, если они доступны. Для сертификатов используется `acme.sh`, а Telemt ставится как нативный бинарник.
 
-При установке используются закреплённые версии Telemt и `acme.sh` с проверкой sha256. Nginx access logs и Telemt runtime logs отключаются.
+При установке используются закреплённые версии Telemt и `acme.sh` с проверкой sha256. Nginx access logs и Telemt runtime logs отключаются. На `80/tcp` nginx отдаёт только HTTP -> HTTPS редирект.
 
 ### Схема
 
 ```text
 Internet
+  -> <PROXY_DOMAIN>:80
+  -> nginx HTTP redirect
+     -> 301 https://<PROXY_DOMAIN>/
   -> <PROXY_DOMAIN>:443
   -> nginx stream SNI router
      -> SNI = <PROXY_DOMAIN>
@@ -223,7 +226,7 @@ Status: experimental. Tiny Core is very different from conventional server distr
 
 ### Main Differences
 
-The Tiny Core version has no Docker, systemd, apt/dnf, or regular `certbot.timer`. Dependencies are installed via `tce-load`, Telemt is installed as a native `musl` binary from GitHub releases, autostart is handled through `/opt/bootlocal.sh`, and persistence is saved through `/opt/.filetool.lst` and `filetool.sh -b`. Certificates are issued through `acme.sh` in standalone mode.
+The Tiny Core version has no Docker, systemd, apt/dnf, or regular `certbot.timer`. Dependencies are installed via `tce-load`, Telemt is installed as a native `musl` binary from GitHub releases, autostart is handled through `/opt/bootlocal.sh`, and persistence is saved through `/opt/.filetool.lst` and `filetool.sh -b`. Certificates are issued through `acme.sh` in standalone mode, with nginx stop/start hooks for renewal.
 
 ### Requirements
 
@@ -245,12 +248,15 @@ By default, the installer uses pinned Telemt release `3.4.0` and pinned `acme.sh
 
 The script installs base dependencies (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), plus optional `jq` and `iproute2` when available. Certificates are handled by `acme.sh`, and Telemt is installed as a native binary.
 
-The installer uses a pinned Telemt release and pinned `acme.sh` version with sha256 verification. Nginx access logs and Telemt runtime logs are disabled.
+The installer uses a pinned Telemt release and pinned `acme.sh` version with sha256 verification. Nginx access logs and Telemt runtime logs are disabled. On `80/tcp`, nginx only serves the HTTP -> HTTPS redirect.
 
 ### Layout
 
 ```text
 Internet
+  -> <PROXY_DOMAIN>:80
+  -> nginx HTTP redirect
+     -> 301 https://<PROXY_DOMAIN>/
   -> <PROXY_DOMAIN>:443
   -> nginx stream SNI router
      -> SNI = <PROXY_DOMAIN>

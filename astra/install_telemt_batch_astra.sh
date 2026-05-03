@@ -16,6 +16,8 @@ REMOTE_INSTALLER_NAME="${REMOTE_INSTALLER_NAME:-$(basename "$INSTALLER_FILE")}"
 SSH_USER="${SSH_USER:-root}"
 CONNECT_SSH_PORT="${CONNECT_SSH_PORT:-22}"
 TARGET_SSH_PORT="${TARGET_SSH_PORT:-22}"
+ENABLE_FAIL2BAN="${ENABLE_FAIL2BAN:-no}"
+ADD_SWAP="${ADD_SWAP:-no}"
 TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-1000}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 KEY_PATH="${KEY_PATH:-${HOME}/.ssh/id_ed25519}"
@@ -57,6 +59,21 @@ prompt_default() {
   else
     printf -v "$var" '%s' "$default_value"
   fi
+}
+
+prompt_yes_no() {
+  local var="$1"
+  local label="$2"
+  local default_value="${3:-no}"
+  local value=""
+
+  prompt_default "$var" "$label" "$default_value"
+  value="$(printf '%s' "${!var}" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    y|yes) printf -v "$var" '%s' "yes" ;;
+    n|no|"") printf -v "$var" '%s' "no" ;;
+    *) die "$label must be yes or no." ;;
+  esac
 }
 
 confirm() {
@@ -350,9 +367,8 @@ choose_auth_mode() {
         cat <<'EOF'
 
 Password mode will use interactive SSH/SCP password prompts.
-The Astra installer disables SSH password login, so the server should already
-have /root/.ssh/authorized_keys. If it does not, install_telemt_astra.sh will stop
-before SSH hardening to avoid locking you out.
+By default, the Astra installer keeps SSH password login enabled. If you
+explicitly enable SSH_KEY_ONLY_LOGIN=yes, make sure root key login works first.
 
 EOF
         if confirm "Use password mode for this server? [y/N]: "; then
@@ -403,6 +419,8 @@ run_remote_installer() {
   remote_cmd+="PUBLIC_HOST=$(shell_quote "$domain") "
   remote_cmd+="LETSENCRYPT_EMAIL=$(shell_quote "$email_answer") "
   remote_cmd+="SSH_PORT=$(shell_quote "$TARGET_SSH_PORT") "
+  remote_cmd+="ENABLE_FAIL2BAN=$(shell_quote "$ENABLE_FAIL2BAN") "
+  remote_cmd+="ADD_SWAP=$(shell_quote "$ADD_SWAP") "
   remote_cmd+="TELEMT_MAX_TCP_CONNS=$(shell_quote "$TELEMT_MAX_TCP_CONNS") "
   remote_cmd+="ASSUME_YES=1 /root/${REMOTE_INSTALLER_NAME}"
   ssh "${SSH_OPTS[@]}" "$target" "$remote_cmd"
@@ -466,6 +484,8 @@ show_plan() {
   echo "  SSH user:            $SSH_USER"
   echo "  connect SSH port:    $CONNECT_SSH_PORT"
   echo "  target SSH port:     $TARGET_SSH_PORT"
+  echo "  fail2ban SSH:        $ENABLE_FAIL2BAN"
+  echo "  add swap:            $ADD_SWAP"
   echo "  Telemt limit:        $TELEMT_MAX_TCP_CONNS"
   if [[ -n "$LETSENCRYPT_EMAIL" ]]; then
     echo "  Let's Encrypt email: $LETSENCRYPT_EMAIL"
@@ -500,6 +520,8 @@ EOF
   fi
   prompt_default CONNECT_SSH_PORT "Current SSH port for connecting to servers" "$CONNECT_SSH_PORT"
   prompt_default TARGET_SSH_PORT "SSH port to configure on installed servers" "$TARGET_SSH_PORT"
+  prompt_yes_no ENABLE_FAIL2BAN "Enable fail2ban for SSH? yes/no" "$ENABLE_FAIL2BAN"
+  prompt_yes_no ADD_SWAP "Add 1G swap if missing? yes/no" "$ADD_SWAP"
   prompt_default TELEMT_MAX_TCP_CONNS "Telemt max TCP connections" "$TELEMT_MAX_TCP_CONNS"
   prompt_default LETSENCRYPT_EMAIL "Common Let's Encrypt email, empty = admin@domain" "$LETSENCRYPT_EMAIL"
 

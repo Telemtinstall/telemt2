@@ -4,10 +4,21 @@
 
 `install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом сервере.
 
+Для Debian 11 / bullseye есть отдельный установщик:
+
+```text
+install_telemt_debian11.sh
+```
+
+Он нужен для старых версий `nftables`, `nginx` и `docker-compose`, а также для серверов, где `ufw` уже включён и закрывает `80/tcp` или `443/tcp`.
+
 Целевая схема после установки:
 
 ```text
 Internet
+  -> <PROXY_DOMAIN>:80
+  -> nginx HTTP redirect
+     -> 301 https://<PROXY_DOMAIN>/
   -> <PROXY_DOMAIN>:443
   -> nginx stream SNI router
      -> SNI = <PROXY_DOMAIN>
@@ -18,7 +29,7 @@ Internet
         -> HTTPS mask site
 ```
 
-Снаружи открыт только HTTPS-порт `443`. Telemt не слушает внешний интерфейс напрямую, он доступен только локально на `127.0.0.1:1443`. API Telemt доступен только локально на `127.0.0.1:9091`.
+Снаружи открыты `80/tcp` и `443/tcp`: `80/tcp` только перенаправляет HTTP на HTTPS, `443/tcp` принимает Telemt/HTTPS через nginx SNI router. Telemt не слушает внешний интерфейс напрямую, он доступен только локально на `127.0.0.1:1443`. API Telemt доступен только локально на `127.0.0.1:9091`.
 
 ### Что нужно до запуска
 
@@ -31,11 +42,11 @@ Internet
 ```
 
 4. Порты `80/tcp` и `443/tcp` должны быть доступны с интернета.
-5. В `/root/.ssh/authorized_keys` должен быть SSH-ключ, потому что скрипт отключает SSH-пароли.
+5. SSH-ключ в `/root/.ssh/authorized_keys` нужен только если вы сами включите режим “root только по ключу”.
 
 ### Важно: только чистый сервер
 
-Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewall, SSH hardening, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
+Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewall, SSH-port, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Fail2ban включается только если выбрать `yes`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
 
 ### Как скачать файл на сервер
 
@@ -57,6 +68,13 @@ chmod +x /root/install_telemt.sh
 ```bash
 curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
+```
+
+Для Debian 11 скачайте отдельный файл:
+
+```bash
+wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt_debian11.sh
+chmod +x /root/install_telemt_debian11.sh
 ```
 
 Если нужен именно `git`, скачайте только каталог Debian/Ubuntu:
@@ -119,7 +137,27 @@ admin@<PROXY_DOMAIN>
 
 Можно нажать Enter и оставить `22`, либо указать другой порт.
 
-4. Лимит подключений Telemt. По умолчанию:
+4. Отключать ли SSH-пароли и оставить root только по ключу. По умолчанию:
+
+```text
+no
+```
+
+Если выбрать `yes`, скрипт проверит `/root/.ssh/authorized_keys` и попросит второе подтверждение.
+
+5. Включать ли fail2ban для SSH. По умолчанию:
+
+```text
+no
+```
+
+6. Добавлять ли swap `1G`, если swap нет. По умолчанию:
+
+```text
+no
+```
+
+7. Лимит подключений Telemt. По умолчанию:
 
 ```text
 1000
@@ -135,6 +173,9 @@ admin@<PROXY_DOMAIN>
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default [22]: <Enter>
+Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Max Telemt connections [1000]: <Enter>
 
 Install plan:
@@ -142,13 +183,16 @@ Install plan:
   public IPv4:  <SERVER_PUBLIC_IP>
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22
+  SSH key-only: no
+  fail2ban SSH: no
+  add swap:     no
   Telemt limit: 1000
 
 Type y or yes to continue:
 y
 ```
 
-В примере пустой ответ означает “оставить значение по умолчанию”. После `y` начинается установка: `apt` обновляет пакеты, ставятся Docker/Compose, nginx, nginx stream module, certbot, fail2ban, nftables, jq, curl и openssl, затем выпускается сертификат, создаются nginx/Telemt-конфиги, запускается контейнер и применяется SSH/firewall hardening.
+В примере пустой ответ означает “оставить значение по умолчанию”. По умолчанию SSH-пароли не отключаются, fail2ban не включается и swap не добавляется. После `y` начинается установка: `apt` обновляет пакеты, ставятся Docker/Compose, nginx, nginx stream module, certbot, nftables, jq, curl и openssl, затем выпускается сертификат, создаются nginx/Telemt-конфиги, запускается контейнер и применяется firewall/SSH-port настройка.
 
 ### Проверки перед установкой
 
@@ -160,13 +204,13 @@ y
 
 Если домен ещё не указывает на IP сервера, установка остановится до получения SSL-сертификата.
 
-Скрипт также проверяет наличие:
+Если на вопрос `Disable SSH password login and keep root key-only?` ответить `yes`, скрипт сначала проверит наличие root SSH-ключа:
 
 ```text
 /root/.ssh/authorized_keys
 ```
 
-Если ключей нет, установка остановится, чтобы не отключить парольный вход и не заблокировать доступ.
+Если ключей нет, установка остановится. Если ключ найден, скрипт ещё раз спросит подтверждение `Are you sure you want to close SSH password login?`. Только после второго `yes` он отключит парольный SSH-вход.
 
 ### Продолжение После Обрыва
 
@@ -208,30 +252,31 @@ docker / docker-compose
 nginx
 nginx stream module
 certbot
-fail2ban
+fail2ban (только если выбран yes)
 nftables
 jq
 curl
 openssl
 ```
 
-Также добавляется swap `1G`, если swap ещё не включён.
+Swap `1G` добавляется только если на вопрос `Add 1G swap if missing?` выбран `yes`.
 
 ### Что настраивается
 
 1. Let's Encrypt сертификат для `<PROXY_DOMAIN>`.
 2. Автопродление сертификата через `certbot.timer`.
-3. Deploy-hook для `reload nginx` после успешного продления.
-4. Nginx stream router на внешнем `443/tcp`.
-5. Маскировочный HTTPS-сайт на `127.0.0.1:8443`; HTML-страница создаётся в `/var/www/<PROXY_DOMAIN>/index.html`, а её `<title>` и `<h1>` равны введённому домену.
-6. Telemt backend на `127.0.0.1:1443`.
-7. Telemt API на `127.0.0.1:9091`.
-8. Firewall-правило, закрывающее `9091/tcp` снаружи.
-9. Fail2ban для SSH.
-10. Отключение nginx access logs для маскировочного сайта.
-11. Отключение Docker runtime logs для Telemt-контейнера.
-12. Безопасное поведение nginx: скрипт добавляет отдельный site/stream config и не удаляет существующие сайты. Если `443/tcp` уже занят чужим HTTPS-сервисом, установка останавливается до изменения frontend-а.
-13. SSH hardening:
+3. Pre/post/deploy hooks для certbot: nginx останавливается перед standalone-renew, запускается обратно и reload выполняется после успешного продления.
+4. HTTP -> HTTPS редирект на внешнем `80/tcp`.
+5. Nginx stream router на внешнем `443/tcp`.
+6. Маскировочный HTTPS-сайт на `127.0.0.1:8443`; HTML-страница создаётся в `/var/www/<PROXY_DOMAIN>/index.html`, а её `<title>` и `<h1>` равны введённому домену.
+7. Telemt backend на `127.0.0.1:1443`.
+8. Telemt API на `127.0.0.1:9091`.
+9. Firewall-правило, закрывающее `9091/tcp` снаружи.
+10. Fail2ban для SSH, только если на вопрос `Enable fail2ban for SSH?` выбран `yes`.
+11. Отключение nginx access logs для маскировочного сайта.
+12. Отключение Docker runtime logs для Telemt-контейнера.
+13. Безопасное поведение nginx: скрипт добавляет отдельный site/stream config и не удаляет существующие сайты. Если `443/tcp` уже занят чужим HTTPS-сервисом, установка останавливается до изменения frontend-а.
+14. SSH port настройка. Отключение SSH-паролей выполняется только если на вопрос `Disable SSH password login and keep root key-only?` выбран `yes` и подтверждение повторено вторым `yes`:
 
 ```text
 PasswordAuthentication no
@@ -303,12 +348,13 @@ certbot renew --dry-run
 Проверка портов:
 
 ```bash
-ss -lntp | grep -E ':(443|8443|1443|9091)'
+ss -lntp | grep -E ':(80|443|8443|1443|9091)'
 ```
 
 Ожидаемая схема портов:
 
 ```text
+0.0.0.0:80         nginx HTTP -> HTTPS redirect
 0.0.0.0:443        nginx
 127.0.0.1:8443     nginx mask site
 127.0.0.1:1443     telemt
@@ -410,6 +456,8 @@ chmod +x /root/install_telemt.sh
 SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Telemt max TCP connections [1000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
@@ -454,7 +502,7 @@ Domain:
 
 ```bash
 chmod +x install_telemt_batch.sh ../common/add_key.sh
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
 ```
 
 `install_telemt.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без пакетного режима.
@@ -465,10 +513,21 @@ CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telem
 
 `install_telemt.sh` automatically installs a Telemt MTProto proxy on a new server.
 
+For Debian 11 / bullseye, use the separate installer:
+
+```text
+install_telemt_debian11.sh
+```
+
+It handles older `nftables`, `nginx`, and `docker-compose` behavior, and also opens `80/tcp` and `443/tcp` when `ufw` is already active and blocking them.
+
 Target architecture after installation:
 
 ```text
 Internet
+  -> <PROXY_DOMAIN>:80
+  -> nginx HTTP redirect
+     -> 301 https://<PROXY_DOMAIN>/
   -> <PROXY_DOMAIN>:443
   -> nginx stream SNI router
      -> SNI = <PROXY_DOMAIN>
@@ -479,7 +538,7 @@ Internet
         -> HTTPS mask site
 ```
 
-Only external port `443` is exposed. Telemt does not listen on the public network interface directly. It listens only on `127.0.0.1:1443`. The Telemt API is local-only on `127.0.0.1:9091`.
+External ports `80/tcp` and `443/tcp` are exposed: `80/tcp` only redirects HTTP to HTTPS, while `443/tcp` accepts Telemt/HTTPS through the nginx SNI router. Telemt does not listen on the public network interface directly. It listens only on `127.0.0.1:1443`. The Telemt API is local-only on `127.0.0.1:9091`.
 
 ### Requirements Before Running
 
@@ -492,11 +551,11 @@ Only external port `443` is exposed. Telemt does not listen on the public networ
 ```
 
 4. Ports `80/tcp` and `443/tcp` must be reachable from the internet.
-5. `/root/.ssh/authorized_keys` must contain your SSH public key because the script disables SSH password login.
+5. `/root/.ssh/authorized_keys` is required only if you explicitly enable root key-only login.
 
 ### Important: Clean Server Only
 
-Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewall, SSH hardening, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
+Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewall, SSH-port, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. Fail2ban is enabled only if you choose `yes`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
 ### How To Download The File To The Server
 
@@ -518,6 +577,13 @@ The same with `curl`:
 ```bash
 curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
+```
+
+For Debian 11, download the dedicated file:
+
+```bash
+wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt_debian11.sh
+chmod +x /root/install_telemt_debian11.sh
 ```
 
 If you specifically want to use `git`, download only the Debian/Ubuntu directory:
@@ -580,7 +646,27 @@ admin@<PROXY_DOMAIN>
 
 Press Enter to keep `22`, or type a different port.
 
-4. Telemt connection limit. Default:
+4. Whether to disable SSH password login and keep root key-only. Default:
+
+```text
+no
+```
+
+If you choose `yes`, the script checks `/root/.ssh/authorized_keys` and asks for a second confirmation.
+
+5. Whether to enable fail2ban for SSH. Default:
+
+```text
+no
+```
+
+6. Whether to add `1G` swap if swap is missing. Default:
+
+```text
+no
+```
+
+7. Telemt connection limit. Default:
 
 ```text
 1000
@@ -596,6 +682,9 @@ Full dialogue example:
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default [22]: <Enter>
+Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Max Telemt connections [1000]: <Enter>
 
 Install plan:
@@ -603,13 +692,16 @@ Install plan:
   public IPv4:  <SERVER_PUBLIC_IP>
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22
+  SSH key-only: no
+  fail2ban SSH: no
+  add swap:     no
   Telemt limit: 1000
 
 Type y or yes to continue:
 y
 ```
 
-In this example, an empty answer means “keep the default”. After `y`, installation starts: `apt` updates packages, installs Docker/Compose, nginx, nginx stream module, certbot, fail2ban, nftables, jq, curl, and openssl, then issues the certificate, writes nginx/Telemt configs, starts the container, and applies SSH/firewall hardening.
+In this example, an empty answer means “keep the default”. By default, SSH password login is not disabled, fail2ban is not enabled, and swap is not added. After `y`, installation starts: `apt` updates packages, installs Docker/Compose, nginx, nginx stream module, certbot, nftables, jq, curl, and openssl, then issues the certificate, writes nginx/Telemt configs, starts the container, and applies firewall/SSH-port settings.
 
 ### Preflight Checks
 
@@ -621,13 +713,13 @@ The script detects the server public IPv4 and checks DNS:
 
 If the domain does not point to the server IP yet, the installation stops before requesting the SSL certificate.
 
-The script also checks:
+If you answer `yes` to `Disable SSH password login and keep root key-only?`, the script first checks for a root SSH key:
 
 ```text
 /root/.ssh/authorized_keys
 ```
 
-If no SSH key is found, the installation stops to avoid locking you out after password login is disabled.
+If no SSH key is found, installation stops. If a key is found, the script asks again: `Are you sure you want to close SSH password login?`. Password SSH login is disabled only after that second `yes`.
 
 ### Resume After Disconnect
 
@@ -669,30 +761,31 @@ docker / docker-compose
 nginx
 nginx stream module
 certbot
-fail2ban
+fail2ban (only if selected)
 nftables
 jq
 curl
 openssl
 ```
 
-It also adds `1G` swap if swap is not already enabled.
+It adds `1G` swap only when `Add 1G swap if missing?` is answered with `yes`.
 
 ### Configured Components
 
 1. Let's Encrypt certificate for `<PROXY_DOMAIN>`.
 2. Automatic certificate renewal via `certbot.timer`.
-3. Deploy hook that reloads nginx after a successful renewal.
-4. Nginx stream router on public `443/tcp`.
-5. HTTPS mask site on `127.0.0.1:8443`; the HTML page is created at `/var/www/<PROXY_DOMAIN>/index.html`, and its `<title>` and `<h1>` are set to the entered domain.
-6. Telemt backend on `127.0.0.1:1443`.
-7. Telemt API on `127.0.0.1:9091`.
-8. Firewall rule blocking external access to `9091/tcp`.
-9. Fail2ban for SSH.
-10. Disabled nginx access logs for the mask site.
-11. Disabled Docker runtime logs for the Telemt container.
-12. Safe nginx behavior: the installer adds separate site/stream configs and does not remove existing sites. If `443/tcp` is already owned by another HTTPS service, installation stops before changing the frontend.
-13. SSH hardening:
+3. Certbot pre/post/deploy hooks: nginx is stopped before standalone renewal, started again after it, and reloaded after successful renewal.
+4. HTTP -> HTTPS redirect on public `80/tcp`.
+5. Nginx stream router on public `443/tcp`.
+6. HTTPS mask site on `127.0.0.1:8443`; the HTML page is created at `/var/www/<PROXY_DOMAIN>/index.html`, and its `<title>` and `<h1>` are set to the entered domain.
+7. Telemt backend on `127.0.0.1:1443`.
+8. Telemt API on `127.0.0.1:9091`.
+9. Firewall rule blocking external access to `9091/tcp`.
+10. Fail2ban for SSH, only when `Enable fail2ban for SSH?` is answered with `yes`.
+11. Disabled nginx access logs for the mask site.
+12. Disabled Docker runtime logs for the Telemt container.
+13. Safe nginx behavior: the installer adds separate site/stream configs and does not remove existing sites. If `443/tcp` is already owned by another HTTPS service, installation stops before changing the frontend.
+14. SSH port configuration. Disabling SSH passwords is optional and happens only when `Disable SSH password login and keep root key-only?` is answered with `yes` and confirmed by a second `yes`:
 
 ```text
 PasswordAuthentication no
@@ -764,12 +857,13 @@ certbot renew --dry-run
 Port check:
 
 ```bash
-ss -lntp | grep -E ':(443|8443|1443|9091)'
+ss -lntp | grep -E ':(80|443|8443|1443|9091)'
 ```
 
 Expected port layout:
 
 ```text
+0.0.0.0:80         nginx HTTP -> HTTPS redirect
 0.0.0.0:443        nginx
 127.0.0.1:8443     nginx mask site
 127.0.0.1:1443     telemt
@@ -871,6 +965,8 @@ Batch mode dialogue example:
 SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
+Enable fail2ban for SSH? yes/no [no]: <Enter>
+Add 1G swap if missing? yes/no [no]: <Enter>
 Telemt max TCP connections [1000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
@@ -915,7 +1011,7 @@ Optional environment variables:
 
 ```bash
 chmod +x install_telemt_batch.sh ../common/add_key.sh
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
 ```
 
 `install_telemt.sh` and `add_key.sh` remain standalone scripts and can still be run without batch mode.

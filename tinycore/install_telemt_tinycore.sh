@@ -288,18 +288,64 @@ RUST_LOG=warn "\$TELEMT_HOME/bin/telemt" "\$TELEMT_HOME/telemt.toml" >/dev/null 
 echo \$! > "\$TELEMT_HOME/run/telemt.pid"
 EOF
   chmod 700 "$TELEMT_HOME/bin/restart.sh"
+
+  cat > "$TELEMT_HOME/bin/stop-nginx.sh" <<EOF
+#!/bin/sh
+set -eu
+TELEMT_HOME="$TELEMT_HOME"
+
+if [ -f "\$TELEMT_HOME/run/nginx.pid" ]; then
+  nginx -c "\$TELEMT_HOME/nginx/nginx.conf" -s stop 2>/dev/null || kill "\$(cat "\$TELEMT_HOME/run/nginx.pid")" 2>/dev/null || true
+fi
+EOF
+  chmod 700 "$TELEMT_HOME/bin/stop-nginx.sh"
+
+  cat > "$TELEMT_HOME/bin/start-nginx-if-cert.sh" <<EOF
+#!/bin/sh
+set -eu
+TELEMT_HOME="$TELEMT_HOME"
+
+[ -s "\$TELEMT_HOME/certs/fullchain.pem" ] || exit 0
+[ -s "\$TELEMT_HOME/certs/privkey.pem" ] || exit 0
+"\$TELEMT_HOME/bin/restart.sh"
+EOF
+  chmod 700 "$TELEMT_HOME/bin/start-nginx-if-cert.sh"
 }
 
 issue_certificate() {
   mkdir -p "$TELEMT_HOME/certs"
   stop_services
   "$ACME_HOME/acme.sh" --home "$ACME_HOME" --issue --server letsencrypt --standalone \
-    --accountemail "$LETSENCRYPT_EMAIL" --keylength ec-256 -d "$PUBLIC_HOST"
+    --accountemail "$LETSENCRYPT_EMAIL" --keylength ec-256 -d "$PUBLIC_HOST" \
+    --pre-hook "$TELEMT_HOME/bin/stop-nginx.sh" \
+    --post-hook "$TELEMT_HOME/bin/start-nginx-if-cert.sh"
   "$ACME_HOME/acme.sh" --home "$ACME_HOME" --install-cert -d "$PUBLIC_HOST" --ecc \
     --fullchain-file "$TELEMT_HOME/certs/fullchain.pem" \
     --key-file "$TELEMT_HOME/certs/privkey.pem" \
     --reloadcmd "$TELEMT_HOME/bin/restart.sh"
   chmod 600 "$TELEMT_HOME/certs/"*.pem
+}
+
+set_acme_conf_value() {
+  key="$1"
+  value="$2"
+  file="$3"
+  safe_value="$(printf '%s' "$value" | sed 's/[&|]/\\&/g')"
+
+  if grep -q "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}='${safe_value}'|" "$file"
+  else
+    printf "%s='%s'\n" "$key" "$value" >> "$file"
+  fi
+}
+
+configure_acme_renewal_hooks() {
+  for domain_conf in "$ACME_HOME/${PUBLIC_HOST}_ecc/${PUBLIC_HOST}.conf" "$ACME_HOME/${PUBLIC_HOST}/${PUBLIC_HOST}.conf"; do
+    [ -f "$domain_conf" ] || continue
+    set_acme_conf_value "Le_PreHook" "$TELEMT_HOME/bin/stop-nginx.sh" "$domain_conf"
+    set_acme_conf_value "Le_PostHook" "$TELEMT_HOME/bin/start-nginx-if-cert.sh" "$domain_conf"
+    set_acme_conf_value "Le_ReloadCmd" "$TELEMT_HOME/bin/restart.sh" "$domain_conf"
+  done
 }
 
 write_mask_page() {
@@ -361,6 +407,23 @@ http {
     access_log off;
     sendfile on;
     keepalive_timeout 65;
+
+    server {
+        listen 80;
+        server_name ${PUBLIC_HOST};
+        access_log off;
+        error_log /dev/null crit;
+
+        location ^~ /.well-known/acme-challenge/ {
+            root $TELEMT_HOME/www;
+            default_type "text/plain";
+            try_files \$uri =404;
+        }
+
+        location / {
+            return 301 https://\$host\$request_uri;
+        }
+    }
 
     server {
         listen 127.0.0.1:8443 ssl;
@@ -710,6 +773,9 @@ else
   mark_done cert
 fi
 
+step "Configure acme.sh renewal hooks"
+configure_acme_renewal_hooks
+
 step "Configure nginx"
 write_nginx_config
 rm -f "$TELEMT_HOME/log/telemt.log" "$TELEMT_HOME/log/nginx-access.log" "$TELEMT_HOME/log/nginx-error.log" 2>/dev/null || true
@@ -724,6 +790,7 @@ persist_tinycore_files
 
 step "Validation"
 write_proxy_link
+curl -fsSIs --resolve "${PUBLIC_HOST}:80:${PUBLIC_IP}" "http://${PUBLIC_HOST}/" | head -n 12 || true
 curl -fsSIs --resolve "${PUBLIC_HOST}:443:${PUBLIC_IP}" "https://${PUBLIC_HOST}/" | head -n 12 || true
 telemt-report 2m || true
 
