@@ -59,21 +59,21 @@ scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
 Для Debian 11 скачайте отдельный файл:
 
 ```bash
-wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt_debian11.sh
+wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt_debian11.sh
 chmod +x /root/install_telemt_debian11.sh
 ```
 
@@ -82,7 +82,7 @@ chmod +x /root/install_telemt_debian11.sh
 ```bash
 apt-get update
 apt-get install -y git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
 git sparse-checkout set debian-ubuntu
 cp debian-ubuntu/install_telemt.sh /root/
@@ -568,21 +568,21 @@ scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt.sh
+curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
 For Debian 11, download the dedicated file:
 
 ```bash
-wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/debian-ubuntu/install_telemt_debian11.sh
+wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt_debian11.sh
 chmod +x /root/install_telemt_debian11.sh
 ```
 
@@ -591,7 +591,7 @@ If you specifically want to use `git`, download only the Debian/Ubuntu directory
 ```bash
 apt-get update
 apt-get install -y git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
 git sparse-checkout set debian-ubuntu
 cp debian-ubuntu/install_telemt.sh /root/

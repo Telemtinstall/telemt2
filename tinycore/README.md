@@ -72,14 +72,14 @@ scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
@@ -87,7 +87,7 @@ chmod +x /root/install_telemt_tinycore.sh
 
 ```bash
 tce-load -wi git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
 git sparse-checkout set tinycore
 cp tinycore/install_telemt_tinycore.sh /root/
@@ -284,14 +284,14 @@ scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/tinycore/install_telemt_tinycore.sh
+curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
@@ -299,7 +299,7 @@ If you specifically want to use `git`, download only the Tiny Core directory:
 
 ```bash
 tce-load -wi git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
 git sparse-checkout set tinycore
 cp tinycore/install_telemt_tinycore.sh /root/

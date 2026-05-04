@@ -51,14 +51,14 @@ scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
@@ -67,7 +67,7 @@ chmod +x /root/install_telemt_astra.sh
 ```bash
 apt-get update
 apt-get install -y git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
 git sparse-checkout set astra
 cp astra/install_telemt_astra.sh /root/
@@ -545,14 +545,14 @@ scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/astra/install_telemt_astra.sh
+curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
@@ -561,7 +561,7 @@ If you specifically want to use `git`, download only the Astra directory:
 ```bash
 apt-get update
 apt-get install -y git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt.git /tmp/telemt
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
 git sparse-checkout set astra
 cp astra/install_telemt_astra.sh /root/
