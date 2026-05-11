@@ -9,9 +9,9 @@ TELEMT_HOME="${TELEMT_HOME:-/opt/telemt}"
 ACME_HOME="${ACME_HOME:-/opt/acme.sh}"
 STATE_FILE="${STATE_FILE:-$TELEMT_HOME/.install_tinycore.state}"
 RESUME_CONFIG="${RESUME_CONFIG:-$TELEMT_HOME/install.conf}"
-TELEMT_RELEASE="${TELEMT_RELEASE:-3.4.0}"
-TELEMT_SHA256_X86_64="${TELEMT_SHA256_X86_64:-fa79e91a1e5b1b035000f1800f21dfbaf76e6b2fc269b5e9585b268b70c640e2}"
-TELEMT_SHA256_AARCH64="${TELEMT_SHA256_AARCH64:-5233e2ad91ed7e4c66b8d30ceef76e0b695ba6372f613ac8c75595342d85973e}"
+TELEMT_RELEASE="${TELEMT_RELEASE:-latest}"
+TELEMT_SHA256_X86_64="${TELEMT_SHA256_X86_64:-}"
+TELEMT_SHA256_AARCH64="${TELEMT_SHA256_AARCH64:-}"
 ACME_SH_VERSION="${ACME_SH_VERSION:-3.1.2}"
 ACME_SH_SHA256="${ACME_SH_SHA256:-c46b41a61c96f67d424e4b4e476907c964b81d53cf94358a9c1d363a4f99c3a4}"
 ASSUME_YES="${ASSUME_YES:-0}"
@@ -226,13 +226,20 @@ download_telemt() {
     telemt-aarch64-linux-musl.tar.gz) expected_sha="$TELEMT_SHA256_AARCH64" ;;
   esac
 
-  [ -n "$expected_sha" ] || die "Missing pinned sha256 for $asset."
-
-  url="https://github.com/telemt/telemt/releases/download/$TELEMT_RELEASE/$asset"
+  if [ "$TELEMT_RELEASE" = "latest" ]; then
+    base_url="https://github.com/telemt/telemt/releases/latest/download"
+  else
+    base_url="https://github.com/telemt/telemt/releases/download/$TELEMT_RELEASE"
+  fi
+  url="$base_url/$asset"
 
   echo "download=$url"
   curl -fsSL "$url" -o "$tmp_dir/$asset"
-  printf '%s  %s\n' "$expected_sha" "$asset" > "$tmp_dir/$asset.sha256"
+  if [ -n "$expected_sha" ]; then
+    printf '%s  %s\n' "$expected_sha" "$asset" > "$tmp_dir/$asset.sha256"
+  else
+    curl -fsSL "$base_url/$asset.sha256" -o "$tmp_dir/$asset.sha256"
+  fi
   (cd "$tmp_dir" && sha256sum -c "$asset.sha256") || die "Telemt sha256 check failed."
 
   tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"

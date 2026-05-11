@@ -78,14 +78,14 @@ scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -95,8 +95,8 @@ chmod +x /root/install_telemt_alma.sh
 dnf install -y git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set almalinux
-cp almalinux/install_telemt_alma.sh /root/
+git sparse-checkout set telemt/almalinux
+cp telemt/almalinux/install_telemt_alma.sh /root/
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -286,14 +286,14 @@ scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -303,8 +303,8 @@ If you specifically want to use `git`, download only the AlmaLinux directory:
 dnf install -y git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set almalinux
-cp almalinux/install_telemt_alma.sh /root/
+git sparse-checkout set telemt/almalinux
+cp telemt/almalinux/install_telemt_alma.sh /root/
 chmod +x /root/install_telemt_alma.sh
 ```
 

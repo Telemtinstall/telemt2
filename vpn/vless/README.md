@@ -70,16 +70,16 @@ scp install_vless.sh vlessctl.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файлы лежат в GitHub, можно скачать их напрямую через `wget`:
 
 ```bash
-wget -O /root/install_vless.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/install_vless.sh
-wget -O /root/vlessctl.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/vlessctl.sh
+wget -O /root/install_vless.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/install_vless.sh
+wget -O /root/vlessctl.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/vlessctl.sh
 chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_vless.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/install_vless.sh
-curl -fsSL -o /root/vlessctl.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/vlessctl.sh
+curl -fsSL -o /root/install_vless.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/install_vless.sh
+curl -fsSL -o /root/vlessctl.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/vlessctl.sh
 chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```
 
@@ -88,10 +88,10 @@ chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```bash
 apt-get update
 apt-get install -y git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/<USER>/<REPO>.git /tmp/<REPO>
-cd /tmp/<REPO>
-git sparse-checkout set <PATH>
-cp <PATH>/install_vless.sh <PATH>/vlessctl.sh /root/
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt2
+cd /tmp/telemt2
+git sparse-checkout set vpn/vless
+cp vpn/vless/install_vless.sh vpn/vless/vlessctl.sh /root/
 chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```
 
@@ -535,16 +535,16 @@ scp install_vless.sh vlessctl.sh root@<SERVER_PUBLIC_IP>:/root/
 If the files are in GitHub, download them directly with `wget`:
 
 ```bash
-wget -O /root/install_vless.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/install_vless.sh
-wget -O /root/vlessctl.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/vlessctl.sh
+wget -O /root/install_vless.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/install_vless.sh
+wget -O /root/vlessctl.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/vlessctl.sh
 chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_vless.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/install_vless.sh
-curl -fsSL -o /root/vlessctl.sh https://raw.githubusercontent.com/<USER>/<REPO>/<BRANCH>/<PATH>/vlessctl.sh
+curl -fsSL -o /root/install_vless.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/install_vless.sh
+curl -fsSL -o /root/vlessctl.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/vpn/vless/vlessctl.sh
 chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```
 
@@ -553,10 +553,10 @@ If you specifically want to use `git`, download only the needed directory with s
 ```bash
 apt-get update
 apt-get install -y git
-git clone --depth 1 --filter=blob:none --sparse https://github.com/<USER>/<REPO>.git /tmp/<REPO>
-cd /tmp/<REPO>
-git sparse-checkout set <PATH>
-cp <PATH>/install_vless.sh <PATH>/vlessctl.sh /root/
+git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt2
+cd /tmp/telemt2
+git sparse-checkout set vpn/vless
+cp vpn/vless/install_vless.sh vpn/vless/vlessctl.sh /root/
 chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```
 

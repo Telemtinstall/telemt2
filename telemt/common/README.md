@@ -18,14 +18,14 @@
 Как скачать `add_key.sh` с GitHub:
 
 ```bash
-wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
 Или через `curl`:
 
 ```bash
-curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
@@ -134,14 +134,14 @@ The script does not disable SSH passwords and does not modify the SSH server con
 How to download `add_key.sh` from GitHub:
 
 ```bash
-wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
 Or with `curl`:
 
 ```bash
-curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 

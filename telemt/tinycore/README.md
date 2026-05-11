@@ -30,13 +30,13 @@ add_key.sh                          вспомогательный скрипт 
 
 Официальный Telemt сейчас публикует `linux-musl` бинарники для `x86_64` и `aarch64`. Поэтому 32-bit Tiny Core x86 этим скриптом не поддерживается.
 
-По умолчанию используется pinned Telemt release `3.4.0` и pinned `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для другого release нужно передать свои `TELEMT_RELEASE`, `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
+По умолчанию используется последний release Telemt и закреплённый `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для закрепления конкретной версии передайте `TELEMT_RELEASE=<version>`. Если хотите не использовать upstream `.sha256`, можно также передать `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
 
 ### Что Ставит
 
 Скрипт ставит базовые зависимости (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), а также optional-компоненты `jq` и `iproute2`, если они доступны. Для сертификатов используется `acme.sh`, а Telemt ставится как нативный бинарник.
 
-При установке используются закреплённые версии Telemt и `acme.sh` с проверкой sha256. Nginx access logs и Telemt runtime logs отключаются. На `80/tcp` nginx отдаёт только HTTP -> HTTPS редирект.
+При установке Telemt скачивается из последнего release, если не задан `TELEMT_RELEASE=<version>`. `acme.sh` закреплён по версии. Оба скачивания проверяются через sha256. Nginx access logs и Telemt runtime logs отключаются. На `80/tcp` nginx отдаёт только HTTP -> HTTPS редирект.
 
 ### Схема
 
@@ -72,14 +72,14 @@ scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
+curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
@@ -89,8 +89,8 @@ chmod +x /root/install_telemt_tinycore.sh
 tce-load -wi git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set tinycore
-cp tinycore/install_telemt_tinycore.sh /root/
+git sparse-checkout set telemt/tinycore
+cp telemt/tinycore/install_telemt_tinycore.sh /root/
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
@@ -118,7 +118,7 @@ Install plan:
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
   Telemt limit: 1000
-  release:      3.4.0
+  release:      latest
 
 Type y or yes to continue:
 y
@@ -242,13 +242,13 @@ Use a new Tiny Core server without existing websites, control panels, or network
 
 Official Telemt currently publishes `linux-musl` binaries for `x86_64` and `aarch64`. 32-bit Tiny Core x86 is not supported by this script.
 
-By default, the installer uses pinned Telemt release `3.4.0` and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To use another release, pass your own `TELEMT_RELEASE`, `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
+By default, the installer uses the latest Telemt release and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To pin a specific release, pass `TELEMT_RELEASE=<version>`. If you do not want to use upstream `.sha256`, you can also pass `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
 
 ### What It Installs
 
 The script installs base dependencies (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), plus optional `jq` and `iproute2` when available. Certificates are handled by `acme.sh`, and Telemt is installed as a native binary.
 
-The installer uses a pinned Telemt release and pinned `acme.sh` version with sha256 verification. Nginx access logs and Telemt runtime logs are disabled. On `80/tcp`, nginx only serves the HTTP -> HTTPS redirect.
+Telemt is downloaded from the latest release unless `TELEMT_RELEASE=<version>` is set. `acme.sh` is pinned by version. Both downloads are verified with sha256. Nginx access logs and Telemt runtime logs are disabled. On `80/tcp`, nginx only serves the HTTP -> HTTPS redirect.
 
 ### Layout
 
@@ -284,14 +284,14 @@ scp install_telemt_tinycore.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/tinycore/install_telemt_tinycore.sh
+curl -fsSL -o /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
@@ -301,8 +301,8 @@ If you specifically want to use `git`, download only the Tiny Core directory:
 tce-load -wi git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set tinycore
-cp tinycore/install_telemt_tinycore.sh /root/
+git sparse-checkout set telemt/tinycore
+cp telemt/tinycore/install_telemt_tinycore.sh /root/
 chmod +x /root/install_telemt_tinycore.sh
 ```
 
@@ -330,7 +330,7 @@ Install plan:
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
   Telemt limit: 1000
-  release:      3.4.0
+  release:      latest
 
 Type y or yes to continue:
 y

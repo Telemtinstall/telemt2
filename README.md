@@ -24,97 +24,94 @@ EN: Run the installers only on a new clean VPS/server without existing websites,
 ## Structure
 
 ```text
-debian-ubuntu/
-  install_telemt.sh
-  install_telemt_debian11.sh
-  install_telemt_batch.sh
-  README.md
+telemt/
+  debian-13-ubuntu/
+    install_telemt.sh
+    install_telemt_batch.sh
+    README.md
+  debian-11/
+    install_telemt_debian11.sh
+    README.md
+  astra/
+    install_telemt_astra.sh
+    install_telemt_batch_astra.sh
+    README.md
+  almalinux/
+    install_telemt_alma.sh
+    install_telemt_batch_alma.sh
+    README.md
+  tinycore/
+    install_telemt_tinycore.sh
+    install_telemt_batch_tinycore.sh
+    README.md
+  common/
+    add_key.sh
+    README.md
 
-astra/
-  install_telemt_astra.sh
-  install_telemt_batch_astra.sh
-  README.md
-
-almalinux/
-  install_telemt_alma.sh
-  install_telemt_batch_alma.sh
-  README.md
-
-tinycore/
-  install_telemt_tinycore.sh
-  install_telemt_batch_tinycore.sh
-  README.md
-
-common/
-  add_key.sh
-  README.md
-
-vless/
-  install_vless.sh
-  vlessctl.sh
-  README.md
-
-wg/
-  install_wg.sh
-  wgctl.sh
-  README.md
-
-wg-experimental/
-  install_wg_wstunnel.sh
-  wgctl.sh
-  README.md
-
-openvpn/
-  install_openvpn.sh
-  openvpnctl.sh
-  README.md
-
-amneziawg/
-  install_amneziawg.sh
-  awgctl.sh
-  README.md
+vpn/
+  vless/
+    install_vless.sh
+    vlessctl.sh
+    README.md
+  wg/
+    install_wg.sh
+    wgctl.sh
+    README.md
+  wg-experimental/
+    install_wg_wstunnel.sh
+    wgctl.sh
+    README.md
+  openvpn/
+    install_openvpn.sh
+    openvpnctl.sh
+    README.md
+  amneziawg/
+    install_amneziawg.sh
+    awgctl.sh
+    README.md
 ```
 
 ## Which Directory To Use
 
 ```text
-Telemt on Debian / Ubuntu       -> debian-ubuntu/
-Telemt on Astra Linux           -> astra/
-Telemt on AlmaLinux             -> almalinux/
-Telemt on Tiny Core Linux       -> tinycore/
-SSH key helper                  -> common/
-VLESS over WebSocket + TLS      -> vless/
-WireGuard                       -> wg/
-WireGuard over wstunnel, test   -> wg-experimental/
-OpenVPN                         -> openvpn/
-AmneziaWG, test                 -> amneziawg/
+Telemt on Debian 13 / Ubuntu    -> telemt/debian-13-ubuntu/
+Telemt on Debian 11             -> telemt/debian-11/
+Telemt on Astra Linux           -> telemt/astra/
+Telemt on AlmaLinux             -> telemt/almalinux/
+Telemt on Tiny Core Linux       -> telemt/tinycore/
+SSH key helper                  -> telemt/common/
+VLESS over WebSocket + TLS      -> vpn/vless/
+WireGuard                       -> vpn/wg/
+WireGuard over wstunnel, test   -> vpn/wg-experimental/
+OpenVPN                         -> vpn/openvpn/
+AmneziaWG, test                 -> vpn/amneziawg/
 ```
 
 Each service directory has its own `README.md` with Russian and English instructions.
 
 ## VPN Directories / VPN-Каталоги
 
-`vless/` installs Xray VLESS over WebSocket + TLS. It can work with a real domain and nginx HTTPS camouflage. It includes `vlessctl.sh` for adding, deleting, listing, showing links/QR codes, and checking traffic counters.
+`vpn/vless/` installs Xray VLESS over WebSocket + TLS. It can work with a real domain and nginx HTTPS camouflage. It includes `vlessctl.sh` for adding, deleting, listing, showing links/QR codes, and checking traffic counters.
 
-`wg/` installs standard WireGuard. It supports a plain UDP mode and a camouflage mode where nginx serves a normal HTTPS site on `443/tcp` while WireGuard listens separately on UDP. It includes `wgctl.sh` for client management and traffic viewing.
+`vpn/wg/` installs standard WireGuard. It supports a plain UDP mode and a camouflage mode where nginx serves a normal HTTPS site on `443/tcp` while WireGuard listens separately on UDP. It includes `wgctl.sh` for client management and traffic viewing.
 
-`wg-experimental/` installs an experimental WireGuard over `wstunnel` layout. This is for desktop/router scenarios where a local wstunnel client can run near the WireGuard client. It is not for the standard iPhone WireGuard app by itself.
+`vpn/wg-experimental/` installs an experimental WireGuard over `wstunnel` layout. This is for desktop/router scenarios where a local wstunnel client can run near the WireGuard client. It is not for the standard iPhone WireGuard app by itself.
 
-`openvpn/` installs OpenVPN with client management. It supports UDP/TCP profiles, username/password handling, traffic viewing, and an optional HTTPS camouflage scheme through nginx/OpenVPN `port-share`.
+`vpn/openvpn/` installs OpenVPN with client management. It supports UDP/TCP profiles, username/password handling, traffic viewing, and an optional HTTPS camouflage scheme through nginx/OpenVPN `port-share`.
 
-`amneziawg/` installs AmneziaWG. It supports plain UDP mode and a mode with an HTTPS camouflage site on TCP 443 plus AmneziaWG on UDP 443. Client configs are intended for AmneziaVPN-compatible clients, not ordinary WireGuard clients.
+`vpn/amneziawg/` installs AmneziaWG. It supports plain UDP mode and a mode with an HTTPS camouflage site on TCP 443 plus AmneziaWG on UDP 443. Client configs are intended for AmneziaVPN-compatible clients, not ordinary WireGuard clients.
 
 ## Download From GitHub / Скачать С GitHub
 
 RU: Если нужен один установщик, его можно скачать прямо на сервер через `wget` или `curl`:
 
 ```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
 ```bash
-curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
+curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
@@ -123,20 +120,20 @@ RU: Если нужен `git`, скачайте только нужный кат
 ```bash
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set debian-ubuntu
-cp debian-ubuntu/install_telemt.sh /root/
+git sparse-checkout set telemt/debian-13-ubuntu
+cp telemt/debian-13-ubuntu/install_telemt.sh /root/
 chmod +x /root/install_telemt.sh
 ```
 
 EN: To download a single installer directly on the server, use `wget` or `curl`:
 
 ```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
 ```bash
-curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/debian-ubuntu/install_telemt.sh
+curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
 ```
 
@@ -145,8 +142,8 @@ EN: If you want to use `git`, download only the needed directory:
 ```bash
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set debian-ubuntu
-cp debian-ubuntu/install_telemt.sh /root/
+git sparse-checkout set telemt/debian-13-ubuntu
+cp telemt/debian-13-ubuntu/install_telemt.sh /root/
 chmod +x /root/install_telemt.sh
 ```
 
@@ -166,30 +163,30 @@ They do not install Telemt locally. They copy the OS-specific installer to targe
 Examples:
 
 ```bash
-cd debian-ubuntu
+cd telemt/debian-13-ubuntu
 chmod +x install_telemt_batch.sh ../common/add_key.sh
 ./install_telemt_batch.sh
 ```
 
 ```bash
-cd astra
+cd telemt/astra
 chmod +x install_telemt_batch_astra.sh ../common/add_key.sh
 ./install_telemt_batch_astra.sh
 ```
 
 ```bash
-cd almalinux
+cd telemt/almalinux
 chmod +x install_telemt_batch_alma.sh ../common/add_key.sh
 ./install_telemt_batch_alma.sh
 ```
 
 ```bash
-cd tinycore
+cd telemt/tinycore
 chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 ./install_telemt_batch_tinycore.sh
 ```
 
-The shared SSH key helper is in `common/add_key.sh`; batch scripts find it automatically via `../common/add_key.sh`.
+The shared SSH key helper is in `telemt/common/add_key.sh`; batch scripts find it automatically via `../common/add_key.sh` from each Telemt OS directory.
 
 ## Common Result
 
