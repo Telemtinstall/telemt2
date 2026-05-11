@@ -475,6 +475,7 @@ show_link = []
 [general]
 fast_mode = true
 use_middle_proxy = false
+config_strict = true
 
 [general.links]
 show = []
@@ -501,6 +502,7 @@ proxy_protocol = false
 enabled = true
 listen = "127.0.0.1:9091"
 read_only = true
+request_body_limit_bytes = 65536
 
 [[server.listeners]]
 ip = "127.0.0.1"
