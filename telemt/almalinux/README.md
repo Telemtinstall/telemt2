@@ -1,5 +1,8 @@
 # Telemt AlmaLinux Installer
 
+> RU: Это не официальный установщик Telemt или AlmaLinux-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official Telemt or AlmaLinux package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 Эти файлы предназначены для AlmaLinux-серверов и не заменяют Debian/Ubuntu-скрипты.

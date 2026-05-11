@@ -1,5 +1,8 @@
 # install_telemt_debian11.sh
 
+> RU: Это не официальный установщик Telemt или Debian-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official Telemt or Debian package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## Русское описание
 
 `install_telemt_debian11.sh` - отдельный установщик Telemt для Debian 11 / bullseye.

@@ -2,6 +2,28 @@
 
 Utilities for installing and maintaining Telemt MTProto proxy servers and VPN servers on fresh Linux machines.
 
+## Installer Notice / Уведомление об установщиках
+
+RU: Эти скрипты являются обычными Bash-установщиками для упрощения настройки Telemt с HTTPS-маскировкой и VPN-сервисов. Это не официальные установщики Telemt, WireGuard, OpenVPN, AmneziaWG, Xray или других проектов. В репозитории нет встроенных бинарников, VPN-клиентов, proxy-серверов, сертификатов или ключей. Скрипты скачивают и устанавливают программное обеспечение из официальных источников ОС и upstream-проектов:
+
+- Telemt: GitHub releases проекта `telemt/telemt`, `https://github.com/telemt/telemt`.
+- Docker / containerd / Docker Compose: пакеты дистрибутива или официальный Docker apt/yum repository, `https://download.docker.com`.
+- nginx, certbot, WireGuard, OpenVPN, easy-rsa, qrencode, iproute2, nftables, fail2ban и другие системные пакеты: официальные репозитории Debian/Ubuntu/Astra/AlmaLinux/Tiny Core.
+- acme.sh для Tiny Core: официальный репозиторий `acmesh-official/acme.sh`, `https://github.com/acmesh-official/acme.sh`.
+- Xray для VLESS: официальный проект `XTLS/Xray-core`, `https://github.com/XTLS/Xray-core`.
+- wstunnel для экспериментального WireGuard-over-WebSocket: официальный проект `erebe/wstunnel`, `https://github.com/erebe/wstunnel`.
+- AmneziaWG: официальные пакеты/репозитории AmneziaWG, когда они используются установщиком.
+
+EN: These scripts are ordinary Bash installers intended to make Telemt with HTTPS camouflage and VPN service setup easier. They are not official installers for Telemt, WireGuard, OpenVPN, AmneziaWG, Xray, or any other upstream project. This repository does not contain embedded binaries, VPN clients, proxy servers, certificates, or keys. The scripts download and install software from official operating-system repositories and upstream project sources:
+
+- Telemt: GitHub releases of `telemt/telemt`, `https://github.com/telemt/telemt`.
+- Docker / containerd / Docker Compose: distribution packages or the official Docker apt/yum repository, `https://download.docker.com`.
+- nginx, certbot, WireGuard, OpenVPN, easy-rsa, qrencode, iproute2, nftables, fail2ban, and other system packages: official Debian/Ubuntu/Astra/AlmaLinux/Tiny Core repositories.
+- acme.sh for Tiny Core: official `acmesh-official/acme.sh` repository, `https://github.com/acmesh-official/acme.sh`.
+- Xray for VLESS: official `XTLS/Xray-core` project, `https://github.com/XTLS/Xray-core`.
+- wstunnel for experimental WireGuard-over-WebSocket: official `erebe/wstunnel` project, `https://github.com/erebe/wstunnel`.
+- AmneziaWG: official AmneziaWG packages/repositories when used by the installer.
+
 This repository intentionally uses placeholders only:
 
 ```text

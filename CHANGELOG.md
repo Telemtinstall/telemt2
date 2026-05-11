@@ -5,6 +5,8 @@
 ### Added
 
 - Added this changelog to track repository-level changes.
+- Added a bilingual installer notice explaining that the scripts are Bash installers, not official upstream installers, and listing software sources.
+- Added short bilingual notice links at the top of subdirectory README files.
 - Added `telemt/debian-11/README.md` for the dedicated Debian 11 installer.
 
 ### Changed

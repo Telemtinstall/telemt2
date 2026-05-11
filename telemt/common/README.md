@@ -1,5 +1,8 @@
 # add_key.sh
 
+> RU: Это вспомогательный Bash-скрипт из этого репозитория, а не официальный инструмент OpenSSH. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is a helper Bash script from this repository, not an official OpenSSH tool. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 `add_key.sh` — общий вспомогательный скрипт для подготовки SSH-доступа перед установкой Telemt. Его задача простая: положить ваш публичный SSH-ключ на сервер и проверить, что после этого вход по ключу действительно работает.

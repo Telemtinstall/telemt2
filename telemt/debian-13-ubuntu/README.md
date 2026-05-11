@@ -1,5 +1,8 @@
 # install_telemt.sh - Debian 13 / Ubuntu
 
+> RU: Это не официальный установщик Telemt, Debian или Ubuntu-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official Telemt, Debian, or Ubuntu package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## Русское описание
 
 `install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом Debian 13 или Ubuntu сервере.

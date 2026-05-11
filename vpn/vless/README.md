@@ -1,5 +1,8 @@
 # VLESS WebSocket + TLS Installer
 
+> RU: Это не официальный установщик Xray/VLESS. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official Xray/VLESS installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 `install_vless.sh` поднимает VLESS через Xray на новом Debian/Ubuntu сервере.

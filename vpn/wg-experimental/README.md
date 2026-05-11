@@ -1,5 +1,8 @@
 # Experimental WireGuard obfuscation
 
+> RU: Это экспериментальный Bash-установщик из этого репозитория, а не официальный установщик WireGuard или wstunnel. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is an experimental Bash installer from this repository, not an official WireGuard or wstunnel installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 Это экспериментальный каталог. Обычный стабильный WireGuard-установщик лежит в `wg/`.

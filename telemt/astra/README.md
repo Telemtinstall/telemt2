@@ -1,5 +1,8 @@
 # install_telemt_astra.sh
 
+> RU: Это не официальный установщик Telemt или Astra Linux-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official Telemt or Astra Linux package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## Русское описание
 
 `install_telemt_astra.sh` автоматически поднимает Telemt MTProto proxy на новом сервере Astra Linux.

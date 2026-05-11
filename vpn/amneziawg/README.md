@@ -1,5 +1,8 @@
 # AmneziaWG installer
 
+> RU: Это не официальный установщик AmneziaWG. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official AmneziaWG installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 Каталог содержит два самостоятельных скрипта для Debian/Ubuntu:
