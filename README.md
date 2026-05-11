@@ -15,6 +15,8 @@ This repository intentionally uses placeholders only:
 
 No private domains, real server IPs, logins, SSH private keys, generated proxy secrets, VPN client configs, or GitHub tokens should be committed here.
 
+Latest repository changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+
 ## Clean Server Only / Только Чистый Сервер
 
 RU: Запускайте установщики только на новом чистом VPS/server без чужих сайтов, панелей управления и сетевых сервисов. Скрипты настраивают nginx, firewall, SSH-port, Docker/Telemt или VPN-сервисы и сертификаты; для режимов с HTTPS-маскировкой им нужны свободные `80/tcp` и `443/tcp`. У Telemt также используются локальные `8443`, `1443`, `9091`. Отключение SSH-паролей, включение fail2ban и добавление swap спрашиваются отдельно и по умолчанию выключены. Если на сервере уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. В таком случае используйте отдельную машину или интегрируйте нужный сервис вручную.
