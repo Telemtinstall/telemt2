@@ -6,6 +6,7 @@
 
 - Added `utils/certbot_helper.sh` for issuing Let's Encrypt certificates with certbot-style domain arguments, DNS preflight, and optional auto-renewal setup.
 - Added `utils/README.md` with Russian and English usage notes for utility scripts.
+- Added certbot-style non-interactive mode, web server detection, and automatic HTTP to HTTPS redirect handling to `utils/certbot_helper.sh`.
 - Added this changelog to track repository-level changes.
 - Added a bilingual installer notice explaining that the scripts are Bash installers, not official upstream installers, and listing software sources.
 - Added short bilingual notice links at the top of subdirectory README files.

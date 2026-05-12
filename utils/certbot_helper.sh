@@ -3,43 +3,61 @@ set -Eeuo pipefail
 
 DOMAINS=()
 EMAIL=""
-AUTO_RENEW="yes"
 METHOD=""
 WEBROOT=""
+AUTO_RENEW="yes"
+REDIRECT="yes"
 STAGING="no"
 INSTALL_PACKAGES="yes"
-RELOAD_SERVICE="nginx"
+RELOAD_SERVICE=""
+RELOAD_SERVICE_DISABLED="no"
 STOP_SERVICE=""
 SKIP_DNS_CHECK="no"
+NO_PROMPT="no"
 ASSUME_YES="no"
 CERT_NAME=""
+CERTBOT_COMMAND="certonly"
+CERTBOT_EXTRA_ARGS=()
+DETECTED_SERVER="none"
 
 usage() {
   cat <<'EOF'
-certbot_helper.sh - helper for issuing Let's Encrypt certificates.
+certbot_helper.sh - certbot-style helper for Let's Encrypt certificates.
 
 Usage:
-  ./certbot_helper.sh -d example.com -d www.example.com
-  ./certbot_helper.sh --domain example.com --email admin@example.com --webroot -w /var/www/html
+  ./certbot_helper.sh certonly -d example.com -d www.example.com
+  ./certbot_helper.sh -d example.com --nginx --redirect -m admin@example.com
+  ./certbot_helper.sh -d example.com --webroot -w /var/www/html --non-interactive
 
-Options:
-  -d, --domain DOMAIN       Add domain, same style as certbot. Can be repeated.
-  -m, --email EMAIL        Let's Encrypt account email. Default: admin@<first-domain>.
-      --standalone         Use certbot standalone HTTP-01 challenge.
-      --webroot            Use certbot webroot HTTP-01 challenge.
-  -w, --webroot-path PATH  Webroot path for --webroot. Default: /var/www/html.
-      --auto-renew yes|no  Enable certbot.timer and deploy hook. Default: yes.
-      --no-auto-renew      Do not enable certbot.timer.
-      --reload-service SVC Reload this systemd service after renewal. Default: nginx.
-      --no-reload-service  Do not install a renewal reload hook.
-      --stop-service SVC   Stop this service during standalone issuance, then start it.
-      --staging            Use Let's Encrypt staging endpoint for tests.
-      --skip-dns-check     Do not compare domain A records with server public IPv4.
-      --no-install-packages Do not install certbot if it is missing.
-      --cert-name NAME     Certbot certificate name. Default: first domain.
-  -y, --yes                Non-interactive confirmations, but DNS mismatches still fail
-                           unless --skip-dns-check is set.
-  -h, --help               Show this help.
+Certbot-compatible options handled by this helper:
+  certonly                  Issue/renew certificate without relying on certbot install mode.
+  -d, --domain DOMAIN       Add domain. Can be repeated. Comma-separated values are accepted.
+  -m, --email EMAIL         Let's Encrypt account email. Default: admin@<first-domain>.
+      --nginx               Use certbot nginx authenticator when available.
+      --apache              Use certbot apache authenticator when available.
+      --standalone          Use certbot standalone HTTP-01 challenge.
+      --webroot             Use certbot webroot HTTP-01 challenge.
+  -w, --webroot-path PATH   Webroot path for --webroot. Default: /var/www/html.
+      --redirect            Configure HTTP -> HTTPS redirect after certificate issue. Default.
+      --no-redirect         Do not configure HTTP -> HTTPS redirect.
+      --agree-tos           Accepted for certbot compatibility.
+  -n, --non-interactive     Ask nothing. Missing required values fail or use documented defaults.
+
+Helper-specific options:
+      --no-prompt           Same as --non-interactive.
+      --auto-renew yes|no   Enable certbot.timer and deploy hook. Default: yes.
+      --no-auto-renew       Do not enable certbot.timer.
+      --reload-service SVC  Reload this systemd service after renewal. Default: detected web server.
+      --no-reload-service   Do not install a renewal reload hook.
+      --stop-service SVC    Stop this service during standalone issuance, then start it.
+      --staging             Use Let's Encrypt staging endpoint for tests.
+      --skip-dns-check      Do not compare domain A records with server public IPv4.
+      --no-install-packages Do not install missing certbot/plugin packages.
+      --cert-name NAME      Certbot certificate name. Default: first domain.
+  -y, --yes                 Auto-confirm the final plan but still ask for missing values.
+  -h, --help                Show this help.
+
+Unknown certbot options are passed through to certbot.
 EOF
 }
 
@@ -52,13 +70,24 @@ warn() {
   echo "WARN: $*" >&2
 }
 
+lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s\n' "$value"
+}
+
 is_interactive() {
-  [[ -t 0 ]]
+  [[ "$NO_PROMPT" != "yes" && -t 0 ]]
 }
 
 normalize_yes_no() {
   local value
-  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  value="$(lower "$1")"
   case "$value" in
     y|yes|true|1|on) echo "yes" ;;
     n|no|false|0|off) echo "no" ;;
@@ -120,31 +149,54 @@ normalize_service_name() {
   printf '%s\n' "$service"
 }
 
+safe_name() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '_'
+}
+
 add_domain() {
   local raw="$1"
-  local domain
+  local domain part
   IFS=',' read -r -a parts <<< "$raw"
-  for domain in "${parts[@]}"; do
-    domain="${domain#"${domain%%[![:space:]]*}"}"
-    domain="${domain%"${domain##*[![:space:]]}"}"
+  for part in "${parts[@]}"; do
+    domain="$(trim "$part")"
     [[ -z "$domain" ]] && continue
     validate_domain "$domain" || die "Invalid domain: $domain"
-    DOMAINS+=("$(printf '%s' "$domain" | tr '[:upper:]' '[:lower:]')")
+    DOMAINS+=("$(lower "$domain")")
   done
 }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      certonly|run)
+        CERTBOT_COMMAND="$1"
+        shift
+        ;;
       -d|--domain|--domains)
         [[ $# -ge 2 ]] || die "$1 requires a value"
         add_domain "$2"
         shift 2
         ;;
+      --domain=*)
+        add_domain "${1#*=}"
+        shift
+        ;;
       -m|--email)
         [[ $# -ge 2 ]] || die "$1 requires a value"
         EMAIL="$2"
         shift 2
+        ;;
+      --email=*)
+        EMAIL="${1#*=}"
+        shift
+        ;;
+      --nginx)
+        METHOD="nginx"
+        shift
+        ;;
+      --apache)
+        METHOD="apache"
+        shift
         ;;
       --standalone)
         METHOD="standalone"
@@ -160,10 +212,35 @@ parse_args() {
         METHOD="webroot"
         shift 2
         ;;
+      --webroot-path=*)
+        WEBROOT="${1#*=}"
+        METHOD="webroot"
+        shift
+        ;;
+      --redirect)
+        REDIRECT="yes"
+        shift
+        ;;
+      --no-redirect)
+        REDIRECT="no"
+        shift
+        ;;
+      --agree-tos)
+        shift
+        ;;
+      -n|--non-interactive|--no-prompt)
+        NO_PROMPT="yes"
+        ASSUME_YES="yes"
+        shift
+        ;;
       --auto-renew)
         [[ $# -ge 2 ]] || die "$1 requires yes or no"
         AUTO_RENEW="$(normalize_yes_no "$2")" || die "--auto-renew must be yes or no"
         shift 2
+        ;;
+      --auto-renew=*)
+        AUTO_RENEW="$(normalize_yes_no "${1#*=}")" || die "--auto-renew must be yes or no"
+        shift
         ;;
       --no-auto-renew)
         AUTO_RENEW="no"
@@ -174,8 +251,13 @@ parse_args() {
         RELOAD_SERVICE="$2"
         shift 2
         ;;
+      --reload-service=*)
+        RELOAD_SERVICE="${1#*=}"
+        shift
+        ;;
       --no-reload-service)
         RELOAD_SERVICE=""
+        RELOAD_SERVICE_DISABLED="yes"
         shift
         ;;
       --stop-service)
@@ -183,8 +265,17 @@ parse_args() {
         STOP_SERVICE="$2"
         shift 2
         ;;
+      --stop-service=*)
+        STOP_SERVICE="${1#*=}"
+        shift
+        ;;
       --staging|--test-cert)
         STAGING="yes"
+        shift
+        ;;
+      --dry-run)
+        STAGING="yes"
+        CERTBOT_EXTRA_ARGS+=("--dry-run")
         shift
         ;;
       --skip-dns-check)
@@ -204,6 +295,10 @@ parse_args() {
         CERT_NAME="$2"
         shift 2
         ;;
+      --cert-name=*)
+        CERT_NAME="${1#*=}"
+        shift
+        ;;
       -y|--yes)
         ASSUME_YES="yes"
         shift
@@ -213,13 +308,67 @@ parse_args() {
         exit 0
         ;;
       *)
-        die "Unknown argument: $1"
+        CERTBOT_EXTRA_ARGS+=("$1")
+        if [[ $# -ge 2 && -n "${2:-}" && "${2:0:1}" != "-" ]]; then
+          CERTBOT_EXTRA_ARGS+=("$2")
+          shift 2
+        else
+          shift
+        fi
         ;;
     esac
   done
 }
 
+systemd_unit_exists() {
+  local unit="$1"
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl list-unit-files "$unit" >/dev/null 2>&1
+}
+
+service_active_or_exists() {
+  local service="$1"
+  if systemd_unit_exists "${service}.service"; then
+    return 0
+  fi
+  command -v "$service" >/dev/null 2>&1
+}
+
+detect_web_server() {
+  if service_active_or_exists nginx || service_active_or_exists openresty; then
+    echo "nginx"
+  elif service_active_or_exists apache2; then
+    echo "apache2"
+  elif service_active_or_exists httpd; then
+    echo "httpd"
+  elif service_active_or_exists caddy; then
+    echo "caddy"
+  else
+    echo "none"
+  fi
+}
+
+default_reload_service() {
+  case "$DETECTED_SERVER" in
+    nginx) echo "nginx" ;;
+    apache2) echo "apache2" ;;
+    httpd) echo "httpd" ;;
+    caddy) echo "caddy" ;;
+    *) echo "" ;;
+  esac
+}
+
+default_method() {
+  case "$DETECTED_SERVER" in
+    nginx) echo "nginx" ;;
+    apache2|httpd) echo "apache" ;;
+    *) echo "standalone" ;;
+  esac
+}
+
 prompt_missing_values() {
+  DETECTED_SERVER="$(detect_web_server)"
+
   if [[ "${#DOMAINS[@]}" -eq 0 ]]; then
     is_interactive || die "No domains provided. Use -d example.com."
     local domain index=1
@@ -248,15 +397,18 @@ prompt_missing_values() {
   fi
 
   if [[ -z "$METHOD" ]]; then
+    local suggested
+    suggested="$(default_method)"
     if is_interactive; then
+      echo "Detected web server: $DETECTED_SERVER"
       while true; do
-        METHOD="$(ask "ACME challenge method: standalone or webroot" "standalone")"
-        METHOD="$(printf '%s' "$METHOD" | tr '[:upper:]' '[:lower:]')"
-        [[ "$METHOD" == "standalone" || "$METHOD" == "webroot" ]] && break
-        echo "Please enter standalone or webroot."
+        METHOD="$(ask "ACME method: nginx, apache, standalone or webroot" "$suggested")"
+        METHOD="$(lower "$METHOD")"
+        [[ "$METHOD" == "nginx" || "$METHOD" == "apache" || "$METHOD" == "standalone" || "$METHOD" == "webroot" ]] && break
+        echo "Please enter nginx, apache, standalone or webroot."
       done
     else
-      METHOD="standalone"
+      METHOD="$suggested"
     fi
   fi
 
@@ -272,12 +424,16 @@ prompt_missing_values() {
     STAGING="$(ask_yes_no "Use Let's Encrypt staging/test certificate" "no")"
   fi
 
-  if is_interactive && [[ "$AUTO_RENEW" == "yes" ]]; then
-    AUTO_RENEW="$(ask_yes_no "Enable certificate auto-renewal" "yes")"
+  if is_interactive; then
+    REDIRECT="$(ask_yes_no "Configure HTTP to HTTPS redirect after certificate issue" "$REDIRECT")"
+    AUTO_RENEW="$(ask_yes_no "Enable certificate auto-renewal" "$AUTO_RENEW")"
   fi
 
-  if [[ "$AUTO_RENEW" == "yes" && is_interactive ]]; then
-    RELOAD_SERVICE="$(ask "Reload systemd service after renewal, empty means none" "${RELOAD_SERVICE:-nginx}")"
+  if [[ -z "$RELOAD_SERVICE" && "$AUTO_RENEW" == "yes" && "$RELOAD_SERVICE_DISABLED" != "yes" ]]; then
+    RELOAD_SERVICE="$(default_reload_service)"
+  fi
+  if [[ "$AUTO_RENEW" == "yes" && "$RELOAD_SERVICE_DISABLED" != "yes" && is_interactive ]]; then
+    RELOAD_SERVICE="$(ask "Reload systemd service after renewal, empty means none" "$RELOAD_SERVICE")"
   fi
 
   CERT_NAME="${CERT_NAME:-${DOMAINS[0]}}"
@@ -289,21 +445,54 @@ require_root() {
   [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "Run as root."
 }
 
-install_certbot_if_needed() {
-  command -v certbot >/dev/null 2>&1 && return 0
-  [[ "$INSTALL_PACKAGES" == "yes" ]] || die "certbot is missing and package installation is disabled."
-
-  echo "[01] Install certbot"
+package_manager() {
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y certbot
+    echo "apt"
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y certbot
+    echo "dnf"
   elif command -v yum >/dev/null 2>&1; then
-    yum install -y certbot
+    echo "yum"
   else
-    die "Cannot install certbot automatically: unsupported package manager."
+    echo "unknown"
   fi
+}
+
+install_certbot_if_needed() {
+  local pm packages=(certbot)
+  case "$METHOD" in
+    nginx) packages+=(python3-certbot-nginx) ;;
+    apache) packages+=(python3-certbot-apache) ;;
+  esac
+
+  local missing=()
+  command -v certbot >/dev/null 2>&1 || missing+=("certbot")
+  if [[ "$METHOD" == "nginx" ]] && ! certbot plugins 2>/dev/null | grep -q "nginx"; then
+    missing+=("python3-certbot-nginx")
+  fi
+  if [[ "$METHOD" == "apache" ]] && ! certbot plugins 2>/dev/null | grep -q "apache"; then
+    missing+=("python3-certbot-apache")
+  fi
+  [[ "${#missing[@]}" -eq 0 ]] && return 0
+
+  [[ "$INSTALL_PACKAGES" == "yes" ]] || die "Missing packages/tools: ${missing[*]}"
+
+  echo "[01] Install certbot packages"
+  pm="$(package_manager)"
+  case "$pm" in
+    apt)
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
+      ;;
+    dnf)
+      dnf install -y "${packages[@]}"
+      ;;
+    yum)
+      yum install -y "${packages[@]}"
+      ;;
+    *)
+      die "Cannot install certbot automatically: unsupported package manager."
+      ;;
+  esac
 }
 
 get_public_ipv4() {
@@ -343,11 +532,7 @@ dns_preflight() {
   echo "server_public_ipv4=$public_ip"
 
   for domain in "${DOMAINS[@]}"; do
-    if ! ips="$(resolve_domain_ipv4 "$domain" | xargs 2>/dev/null || true)"; then
-      warn "Cannot resolve A record for $domain."
-      mismatch="yes"
-      continue
-    fi
+    ips="$(resolve_domain_ipv4 "$domain" | xargs 2>/dev/null || true)"
     echo "$domain A=${ips:-none}"
     if [[ -z "$ips" ]]; then
       mismatch="yes"
@@ -407,9 +592,9 @@ standalone_preflight() {
   show_port_80
 
   if [[ -z "$STOP_SERVICE" && is_interactive ]]; then
-    STOP_SERVICE="$(ask "Service to stop temporarily, empty to abort" "nginx")"
+    STOP_SERVICE="$(ask "Service to stop temporarily, empty to abort" "$DETECTED_SERVER")"
   fi
-  [[ -n "$STOP_SERVICE" ]] || die "Port 80 is busy. Use --webroot or --stop-service SERVICE."
+  [[ -n "$STOP_SERVICE" && "$STOP_SERVICE" != "none" ]] || die "Port 80 is busy. Use --webroot, --nginx, --apache, or --stop-service SERVICE."
   validate_service_name "$STOP_SERVICE" || die "Unsafe service name: $STOP_SERVICE"
   command -v systemctl >/dev/null 2>&1 || die "Cannot stop service without systemctl."
   systemctl stop "$STOP_SERVICE"
@@ -467,19 +652,22 @@ enable_auto_renewal() {
 
 issue_certificate() {
   echo "[06] Issue certificate"
-  local cmd=(certbot certonly --non-interactive --agree-tos --email "$EMAIL" --cert-name "$CERT_NAME" --keep-until-expiring --expand)
+  local cmd=(certbot "$CERTBOT_COMMAND" --non-interactive --agree-tos --no-eff-email --email "$EMAIL" --cert-name "$CERT_NAME" --keep-until-expiring --expand)
   local domain
   for domain in "${DOMAINS[@]}"; do
     cmd+=(-d "$domain")
   done
-  if [[ "$STAGING" == "yes" ]]; then
-    cmd+=(--staging)
-  fi
-  if [[ "$METHOD" == "standalone" ]]; then
-    cmd+=(--standalone --preferred-challenges http)
-  else
-    cmd+=(--webroot -w "$WEBROOT")
-  fi
+  [[ "$STAGING" == "yes" ]] && cmd+=(--staging)
+
+  case "$METHOD" in
+    nginx) cmd+=(--nginx) ;;
+    apache) cmd+=(--apache) ;;
+    standalone) cmd+=(--standalone --preferred-challenges http) ;;
+    webroot) cmd+=(--webroot -w "$WEBROOT") ;;
+    *) die "Unsupported method: $METHOD" ;;
+  esac
+
+  cmd+=("${CERTBOT_EXTRA_ARGS[@]}")
 
   printf 'certbot_command='
   printf '%q ' "${cmd[@]}"
@@ -487,13 +675,132 @@ issue_certificate() {
   "${cmd[@]}"
 }
 
+nginx_available() {
+  command -v nginx >/dev/null 2>&1 || systemd_unit_exists nginx.service
+}
+
+apache_service_name() {
+  if service_active_or_exists apache2; then
+    echo "apache2"
+  elif service_active_or_exists httpd; then
+    echo "httpd"
+  else
+    echo ""
+  fi
+}
+
+configure_nginx_redirect() {
+  nginx_available || return 1
+  local name conf webroot domains_line
+  name="$(safe_name "$CERT_NAME")"
+  conf="/etc/nginx/conf.d/certbot-helper-redirect-${name}.conf"
+  webroot="${WEBROOT:-/var/www/html}"
+  domains_line="${DOMAINS[*]}"
+  install -d -m 0755 /etc/nginx/conf.d
+  install -d -m 0755 "$webroot/.well-known/acme-challenge"
+
+  cat > "$conf" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domains_line};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root ${webroot};
+        default_type "text/plain";
+        try_files \$uri =404;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+EOF
+
+  nginx -t
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl reload nginx || systemctl restart nginx
+  fi
+  echo "redirect=nginx:$conf"
+}
+
+configure_apache_redirect() {
+  local service conf name webroot server_alias
+  service="$(apache_service_name)"
+  [[ -n "$service" ]] || return 1
+  name="$(safe_name "$CERT_NAME")"
+  webroot="${WEBROOT:-/var/www/html}"
+  install -d -m 0755 "$webroot/.well-known/acme-challenge"
+
+  if [[ "$service" == "apache2" ]]; then
+    conf="/etc/apache2/sites-available/certbot-helper-redirect-${name}.conf"
+  else
+    conf="/etc/httpd/conf.d/certbot-helper-redirect-${name}.conf"
+  fi
+  install -d -m 0755 "$(dirname "$conf")"
+
+  server_alias=""
+  if [[ "${#DOMAINS[@]}" -gt 1 ]]; then
+    server_alias="    ServerAlias ${DOMAINS[*]:1}"
+  fi
+
+  cat > "$conf" <<EOF
+<VirtualHost *:80>
+    ServerName ${DOMAINS[0]}
+${server_alias}
+    DocumentRoot ${webroot}
+
+    Alias /.well-known/acme-challenge/ ${webroot}/.well-known/acme-challenge/
+    <Directory "${webroot}/.well-known/acme-challenge/">
+        Require all granted
+    </Directory>
+
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\\.well-known/acme-challenge/
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+</VirtualHost>
+EOF
+
+  if [[ "$service" == "apache2" ]]; then
+    a2enmod rewrite >/dev/null 2>&1 || true
+    a2ensite "certbot-helper-redirect-${name}.conf" >/dev/null 2>&1 || true
+    apache2ctl configtest
+  else
+    httpd -t
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl reload "$service" || systemctl restart "$service"
+  fi
+  echo "redirect=apache:$conf"
+}
+
+configure_redirect() {
+  [[ "$REDIRECT" == "yes" ]] || {
+    echo "redirect=not_enabled_by_request"
+    return 0
+  }
+
+  echo "[07] Configure HTTP to HTTPS redirect"
+  if [[ "$METHOD" == "nginx" || "$DETECTED_SERVER" == "nginx" ]]; then
+    configure_nginx_redirect && return 0
+  fi
+  if [[ "$METHOD" == "apache" || "$DETECTED_SERVER" == "apache2" || "$DETECTED_SERVER" == "httpd" ]]; then
+    configure_apache_redirect && return 0
+  fi
+  warn "No supported web server detected for automatic redirect. Supported: nginx, apache2/httpd."
+  echo "redirect=not_configured"
+}
+
 print_summary() {
-  echo "[07] Result"
+  echo "[08] Result"
   echo "cert_name=$CERT_NAME"
   echo "domains=${DOMAINS[*]}"
   echo "email=$EMAIL"
   echo "method=$METHOD"
+  echo "detected_web_server=$DETECTED_SERVER"
   echo "auto_renew=$AUTO_RENEW"
+  echo "redirect=$REDIRECT"
   echo "fullchain=/etc/letsencrypt/live/$CERT_NAME/fullchain.pem"
   echo "privkey=/etc/letsencrypt/live/$CERT_NAME/privkey.pem"
   certbot certificates --cert-name "$CERT_NAME" || true
@@ -502,31 +809,40 @@ print_summary() {
   fi
 }
 
-main() {
-  parse_args "$@"
-  prompt_missing_values
-
+validate_all() {
   [[ "${#DOMAINS[@]}" -gt 0 ]] || die "At least one domain is required."
   validate_email "$EMAIL" || die "Invalid email: $EMAIL"
-  [[ "$METHOD" == "standalone" || "$METHOD" == "webroot" ]] || die "Bad method: $METHOD"
+  [[ "$METHOD" == "nginx" || "$METHOD" == "apache" || "$METHOD" == "standalone" || "$METHOD" == "webroot" ]] || die "Bad method: $METHOD"
   validate_service_name "$RELOAD_SERVICE" || die "Unsafe reload service name: $RELOAD_SERVICE"
   validate_service_name "$STOP_SERVICE" || die "Unsafe stop service name: $STOP_SERVICE"
   validate_cert_name "$CERT_NAME" || die "Unsafe certificate name: $CERT_NAME"
+}
 
+print_plan() {
   echo "Plan:"
-  echo "  domains:       ${DOMAINS[*]}"
-  echo "  cert name:     $CERT_NAME"
-  echo "  email:         $EMAIL"
-  echo "  method:        $METHOD"
-  [[ "$METHOD" == "webroot" ]] && echo "  webroot:       $WEBROOT"
-  echo "  staging:       $STAGING"
-  echo "  auto-renew:    $AUTO_RENEW"
+  echo "  domains:             ${DOMAINS[*]}"
+  echo "  cert name:           $CERT_NAME"
+  echo "  email:               $EMAIL"
+  echo "  detected web server: $DETECTED_SERVER"
+  echo "  method:              $METHOD"
+  [[ "$METHOD" == "webroot" ]] && echo "  webroot:             $WEBROOT"
+  echo "  staging:             $STAGING"
+  echo "  redirect:            $REDIRECT"
+  echo "  auto-renew:          $AUTO_RENEW"
   if [[ "$AUTO_RENEW" == "yes" ]]; then
-    echo "  reload service:${RELOAD_SERVICE:+ $RELOAD_SERVICE}"
+    echo "  reload service:      ${RELOAD_SERVICE:-none}"
   else
-    echo "  reload service: not used"
+    echo "  reload service:      not used"
   fi
+  echo "  certbot extra args:  ${CERTBOT_EXTRA_ARGS[*]:-none}"
   echo
+}
+
+main() {
+  parse_args "$@"
+  prompt_missing_values
+  validate_all
+  print_plan
 
   if is_interactive && [[ "$ASSUME_YES" != "yes" ]]; then
     local confirm
@@ -542,6 +858,7 @@ main() {
   install_renew_hook
   enable_auto_renewal
   issue_certificate
+  configure_redirect
   print_summary
 }
 
