@@ -93,6 +93,10 @@ vpn/
     install_amneziawg.sh
     awgctl.sh
     README.md
+
+utils/
+  certbot_helper.sh
+  README.md
 ```
 
 ## Which Directory To Use
@@ -109,9 +113,10 @@ WireGuard                       -> vpn/wg/
 WireGuard over wstunnel, test   -> vpn/wg-experimental/
 OpenVPN                         -> vpn/openvpn/
 AmneziaWG, test                 -> vpn/amneziawg/
+Certificate helper              -> utils/
 ```
 
-Each service directory has its own `README.md` with Russian and English instructions.
+Each service and utility directory has its own `README.md` with Russian and English instructions.
 
 ## VPN Directories / VPN-Каталоги
 
@@ -124,6 +129,8 @@ Each service directory has its own `README.md` with Russian and English instruct
 `vpn/openvpn/` installs OpenVPN with client management. It supports UDP/TCP profiles, username/password handling, traffic viewing, and an optional HTTPS camouflage scheme through nginx/OpenVPN `port-share`.
 
 `vpn/amneziawg/` installs AmneziaWG. It supports plain UDP mode and a mode with an HTTPS camouflage site on TCP 443 plus AmneziaWG on UDP 443. Client configs are intended for AmneziaVPN-compatible clients, not ordinary WireGuard clients.
+
+`utils/` contains helper scripts that are useful across installers. `certbot_helper.sh` issues Let's Encrypt certificates with certbot-style `-d` domain arguments, optional interactive prompts, DNS preflight, and certbot auto-renewal setup.
 
 ## Download From GitHub / Скачать С GitHub
 
