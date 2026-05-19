@@ -33,7 +33,7 @@ add_key.sh                      вспомогательный скрипт дл
 4. Отключать ли SSH-пароли и оставить root только по ключу. По умолчанию `no`.
 5. Включать ли fail2ban для SSH. По умолчанию `no`.
 6. Добавлять ли swap `1G`, если swap нет. По умолчанию `no`.
-7. Лимит подключений Telemt. По умолчанию используется `1000`.
+7. Лимит подключений Telemt. По умолчанию используется `5000`.
 
 Пример полного диалога:
 
@@ -44,7 +44,7 @@ SSH port, Enter keeps current/default [22]: <Enter>
 Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Max Telemt connections [1000]: <Enter>
+Max Telemt connections [5000]: <Enter>
 
 Install plan:
   domain:       <PROXY_DOMAIN>
@@ -54,7 +54,7 @@ Install plan:
   SSH key-only: no
   fail2ban SSH: no
   add swap:     no
-  Telemt limit: 1000
+  Telemt limit: 5000
 
 Type y or yes to continue:
 y
@@ -146,7 +146,7 @@ Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Telemt max TCP connections [1000]: <Enter>
+Telemt max TCP connections [5000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com
@@ -241,7 +241,7 @@ The script does not overwrite `nginx.conf`: it only adds the `stream-conf.d` inc
 4. Whether to disable SSH password login and keep root key-only. The default is `no`.
 5. Whether to enable fail2ban for SSH. The default is `no`.
 6. Whether to add `1G` swap if swap is missing. The default is `no`.
-7. Max Telemt connections. The default is `1000`.
+7. Max Telemt connections. The default is `5000`.
 
 Full dialogue example:
 
@@ -252,7 +252,7 @@ SSH port, Enter keeps current/default [22]: <Enter>
 Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Max Telemt connections [1000]: <Enter>
+Max Telemt connections [5000]: <Enter>
 
 Install plan:
   domain:       <PROXY_DOMAIN>
@@ -262,7 +262,7 @@ Install plan:
   SSH key-only: no
   fail2ban SSH: no
   add swap:     no
-  Telemt limit: 1000
+  Telemt limit: 5000
 
 Type y or yes to continue:
 y
@@ -354,7 +354,7 @@ Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Telemt max TCP connections [1000]: <Enter>
+Telemt max TCP connections [5000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com

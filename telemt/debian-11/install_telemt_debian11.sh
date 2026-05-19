@@ -18,7 +18,7 @@ SSH_KEY_ONLY_LOGIN="${SSH_KEY_ONLY_LOGIN:-no}"
 SSH_KEY_ONLY_CONFIRM="${SSH_KEY_ONLY_CONFIRM:-no}"
 ENABLE_FAIL2BAN="${ENABLE_FAIL2BAN:-no}"
 ADD_SWAP="${ADD_SWAP:-no}"
-TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-1000}"
+TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-5000}"
 TELEMT_IMAGE="${TELEMT_IMAGE:-$TELEMT_IMAGE_DEFAULT}"
 ASSUME_YES="${ASSUME_YES:-0}"
 BACKUP_ROOT="/root/telemt-install-backups"
@@ -879,9 +879,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
-    pids_limit: 256
-    mem_limit: 256m
-    cpus: "0.50"
     logging:
       driver: "none"
     ulimits:
@@ -934,9 +931,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
-    pids_limit: 256
-    mem_limit: 256m
-    cpus: "0.50"
     logging:
       driver: "none"
     ulimits:

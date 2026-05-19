@@ -105,7 +105,7 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
-Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, а также лимит подключений Telemt со значением по умолчанию `1000`.
+Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, а также лимит подключений Telemt со значением по умолчанию `5000`.
 
 Пример полного диалога:
 
@@ -113,14 +113,14 @@ chmod +x /root/install_telemt_tinycore.sh
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
-Max Telemt connections [1000]: <Enter>
+Max Telemt connections [5000]: <Enter>
 
 Install plan:
   target OS:    Tiny Core Linux
   domain:       <PROXY_DOMAIN>
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
-  Telemt limit: 1000
+  Telemt limit: 5000
   release:      latest
 
 Type y or yes to continue:
@@ -177,7 +177,7 @@ chmod +x install_telemt_batch_tinycore.sh ../common/add_key.sh
 SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
-Telemt max TCP connections [1000]: <Enter>
+Telemt max TCP connections [5000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com
@@ -317,7 +317,7 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
-The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, and max Telemt connections with default `1000`.
+The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, and max Telemt connections with default `5000`.
 
 Full dialogue example:
 
@@ -325,14 +325,14 @@ Full dialogue example:
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
-Max Telemt connections [1000]: <Enter>
+Max Telemt connections [5000]: <Enter>
 
 Install plan:
   target OS:    Tiny Core Linux
   domain:       <PROXY_DOMAIN>
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
-  Telemt limit: 1000
+  Telemt limit: 5000
   release:      latest
 
 Type y or yes to continue:
@@ -389,7 +389,7 @@ Batch mode dialogue example:
 SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
-Telemt max TCP connections [1000]: <Enter>
+Telemt max TCP connections [5000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com

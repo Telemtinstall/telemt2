@@ -163,10 +163,10 @@ no
 7. Лимит подключений Telemt. По умолчанию:
 
 ```text
-1000
+5000
 ```
 
-Можно нажать Enter и оставить `1000`, либо указать другое число.
+Можно нажать Enter и оставить `5000`, либо указать другое число.
 
 После показа плана установки скрипт спросит подтверждение. Можно ввести `y`, `yes` или `YES`.
 
@@ -179,7 +179,7 @@ SSH port, Enter keeps current/default [22]: <Enter>
 Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Max Telemt connections [1000]: <Enter>
+Max Telemt connections [5000]: <Enter>
 
 Install plan:
   domain:       <PROXY_DOMAIN>
@@ -189,7 +189,7 @@ Install plan:
   SSH key-only: no
   fail2ban SSH: no
   add swap:     no
-  Telemt limit: 1000
+  Telemt limit: 5000
 
 Type y or yes to continue:
 y
@@ -300,6 +300,8 @@ read_only: true
 cap_drop: ALL
 no-new-privileges: true
 ```
+
+CPU/RAM/PID лимиты в `docker-compose.yml` не задаются, чтобы Telemt не упирался в искусственные ограничения при большом числе клиентов и загрузке медиа.
 
 Основные параметры Telemt:
 
@@ -461,7 +463,7 @@ Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Telemt max TCP connections [1000]: <Enter>
+Telemt max TCP connections [5000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com
@@ -505,7 +507,7 @@ Domain:
 
 ```bash
 chmod +x install_telemt_batch.sh ../common/add_key.sh
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX_TCP_CONNS=5000 ./install_telemt_batch.sh
 ```
 
 `install_telemt.sh` и `add_key.sh` остаются самостоятельными скриптами: их можно запускать отдельно без пакетного режима.
@@ -672,10 +674,10 @@ no
 7. Telemt connection limit. Default:
 
 ```text
-1000
+5000
 ```
 
-Press Enter to keep `1000`, or type another number.
+Press Enter to keep `5000`, or type another number.
 
 After showing the installation plan, the script asks for confirmation. You can type `y`, `yes`, or `YES`.
 
@@ -688,7 +690,7 @@ SSH port, Enter keeps current/default [22]: <Enter>
 Disable SSH password login and keep root key-only? yes/no [no]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Max Telemt connections [1000]: <Enter>
+Max Telemt connections [5000]: <Enter>
 
 Install plan:
   domain:       <PROXY_DOMAIN>
@@ -698,7 +700,7 @@ Install plan:
   SSH key-only: no
   fail2ban SSH: no
   add swap:     no
-  Telemt limit: 1000
+  Telemt limit: 5000
 
 Type y or yes to continue:
 y
@@ -809,6 +811,8 @@ read_only: true
 cap_drop: ALL
 no-new-privileges: true
 ```
+
+CPU/RAM/PID limits are not set in `docker-compose.yml`, so Telemt does not hit artificial limits when many clients load media.
 
 Main Telemt parameters:
 
@@ -970,7 +974,7 @@ Current SSH port for connecting to servers [22]: <Enter>
 SSH port to configure on installed servers [22]: <Enter>
 Enable fail2ban for SSH? yes/no [no]: <Enter>
 Add 1G swap if missing? yes/no [no]: <Enter>
-Telemt max TCP connections [1000]: <Enter>
+Telemt max TCP connections [5000]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com
@@ -1014,7 +1018,7 @@ Optional environment variables:
 
 ```bash
 chmod +x install_telemt_batch.sh ../common/add_key.sh
-CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX_TCP_CONNS=1000 ./install_telemt_batch.sh
+CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX_TCP_CONNS=5000 ./install_telemt_batch.sh
 ```
 
 `install_telemt.sh` and `add_key.sh` remain standalone scripts and can still be run without batch mode.
