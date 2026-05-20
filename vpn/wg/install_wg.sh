@@ -482,8 +482,8 @@ Address = ${WG_SERVER_IP}/${prefix}
 ListenPort = ${WG_PORT}
 PrivateKey = ${private_key}
 SaveConfig = false
-PostUp = sysctl -w net.ipv4.ip_forward=1 >/dev/null; iptables -t nat -C POSTROUTING -s ${WG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s ${WG_SUBNET} -o ${wan_iface} -j MASQUERADE
-PostDown = iptables -t nat -D POSTROUTING -s ${WG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || true
+PostUp = sysctl -w net.ipv4.ip_forward=1 >/dev/null; iptables -C FORWARD -i ${WG_IFACE} -o ${wan_iface} -j ACCEPT 2>/dev/null || iptables -A FORWARD -i ${WG_IFACE} -o ${wan_iface} -j ACCEPT; iptables -C FORWARD -i ${wan_iface} -o ${WG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -A FORWARD -i ${wan_iface} -o ${WG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -C POSTROUTING -s ${WG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s ${WG_SUBNET} -o ${wan_iface} -j MASQUERADE
+PostDown = iptables -D FORWARD -i ${WG_IFACE} -o ${wan_iface} -j ACCEPT 2>/dev/null || true; iptables -D FORWARD -i ${wan_iface} -o ${WG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -s ${WG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || true
 EOF
   chmod 600 "$WG_DIR/${WG_IFACE}.conf"
 }
@@ -494,8 +494,13 @@ install_wgctl() {
 }
 
 configure_firewall() {
+  local wan_iface
+  wan_iface="$(out_iface || true)"
   if have ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "${WG_PORT}/udp"
+    if [[ -n "$wan_iface" ]]; then
+      ufw route allow in on "$WG_IFACE" out on "$wan_iface" || true
+    fi
     if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
       ufw allow "80/tcp"
       ufw allow "443/tcp"

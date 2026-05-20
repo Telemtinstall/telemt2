@@ -7,6 +7,7 @@
 - Raised the default Telemt connection limit from `1000` to `5000` in Telemt installers and batch installers.
 - Removed default Docker CPU/RAM/PID limits from Telemt-generated compose files so media downloads are not throttled by artificial container limits.
 - Kept Docker hardening controls that do not cap throughput: `read_only`, `cap_drop`, `no-new-privileges`, `tmpfs`, disabled access logs, and `nofile` ulimits.
+- Fixed the WireGuard installer routing path: generated `wg0.conf` now adds explicit `FORWARD` accept rules in addition to NAT, and active UFW setups get `ufw route allow` for the VPN route.
 
 ## 2026-05-11
 

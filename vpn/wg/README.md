@@ -75,9 +75,9 @@ Enable nginx access logs for mask site? yes/no [no]
 3. Проверяет занятые порты.
 4. Включает IPv4 forwarding.
 5. Создает /etc/wireguard/wg0.conf.
-6. Добавляет NAT MASQUERADE для VPN-сети.
+6. Добавляет forwarding-правила и NAT MASQUERADE для VPN-сети.
 7. Если включена маскировка, создает nginx-сайт, выпускает SSL и включает certbot.timer.
-8. Открывает порты через ufw, если ufw активен.
+8. Открывает порты и `ufw route allow` для VPN-маршрута, если ufw активен.
 9. Включает и запускает wg-quick@wg0.
 10. Создает первого клиента, печатает конфиг и QR-код.
 ```
@@ -211,9 +211,9 @@ When masking is enabled, the installer checks that the domain A record points to
 3. Checks occupied ports.
 4. Enables IPv4 forwarding.
 5. Creates /etc/wireguard/wg0.conf.
-6. Adds NAT MASQUERADE for the VPN subnet.
+6. Adds forwarding rules and NAT MASQUERADE for the VPN subnet.
 7. If masking is enabled, creates an nginx site, issues SSL, and enables certbot.timer.
-8. Opens ports through ufw if ufw is active.
+8. Opens ports and `ufw route allow` for the VPN route if ufw is active.
 9. Enables and starts wg-quick@wg0.
 10. Creates the first client and prints config plus QR code.
 ```
