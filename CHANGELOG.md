@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-22
+
+### Added
+
+- Added `--update` / `-update` mode to Telemt single-server installers for Debian 13/Ubuntu, Debian 11, Astra Linux, AlmaLinux, and Tiny Core.
+- Added IDN/punycode normalization for Telemt installer domains and Let's Encrypt email domains.
+- Added conditional `censorship.exclusive_mask` generation for new configs when the selected Telemt image/release is `latest` or `3.4.12+`.
+- Documented update commands and installer prompts in the root README and Telemt OS README files.
+
+### Changed
+
+- Update mode preserves existing `telemt.toml`, users, secrets, proxy links, nginx/SSH settings, and certificates; it only updates/recreates the Docker container or native Tiny Core binary.
+
 ## 2026-05-19
 
 ### Changed

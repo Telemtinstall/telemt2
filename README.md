@@ -178,6 +178,88 @@ cp telemt/debian-13-ubuntu/install_telemt.sh /root/
 chmod +x /root/install_telemt.sh
 ```
 
+## Telemt Update Mode / Обновление Telemt
+
+RU: Одиночные Telemt-установщики поддерживают безопасный режим обновления. Он не пересоздаёт пользователей, не меняет секреты, не переписывает `telemt.toml`, nginx, SSH и сертификаты. Он делает бэкап текущего состояния, обновляет Docker image/контейнер или native binary на Tiny Core, перезапускает Telemt и заново выводит proxy-ссылку из текущего секрета.
+
+EN: Single-server Telemt installers support a safe update mode. It does not recreate users, change secrets, or rewrite `telemt.toml`, nginx, SSH, or certificate settings. It backs up the current state, updates the Docker image/container or the native Tiny Core binary, restarts Telemt, and prints the proxy link from the existing secret.
+
+Debian 13 / Ubuntu:
+
+```bash
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
+chmod +x /root/install_telemt.sh
+/root/install_telemt.sh --update -lang ru
+```
+
+Debian 11:
+
+```bash
+wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-11/install_telemt_debian11.sh
+chmod +x /root/install_telemt_debian11.sh
+/root/install_telemt_debian11.sh --update -lang ru
+```
+
+Astra Linux:
+
+```bash
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh --update -lang ru
+```
+
+AlmaLinux:
+
+```bash
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+/root/install_telemt_alma.sh --update -lang ru
+```
+
+Tiny Core:
+
+```bash
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+/root/install_telemt_tinycore.sh --update -lang ru
+```
+
+RU: Если Docker compose использует digest-pinned image вида `image@sha256:...`, обычный `--update` пересоздаст контейнер на том же digest. Чтобы явно перейти на другой image/tag, задайте переменную:
+
+```bash
+TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt.sh --update -lang ru
+```
+
+EN: If Docker compose uses a digest-pinned image such as `image@sha256:...`, plain `--update` recreates the container with that same digest. To explicitly move to another image/tag, pass:
+
+```bash
+TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt.sh --update -lang ru
+```
+
+## Telemt Installer Questions / Вопросы Установщика Telemt
+
+RU: При обычной установке одиночный Telemt-установщик спрашивает:
+
+1. `Proxy domain` - домен прокси. Можно вводить ASCII, punycode или кириллицу/IDN. Кириллица переводится в punycode, введённый `xn--...` проверяется через IDN round-trip.
+2. `Let's Encrypt email` - email для сертификата. По умолчанию `admin@<domain>`; доменная часть email тоже нормализуется в punycode при необходимости.
+3. `SSH port` - SSH-порт, который должен остаться или быть настроен. По умолчанию `22`.
+4. `Disable SSH password login...` - отключать ли парольный SSH-вход. По умолчанию `no`. Если выбрать `yes`, скрипт проверит `/root/.ssh/authorized_keys` и попросит второе подтверждение.
+5. `Enable fail2ban for SSH` - включать ли fail2ban для SSH. По умолчанию `no`.
+6. `Add 1G swap if missing` - добавлять ли swap, если его нет. По умолчанию `no`.
+7. `Max Telemt connections` - лимит одновременных подключений пользователя Telemt. По умолчанию `5000`.
+8. Финальное подтверждение `y`/`yes`/`да` - только после него начинается установка.
+
+EN: During a normal single-server install, the Telemt installer asks for:
+
+1. `Proxy domain` - the proxy domain. ASCII, punycode, or IDN/Cyrillic input is accepted. IDN is converted to punycode; existing `xn--...` input is validated with an IDN round-trip.
+2. `Let's Encrypt email` - certificate email. Default is `admin@<domain>`; the email domain is normalized to punycode when needed.
+3. `SSH port` - SSH port to keep/configure. Default is `22`.
+4. `Disable SSH password login...` - whether to disable password SSH login. Default is `no`. If `yes`, the script checks `/root/.ssh/authorized_keys` and asks for a second confirmation.
+5. `Enable fail2ban for SSH` - whether to enable fail2ban for SSH. Default is `no`.
+6. `Add 1G swap if missing` - whether to add swap when absent. Default is `no`.
+7. `Max Telemt connections` - Telemt per-user simultaneous connection limit. Default is `5000`.
+8. Final confirmation `y`/`yes`/`да` - installation starts only after confirmation.
+
 ## Batch Mode
 
 Batch scripts are local orchestrators. They can run on an admin machine such as macOS, Debian, Ubuntu, AlmaLinux, or another Linux host with:
@@ -221,7 +303,7 @@ The shared SSH key helper is in `telemt/common/add_key.sh`; batch scripts find i
 
 ## Common Result
 
-The installers configure the full Telemt proxy stack: Telemt itself, nginx SNI routing, an HTTP -> HTTPS redirect, an HTTPS mask site, Let's Encrypt / ACME certificates with renewal hooks, a local-only Telemt API, connection limits, and proxy link output.
+The installers configure the full Telemt proxy stack: Telemt itself, nginx SNI routing, an HTTP -> HTTPS redirect, an HTTPS mask site, Let's Encrypt / ACME certificates with renewal hooks, a local-only Telemt API, connection limits, and proxy link output. New Telemt configs also add `censorship.exclusive_mask` when the selected Telemt image/release is `latest` or `3.4.12+`; update mode preserves existing configs and does not add it automatically to already installed servers.
 
 Where supported, they also disable nginx access logs and Telemt runtime logs, support non-interactive batch execution through explicit environment variables, and use safe nginx behavior: separate configs are added, and installation stops if `443/tcp` is already owned by another site.
 

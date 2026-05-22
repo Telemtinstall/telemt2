@@ -105,6 +105,25 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
+
+### Как обновлять уже установленный Telemt
+
+Скачайте свежий установщик и запустите update-режим. Он сохранит существующие настройки, пользователей, секреты, nginx/acme.sh-конфиги и обновит только native binary Telemt.
+
+```bash
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+/root/install_telemt_tinycore.sh --update -lang ru
+```
+
+По умолчанию обновляется `TELEMT_RELEASE=latest`. Чтобы закрепить версию, передайте, например:
+
+```bash
+TELEMT_RELEASE=v3.4.12 /root/install_telemt_tinycore.sh --update -lang ru
+```
+
+IDN-домены поддерживаются: если ввести кириллицу, скрипт переведёт домен в punycode; если ввести `xn--...`, скрипт проверит, что это корректный punycode.
+
 Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, а также лимит подключений Telemt со значением по умолчанию `5000`.
 
 Пример полного диалога:
@@ -316,6 +335,25 @@ ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
+
+
+### Updating an Existing Telemt Install
+
+Download the fresh installer and run update mode. It preserves existing settings, users, secrets, nginx/acme.sh configs, and updates only the native Telemt binary.
+
+```bash
+wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
+chmod +x /root/install_telemt_tinycore.sh
+/root/install_telemt_tinycore.sh --update -lang en
+```
+
+By default it updates `TELEMT_RELEASE=latest`. To pin a version, pass for example:
+
+```bash
+TELEMT_RELEASE=v3.4.12 /root/install_telemt_tinycore.sh --update -lang en
+```
+
+IDN domains are supported: Cyrillic input is converted to punycode; existing `xn--...` input is validated as real punycode.
 
 The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, and max Telemt connections with default `5000`.
 

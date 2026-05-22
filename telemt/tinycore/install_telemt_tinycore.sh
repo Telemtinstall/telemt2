@@ -9,12 +9,15 @@ TELEMT_HOME="${TELEMT_HOME:-/opt/telemt}"
 ACME_HOME="${ACME_HOME:-/opt/acme.sh}"
 STATE_FILE="${STATE_FILE:-$TELEMT_HOME/.install_tinycore.state}"
 RESUME_CONFIG="${RESUME_CONFIG:-$TELEMT_HOME/install.conf}"
+TELEMT_RELEASE_FROM_ENV="${TELEMT_RELEASE:+1}"
 TELEMT_RELEASE="${TELEMT_RELEASE:-latest}"
 TELEMT_SHA256_X86_64="${TELEMT_SHA256_X86_64:-}"
 TELEMT_SHA256_AARCH64="${TELEMT_SHA256_AARCH64:-}"
 ACME_SH_VERSION="${ACME_SH_VERSION:-3.1.2}"
 ACME_SH_SHA256="${ACME_SH_SHA256:-c46b41a61c96f67d424e4b4e476907c964b81d53cf94358a9c1d363a4f99c3a4}"
 ASSUME_YES="${ASSUME_YES:-0}"
+SCRIPT_LANG="${SCRIPT_LANG:-en}"
+UPDATE_MODE="${UPDATE_MODE:-0}"
 
 PUBLIC_HOST="${PUBLIC_HOST:-}"
 PUBLIC_IP="${PUBLIC_IP:-}"
@@ -66,6 +69,158 @@ prompt_value_assume() {
     REPLY="$default_value"
   else
     prompt_value "$label" "$default_value"
+  fi
+}
+
+lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_script_lang() {
+  case "$(lower "$1")" in
+    ru|rus|russian|рус|русский) printf 'ru' ;;
+    en|eng|english|'') printf 'en' ;;
+    *) return 1 ;;
+  esac
+}
+
+is_ru() {
+  [ "${SCRIPT_LANG:-en}" = "ru" ]
+}
+
+parse_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -update|--update|update)
+        UPDATE_MODE=1
+        ;;
+      -lang|--lang)
+        shift
+        [ "$#" -gt 0 ] || die "Missing value for -lang. Use ru or en."
+        SCRIPT_LANG="$(normalize_script_lang "$1")" || die "Bad language: $1. Use ru or en."
+        ;;
+      -lang=*|--lang=*)
+        value="${1#*=}"
+        SCRIPT_LANG="$(normalize_script_lang "$value")" || die "Bad language: $value. Use ru or en."
+        ;;
+      -h|--help)
+        cat <<'EOF'
+Usage:
+  install_telemt_tinycore.sh [--update] [-lang ru|en]
+
+Options:
+  -update, --update  Update the native Telemt binary and restart services while
+                     preserving telemt.toml, secrets, nginx and ACME settings.
+  -lang, --lang      Accept ru/en language selector.
+EOF
+        exit 0
+        ;;
+      *) die "Unknown argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+needs_idn_normalization() {
+  value="$1"
+  case "$value" in
+    *[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-]*|*xn--*|*XN--*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ensure_python3_for_idn() {
+  if have python3; then
+    return 0
+  fi
+  if have tce-load; then
+    tce-load -wi python3.11 || tce-load -wi python3.10 || tce-load -wi python3 || true
+  fi
+  have python3 || die "python3 is required for IDN/punycode domain normalization on Tiny Core. Install python3 or enter the domain in punycode."
+}
+
+domain_to_ascii() {
+  value="$1"
+  ensure_python3_for_idn
+  python3 - "$value" <<'PYIDN'
+import sys
+
+domain = sys.argv[1].strip().rstrip('.').lower()
+if not domain:
+    print('empty domain', file=sys.stderr)
+    sys.exit(1)
+if any(ch.isspace() or ch in '/\\' for ch in domain):
+    print('domain contains whitespace, slash, or backslash', file=sys.stderr)
+    sys.exit(1)
+try:
+    ascii_domain = domain.encode('idna').decode('ascii').lower()
+    decoded = ascii_domain.encode('ascii').decode('idna')
+    roundtrip = decoded.encode('idna').decode('ascii').lower()
+except Exception as exc:
+    print(f'IDNA/punycode conversion failed: {exc}', file=sys.stderr)
+    sys.exit(1)
+if ascii_domain != roundtrip:
+    print('IDNA/punycode round-trip check failed', file=sys.stderr)
+    sys.exit(1)
+labels = ascii_domain.split('.')
+if len(labels) < 2 or any(not label for label in labels):
+    print('domain must contain at least two non-empty labels', file=sys.stderr)
+    sys.exit(1)
+if any(len(label) > 63 for label in labels) or len(ascii_domain) > 253:
+    print('domain is too long after IDNA conversion', file=sys.stderr)
+    sys.exit(1)
+for label in labels:
+    if label.startswith('-') or label.endswith('-'):
+        print("domain label starts or ends with '-'", file=sys.stderr)
+        sys.exit(1)
+    if not all(ch.isalnum() or ch == '-' for ch in label):
+        print('domain contains invalid ASCII characters after IDNA conversion', file=sys.stderr)
+        sys.exit(1)
+print(ascii_domain)
+PYIDN
+}
+
+normalize_public_host() {
+  original="$PUBLIC_HOST"
+  PUBLIC_HOST="$(printf '%s' "$PUBLIC_HOST" | tr '[:upper:]' '[:lower:]')"
+  PUBLIC_HOST="${PUBLIC_HOST%.}"
+  if needs_idn_normalization "$PUBLIC_HOST"; then
+    PUBLIC_HOST="$(domain_to_ascii "$PUBLIC_HOST")" || die "Bad domain: $original"
+  fi
+  if [ "$PUBLIC_HOST" != "$original" ]; then
+    echo "Domain normalized to punycode/ASCII: $original -> $PUBLIC_HOST"
+  fi
+}
+
+normalize_letsencrypt_email() {
+  original="$LETSENCRYPT_EMAIL"
+  local_part="${LETSENCRYPT_EMAIL%@*}"
+  domain_part="${LETSENCRYPT_EMAIL#*@}"
+  [ "$local_part" != "$LETSENCRYPT_EMAIL" ] && [ -n "$local_part" ] || die "Email must be a plain email address."
+  printf '%s' "$local_part" | grep -Eq '^[A-Za-z0-9._%+-]+$' || die "Email local part has unsupported characters."
+  domain_part="$(printf '%s' "$domain_part" | tr '[:upper:]' '[:lower:]')"
+  domain_part="${domain_part%.}"
+  if needs_idn_normalization "$domain_part"; then
+    ascii_domain="$(domain_to_ascii "$domain_part")" || die "Bad email domain: $original"
+  else
+    ascii_domain="$domain_part"
+  fi
+  LETSENCRYPT_EMAIL="${local_part}@${ascii_domain}"
+  if [ "$LETSENCRYPT_EMAIL" != "$original" ]; then
+    echo "Email normalized to punycode/ASCII: $original -> $LETSENCRYPT_EMAIL"
+  fi
+}
+
+telemt_release_supports_exclusive_mask() {
+  case "$TELEMT_RELEASE" in
+    latest|v3.4.1[2-9]|3.4.1[2-9]|v3.[5-9].*|3.[5-9].*|v[4-9].*|[4-9].*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+exclusive_mask_block() {
+  if telemt_release_supports_exclusive_mask; then
+    printf '\n[censorship.exclusive_mask]\n"%s" = "127.0.0.1:8443"\n' "$PUBLIC_HOST"
   fi
 }
 
@@ -517,7 +672,7 @@ tls_emulation = true
 tls_front_dir = "tlsfront"
 tls_full_cert_ttl_secs = 0
 alpn_enforce = true
-
+$(exclusive_mask_block)
 [access]
 replay_check_len = 65536
 ignore_time_skew = false
@@ -635,6 +790,109 @@ write_proxy_link() {
   chmod 600 /root/telemt-proxy-link.txt 2>/dev/null || true
 }
 
+
+toml_value_from_section() {
+  file="$1"
+  section="$2"
+  key="$3"
+  [ -f "$file" ] || return 1
+  awk -v section="$section" -v wanted="$key" '
+    $0 ~ "^\\[" section "\\]" {in_section=1; next}
+    /^\[/ && in_section {in_section=0}
+    in_section {
+      line=$0
+      sub(/#.*/, "", line)
+      eq=index(line, "=")
+      if (!eq) next
+      key=substr(line, 1, eq - 1)
+      val=substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      gsub(/^"|"$/, "", key)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      gsub(/^"|"$/, "", val)
+      if (key == wanted) {
+        print val
+        exit
+      }
+    }
+  ' "$file"
+}
+
+infer_update_config_from_existing_files() {
+  if [ -f "$TELEMT_HOME/telemt.toml" ]; then
+    existing_domain="$(toml_value_from_section "$TELEMT_HOME/telemt.toml" "general\\.links" "public_host" || true)"
+    if [ -z "$existing_domain" ]; then
+      existing_domain="$(toml_value_from_section "$TELEMT_HOME/telemt.toml" "censorship" "tls_domain" || true)"
+    fi
+    [ -n "$existing_domain" ] && PUBLIC_HOST="${PUBLIC_HOST:-$existing_domain}"
+  fi
+  if [ -n "$PUBLIC_HOST" ]; then
+    normalize_public_host
+  fi
+}
+
+backup_update_state() {
+  backup_dir="$TELEMT_HOME/update-backups/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$backup_dir"
+  for path in "$TELEMT_HOME/telemt.toml" "$TELEMT_HOME/telemt-secret.env" "$TELEMT_HOME/nginx/nginx.conf" "$RESUME_CONFIG" /root/telemt-proxy-link.txt; do
+    if [ -e "$path" ]; then
+      cp -a "$path" "$backup_dir"/
+    fi
+  done
+  chmod -R go-rwx "$backup_dir" 2>/dev/null || true
+  echo "Update backup: $backup_dir"
+}
+
+run_update_mode() {
+  [ -d "$TELEMT_HOME" ] || die "Telemt home not found: $TELEMT_HOME"
+  [ -f "$TELEMT_HOME/telemt.toml" ] || die "Telemt config not found: $TELEMT_HOME/telemt.toml"
+  infer_update_config_from_existing_files
+  [ -n "$PUBLIC_HOST" ] || die "Cannot detect domain from existing Telemt config."
+  detect_public_ip
+
+  cat <<EOF
+
+Update plan:
+  domain:        ${PUBLIC_HOST}
+  public IPv4:   ${PUBLIC_IP}
+  release:       ${TELEMT_RELEASE}
+  Telemt config: preserved without rewrite
+  secrets/users: preserved
+  nginx/ACME:    preserved
+
+Type y or yes to update:
+EOF
+  if [ "$ASSUME_YES" = "1" ]; then
+    echo "ASSUME_YES=1, continuing."
+  else
+    read -r confirm
+    case "$confirm" in
+      y|Y|yes|YES|Yes) ;;
+      *) die "Cancelled." ;;
+    esac
+  fi
+
+  backup_update_state
+  stop_services
+  download_telemt
+  write_restart_script
+  configure_acme_renewal_hooks
+  "$TELEMT_HOME/bin/restart.sh"
+  sleep 8
+  write_proxy_link || true
+  persist_tinycore_files
+  telemt-report 2m || true
+  echo
+  echo "Update done. Existing config and secrets were preserved."
+  if [ -s /root/telemt-proxy-link.txt ]; then
+    echo "Proxy link:"
+    cat /root/telemt-proxy-link.txt
+  fi
+}
+
+parse_args "$@"
+REQUESTED_TELEMT_RELEASE="$TELEMT_RELEASE"
+
 require_tinycore
 
 if [ "${RESET_INSTALL_STATE:-0}" = "1" ]; then
@@ -645,6 +903,14 @@ if [ -f "$RESUME_CONFIG" ]; then
   # shellcheck disable=SC1090
   . "$RESUME_CONFIG"
   echo "Resume config found: $RESUME_CONFIG"
+fi
+if [ "$TELEMT_RELEASE_FROM_ENV" = "1" ]; then
+  TELEMT_RELEASE="$REQUESTED_TELEMT_RELEASE"
+fi
+
+if [ "$UPDATE_MODE" = "1" ]; then
+  run_update_mode
+  exit 0
 fi
 
 cat <<'EOF'
@@ -659,18 +925,36 @@ Before running:
 
 EOF
 
-prompt_value_assume "Proxy domain" "$PUBLIC_HOST"
+if is_ru; then
+  prompt_value_assume "Домен прокси" "$PUBLIC_HOST"
+else
+  prompt_value_assume "Proxy domain" "$PUBLIC_HOST"
+fi
 PUBLIC_HOST="$REPLY"
+normalize_public_host
 valid_domain "$PUBLIC_HOST" || die "Domain must be a valid DNS name, for example proxy.example.com."
 
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@$PUBLIC_HOST}"
-prompt_value_assume "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
+if is_ru; then
+  prompt_value_assume "Email для Let's Encrypt" "$LETSENCRYPT_EMAIL"
+else
+  prompt_value_assume "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
+fi
 LETSENCRYPT_EMAIL="$REPLY"
+normalize_letsencrypt_email
 
-prompt_value_assume "SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config" "$SSH_PORT"
+if is_ru; then
+  prompt_value_assume "SSH-порт, Enter оставляет текущий/по умолчанию. Tiny Core установщик не меняет SSH config" "$SSH_PORT"
+else
+  prompt_value_assume "SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config" "$SSH_PORT"
+fi
 SSH_PORT="$REPLY"
 
-prompt_value_assume "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
+if is_ru; then
+  prompt_value_assume "Максимум подключений Telemt" "$TELEMT_MAX_TCP_CONNS"
+else
+  prompt_value_assume "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
+fi
 TELEMT_MAX_TCP_CONNS="$REPLY"
 
 printf '%s\n' "$LETSENCRYPT_EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' || die "Email must be a plain email address."
@@ -701,7 +985,7 @@ if [ "$ASSUME_YES" = "1" ]; then
 else
   read -r confirm
   case "$confirm" in
-    y|Y|yes|YES|Yes) ;;
+    y|Y|yes|YES|Yes|д|Д|да|ДА|Да) ;;
     *) die "Cancelled." ;;
   esac
 fi

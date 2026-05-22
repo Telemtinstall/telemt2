@@ -7,6 +7,7 @@ set -Eeuo pipefail
 # SSH key-only login, fail2ban, and swap are opt-in prompts.
 
 TELEMT_IMAGE_DEFAULT="whn0thacked/telemt-docker@sha256:cf9b970f2d13937328372e903e40b971e4a5319cd005930453a89a80ba2365e4"
+TELEMT_IMAGE_FROM_ENV="${TELEMT_IMAGE:+1}"
 
 PUBLIC_HOST="${PUBLIC_HOST:-}"
 PUBLIC_IP="${PUBLIC_IP:-}"
@@ -19,6 +20,9 @@ ADD_SWAP="${ADD_SWAP:-no}"
 TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-5000}"
 TELEMT_IMAGE="${TELEMT_IMAGE:-$TELEMT_IMAGE_DEFAULT}"
 ASSUME_YES="${ASSUME_YES:-0}"
+SCRIPT_LANG="${SCRIPT_LANG:-en}"
+SCRIPT_LANG_FROM_CLI=0
+UPDATE_MODE="${UPDATE_MODE:-0}"
 BACKUP_ROOT="/root/telemt-astra-install-backups"
 STATE_FILE="/root/.install_telemt_astra.state"
 RESUME_CONFIG="/root/.install_telemt_astra.config"
@@ -103,12 +107,192 @@ prompt_yes_no() {
   local value=""
 
   prompt "$var" "$label" "$default_value"
-  value="${!var,,}"
+  value="$(lower "${!var}")"
   case "$value" in
-    y|yes) printf -v "$var" '%s' "yes" ;;
-    n|no|"") printf -v "$var" '%s' "no" ;;
-    *) die "$label must be yes or no." ;;
+    y|yes|д|да) printf -v "$var" '%s' "yes" ;;
+    n|no|н|нет|"") printf -v "$var" '%s' "no" ;;
+    *) die "$label must be yes/no or да/нет." ;;
   esac
+}
+
+lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_script_lang() {
+  case "$(lower "$1")" in
+    ru|rus|russian|рус|русский) printf 'ru' ;;
+    en|eng|english|'') printf 'en' ;;
+    *) return 1 ;;
+  esac
+}
+
+is_ru() {
+  [[ "${SCRIPT_LANG:-en}" == "ru" ]]
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  install_telemt.sh [--update] [-lang ru|en]
+
+Examples:
+  ./install_telemt.sh
+  ./install_telemt.sh -lang ru
+  ./install_telemt.sh --update -lang ru
+
+Options:
+  -update, --update  Update Telemt container/image and restart it while preserving
+                     telemt.toml, secrets, proxy links, nginx and SSH settings.
+  -lang, --lang      Installer language selector: ru or en.
+  -h, --help         Show this help.
+EOF
+}
+
+parse_args() {
+  local value
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -update|--update|update)
+        UPDATE_MODE=1
+        ;;
+      -lang|--lang)
+        shift
+        [[ $# -gt 0 ]] || die "Missing value for -lang. Use ru or en."
+        value="$1"
+        SCRIPT_LANG="$(normalize_script_lang "$value")" || die "Bad language: $value. Use ru or en."
+        SCRIPT_LANG_FROM_CLI=1
+        ;;
+      -lang=*|--lang=*)
+        value="${1#*=}"
+        SCRIPT_LANG="$(normalize_script_lang "$value")" || die "Bad language: $value. Use ru or en."
+        SCRIPT_LANG_FROM_CLI=1
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "Unknown argument: $1"
+        ;;
+    esac
+    shift
+  done
+}
+
+needs_idn_normalization() {
+  local value="$1"
+  case "$value" in
+    *[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-]*|*xn--*|*XN--*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ensure_python3_for_idn() {
+  if have python3; then
+    return 0
+  fi
+  if have apt-get; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends python3-minimal
+  elif have dnf; then
+    dnf install -y python3
+  else
+    die "python3 is required for IDN/punycode domain normalization. Install python3 or enter the domain in punycode."
+  fi
+  have python3 || die "python3 is required for IDN/punycode domain normalization."
+}
+
+domain_to_ascii() {
+  local value="$1"
+  ensure_python3_for_idn
+  python3 - "$value" <<'PYIDN'
+import sys
+
+domain = sys.argv[1].strip().rstrip('.').lower()
+if not domain:
+    print('empty domain', file=sys.stderr)
+    sys.exit(1)
+if any(ch.isspace() or ch in '/\\' for ch in domain):
+    print('domain contains whitespace, slash, or backslash', file=sys.stderr)
+    sys.exit(1)
+try:
+    ascii_domain = domain.encode('idna').decode('ascii').lower()
+    decoded = ascii_domain.encode('ascii').decode('idna')
+    roundtrip = decoded.encode('idna').decode('ascii').lower()
+except Exception as exc:
+    print(f'IDNA/punycode conversion failed: {exc}', file=sys.stderr)
+    sys.exit(1)
+if ascii_domain != roundtrip:
+    print('IDNA/punycode round-trip check failed', file=sys.stderr)
+    sys.exit(1)
+labels = ascii_domain.split('.')
+if len(labels) < 2 or any(not label for label in labels):
+    print('domain must contain at least two non-empty labels', file=sys.stderr)
+    sys.exit(1)
+if any(len(label) > 63 for label in labels) or len(ascii_domain) > 253:
+    print('domain is too long after IDNA conversion', file=sys.stderr)
+    sys.exit(1)
+for label in labels:
+    if label.startswith('-') or label.endswith('-'):
+        print("domain label starts or ends with '-'", file=sys.stderr)
+        sys.exit(1)
+    if not all(ch.isalnum() or ch == '-' for ch in label):
+        print('domain contains invalid ASCII characters after IDNA conversion', file=sys.stderr)
+        sys.exit(1)
+print(ascii_domain)
+PYIDN
+}
+
+normalize_public_host() {
+  local original="$PUBLIC_HOST"
+  PUBLIC_HOST="$(printf '%s' "$PUBLIC_HOST" | tr '[:upper:]' '[:lower:]')"
+  PUBLIC_HOST="${PUBLIC_HOST%.}"
+  if needs_idn_normalization "$PUBLIC_HOST"; then
+    PUBLIC_HOST="$(domain_to_ascii "$PUBLIC_HOST")" || die "Bad domain: $original"
+  fi
+  if [[ "$PUBLIC_HOST" != "$original" ]]; then
+    if is_ru; then
+      echo "Домен нормализован в punycode/ASCII: $original -> $PUBLIC_HOST"
+    else
+      echo "Domain normalized to punycode/ASCII: $original -> $PUBLIC_HOST"
+    fi
+  fi
+}
+
+normalize_letsencrypt_email() {
+  local original="$LETSENCRYPT_EMAIL" local_part domain_part ascii_domain
+  local_part="${LETSENCRYPT_EMAIL%@*}"
+  domain_part="${LETSENCRYPT_EMAIL#*@}"
+  [[ "$local_part" != "$LETSENCRYPT_EMAIL" && -n "$local_part" ]] || die "Email must be a plain email address."
+  [[ "$local_part" =~ ^[A-Za-z0-9._%+-]+$ ]] || die "Email local part has unsupported characters."
+  domain_part="$(printf '%s' "$domain_part" | tr '[:upper:]' '[:lower:]')"
+  domain_part="${domain_part%.}"
+  if needs_idn_normalization "$domain_part"; then
+    ascii_domain="$(domain_to_ascii "$domain_part")" || die "Bad email domain: $original"
+  else
+    ascii_domain="$domain_part"
+  fi
+  LETSENCRYPT_EMAIL="${local_part}@${ascii_domain}"
+  if [[ "$LETSENCRYPT_EMAIL" != "$original" ]]; then
+    if is_ru; then
+      echo "Email нормализован в punycode/ASCII: $original -> $LETSENCRYPT_EMAIL"
+    else
+      echo "Email normalized to punycode/ASCII: $original -> $LETSENCRYPT_EMAIL"
+    fi
+  fi
+}
+
+telemt_image_supports_exclusive_mask() {
+  local image="$TELEMT_IMAGE"
+  [[ "$image" == *:latest || "$image" == latest || "$image" == *3.4.1[2-9]* || "$image" == *3.[5-9].* || "$image" == *[4-9].* ]]
+}
+
+exclusive_mask_block() {
+  if telemt_image_supports_exclusive_mask; then
+    printf '\n[censorship.exclusive_mask]\n"%s" = "127.0.0.1:8443"\n' "$PUBLIC_HOST"
+  fi
 }
 
 valid_domain() {
@@ -324,6 +508,226 @@ nginx_http_redirect_current() {
     grep -Fq 'return 301 https://$host$request_uri;' /etc/nginx/sites-available/"$PUBLIC_HOST"
 }
 
+
+toml_value_from_section() {
+  local file="$1"
+  local section="$2"
+  local key="$3"
+  [[ -f "$file" ]] || return 1
+  awk -v section="$section" -v wanted="$key" '
+    $0 ~ "^\\[" section "\\]" {in_section=1; next}
+    /^\[/ && in_section {in_section=0}
+    in_section {
+      line=$0
+      sub(/#.*/, "", line)
+      eq=index(line, "=")
+      if (!eq) next
+      key=substr(line, 1, eq - 1)
+      val=substr(line, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      gsub(/^"|"$/, "", key)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      gsub(/^"|"$/, "", val)
+      if (key == wanted) {
+        print val
+        exit
+      }
+    }
+  ' "$file"
+}
+
+first_toml_key_from_section() {
+  local file="$1"
+  local section="$2"
+  [[ -f "$file" ]] || return 1
+  awk -v section="$section" '
+    $0 ~ "^\\[" section "\\]" {in_section=1; next}
+    /^\[/ && in_section {in_section=0}
+    in_section {
+      line=$0
+      sub(/#.*/, "", line)
+      eq=index(line, "=")
+      if (!eq) next
+      key=substr(line, 1, eq - 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      gsub(/^"|"$/, "", key)
+      if (key != "") {
+        print key
+        exit
+      }
+    }
+  ' "$file"
+}
+
+compose_image_from_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 1
+  awk '
+    /^[[:space:]]*image:[[:space:]]*/ {
+      value=$0
+      sub(/^[[:space:]]*image:[[:space:]]*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"|"$/, "", value)
+      gsub(/^'"'"'|'"'"'$/, "", value)
+      print value
+      exit
+    }
+  ' "$file"
+}
+
+infer_update_config_from_existing_files() {
+  local existing_domain existing_user existing_image
+
+  if [[ -f /opt/telemt-config/telemt.toml ]]; then
+    existing_domain="$(toml_value_from_section /opt/telemt-config/telemt.toml "general\\.links" "public_host" || true)"
+    if [[ -z "$existing_domain" ]]; then
+      existing_domain="$(toml_value_from_section /opt/telemt-config/telemt.toml "censorship" "tls_domain" || true)"
+    fi
+    existing_user="$(first_toml_key_from_section /opt/telemt-config/telemt.toml "access\\.users" || true)"
+    [[ -n "$existing_domain" ]] && PUBLIC_HOST="${PUBLIC_HOST:-$existing_domain}"
+    [[ -n "$existing_user" ]] && TELEMT_UPDATE_USER="$existing_user"
+  fi
+
+  existing_image="$(compose_image_from_file /opt/telemt-config/docker-compose.yml || true)"
+  if [[ -n "$existing_image" && "$TELEMT_IMAGE_FROM_ENV" != "1" ]]; then
+    TELEMT_IMAGE="$existing_image"
+  fi
+
+  if [[ -n "$PUBLIC_HOST" ]]; then
+    normalize_public_host
+  fi
+}
+
+backup_update_state() {
+  local backup_dir path
+  backup_dir="$BACKUP_ROOT/update-$(date +%Y%m%d-%H%M%S)"
+  install -d -m 0700 "$backup_dir"
+  for path in \
+    /opt/telemt-config/telemt.toml \
+    /opt/telemt-config/docker-compose.yml \
+    /root/telemt-secret.env \
+    "$RESUME_CONFIG" \
+    /root/telemt-proxy-link.txt \
+    /root/telemt-proxy-links.txt \
+    "/etc/nginx/sites-available/$PUBLIC_HOST" \
+    "/etc/nginx/sites-enabled/$PUBLIC_HOST" \
+    "/etc/nginx/conf.d/$PUBLIC_HOST.conf" \
+    /etc/nginx/modules-enabled/60-stream-sni.conf \
+    /etc/nginx/modules-enabled/90-stream-sni.conf \
+    /etc/nginx/stream-conf.d/telemt-sni.conf
+  do
+    if [[ -e "$path" || -L "$path" ]]; then
+      cp -a "$path" "$backup_dir"/
+    fi
+  done
+  chmod -R go-rwx "$backup_dir" 2>/dev/null || true
+  echo "Update backup: $backup_dir"
+}
+
+set_compose_image_if_requested() {
+  local current_image tmp
+  current_image="$(compose_image_from_file /opt/telemt-config/docker-compose.yml || true)"
+  [[ -n "$current_image" ]] || die "Cannot detect image in /opt/telemt-config/docker-compose.yml."
+  if [[ "$TELEMT_IMAGE_FROM_ENV" == "1" && "$TELEMT_IMAGE" != "$current_image" ]]; then
+    [[ "$TELEMT_IMAGE" =~ ^[A-Za-z0-9._/:@+-]+$ ]] || die "Bad Docker image: $TELEMT_IMAGE"
+    tmp="$(mktemp)"
+    awk -v image="$TELEMT_IMAGE" '
+      !done && /^[[:space:]]*image:[[:space:]]*/ {
+        match($0, /^[[:space:]]*/)
+        print substr($0, RSTART, RLENGTH) "image: " image
+        done=1
+        next
+      }
+      { print }
+    ' /opt/telemt-config/docker-compose.yml > "$tmp"
+    cat "$tmp" > /opt/telemt-config/docker-compose.yml
+    rm -f "$tmp"
+    echo "Docker image updated in compose: $current_image -> $TELEMT_IMAGE"
+  else
+    TELEMT_IMAGE="$current_image"
+  fi
+}
+
+confirm_update_plan() {
+  local confirm
+  if [[ "$ASSUME_YES" == "1" ]]; then
+    echo "ASSUME_YES=1, continuing."
+    return 0
+  fi
+  if is_ru; then
+    printf 'Введите y, yes или да для обновления: '
+  else
+    printf 'Type y or yes to update: '
+  fi
+  read -r confirm
+  confirm="$(lower "$confirm")"
+  case "$confirm" in
+    y|yes|д|да) ;;
+    *) die "Cancelled." ;;
+  esac
+}
+
+run_update_mode() {
+  TELEMT_UPDATE_USER=""
+  [[ -d /opt/telemt-config ]] || die "Install directory not found: /opt/telemt-config"
+  [[ -f /opt/telemt-config/telemt.toml ]] || die "Telemt config not found: /opt/telemt-config/telemt.toml"
+  [[ -f /opt/telemt-config/docker-compose.yml ]] || die "Compose config not found: /opt/telemt-config/docker-compose.yml"
+
+  infer_update_config_from_existing_files
+  [[ -n "$PUBLIC_HOST" ]] || die "Cannot detect domain from existing Telemt config."
+  detect_public_ip
+
+  cat <<EOF
+
+Update plan:
+  domain:          ${PUBLIC_HOST}
+  public IPv4:     ${PUBLIC_IP}
+  Docker image:    ${TELEMT_IMAGE}
+  Telemt config:   preserved without rewrite
+  compose file:    preserved unless TELEMT_IMAGE was explicitly passed
+  secrets/users:   preserved
+  nginx/SSH:       preserved
+
+EOF
+  if [[ "$TELEMT_IMAGE" == *@sha256:* && "$TELEMT_IMAGE_FROM_ENV" != "1" ]]; then
+    cat <<'EOF'
+Note: current Docker image is digest-pinned. Update mode will pull/recreate this exact digest.
+To move to another image/tag, run for example:
+  TELEMT_IMAGE=<image-or-tag> ./install_telemt.sh --update -lang ru
+EOF
+  fi
+  confirm_update_plan
+
+  backup_update_state
+  set_compose_image_if_requested
+  systemctl enable --now docker
+  cd /opt/telemt-config
+  compose_cmd config >/dev/null
+  compose_cmd pull || true
+  compose_cmd up -d --force-recreate
+  sleep 12
+
+  tmp_users="$(mktemp)"
+  chmod 600 "$tmp_users"
+  trap 'rm -f "$tmp_users"' EXIT
+  curl -fsS http://127.0.0.1:9091/v1/users > "$tmp_users"
+  grep -q '"ok":true' "$tmp_users"
+  grep -o 'tg://proxy[^"]*' "$tmp_users" > /root/telemt-proxy-link.txt || true
+  chmod 600 /root/telemt-proxy-link.txt 2>/dev/null || true
+  /usr/local/sbin/telemt-report 2m || true
+
+  echo
+  echo "Update done. Existing config and secrets were preserved."
+  if [[ -s /root/telemt-proxy-link.txt ]]; then
+    echo "Proxy link:"
+    cat /root/telemt-proxy-link.txt
+  fi
+}
+
+parse_args "$@"
+REQUESTED_SCRIPT_LANG="$SCRIPT_LANG"
+REQUESTED_TELEMT_IMAGE="$TELEMT_IMAGE"
+
 [[ "$(id -u)" -eq 0 ]] || die "Run as root."
 if [[ "$(uname -s)" != "Linux" ]] || ! have apt-get || ! have systemctl; then
   cat >&2 <<'EOF'
@@ -346,6 +750,17 @@ if [[ -f "$RESUME_CONFIG" ]]; then
   source "$RESUME_CONFIG"
   echo "Resume config found: $RESUME_CONFIG"
 fi
+if [[ "$SCRIPT_LANG_FROM_CLI" == "1" ]]; then
+  SCRIPT_LANG="$REQUESTED_SCRIPT_LANG"
+fi
+if [[ "$TELEMT_IMAGE_FROM_ENV" == "1" ]]; then
+  TELEMT_IMAGE="$REQUESTED_TELEMT_IMAGE"
+fi
+
+if [[ "$UPDATE_MODE" == "1" ]]; then
+  run_update_mode
+  exit 0
+fi
 
 if [[ -z "$NGINX_ACTIVE_AT_START" ]]; then
   if systemctl is-active --quiet nginx 2>/dev/null; then
@@ -365,18 +780,36 @@ Before running:
 
 EOF
 
-prompt PUBLIC_HOST "Proxy domain" "$PUBLIC_HOST"
+if is_ru; then
+  prompt PUBLIC_HOST "Домен прокси" "$PUBLIC_HOST"
+else
+  prompt PUBLIC_HOST "Proxy domain" "$PUBLIC_HOST"
+fi
+normalize_public_host
 valid_domain "$PUBLIC_HOST" || die "Domain must be a valid DNS name, for example proxy.example.com."
 
 detect_public_ip
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${PUBLIC_HOST}}"
 
-prompt LETSENCRYPT_EMAIL "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
-prompt SSH_PORT "SSH port, Enter keeps current/default" "$SSH_PORT"
-prompt_yes_no SSH_KEY_ONLY_LOGIN "Disable SSH password login and keep root key-only? yes/no" "$SSH_KEY_ONLY_LOGIN"
-prompt_yes_no ENABLE_FAIL2BAN "Enable fail2ban for SSH? yes/no" "$ENABLE_FAIL2BAN"
-prompt_yes_no ADD_SWAP "Add 1G swap if missing? yes/no" "$ADD_SWAP"
-prompt TELEMT_MAX_TCP_CONNS "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
+if is_ru; then
+  prompt LETSENCRYPT_EMAIL "Email для Let's Encrypt" "$LETSENCRYPT_EMAIL"
+else
+  prompt LETSENCRYPT_EMAIL "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
+fi
+normalize_letsencrypt_email
+if is_ru; then
+  prompt SSH_PORT "SSH-порт, Enter оставляет текущий/по умолчанию" "$SSH_PORT"
+  prompt_yes_no SSH_KEY_ONLY_LOGIN "Отключить SSH-пароли и оставить root только по ключу? yes/no/да/нет" "$SSH_KEY_ONLY_LOGIN"
+  prompt_yes_no ENABLE_FAIL2BAN "Включить fail2ban для SSH? yes/no/да/нет" "$ENABLE_FAIL2BAN"
+  prompt_yes_no ADD_SWAP "Добавить 1G swap, если swap нет? yes/no/да/нет" "$ADD_SWAP"
+  prompt TELEMT_MAX_TCP_CONNS "Максимум подключений Telemt" "$TELEMT_MAX_TCP_CONNS"
+else
+  prompt SSH_PORT "SSH port, Enter keeps current/default" "$SSH_PORT"
+  prompt_yes_no SSH_KEY_ONLY_LOGIN "Disable SSH password login and keep root key-only? yes/no" "$SSH_KEY_ONLY_LOGIN"
+  prompt_yes_no ENABLE_FAIL2BAN "Enable fail2ban for SSH? yes/no" "$ENABLE_FAIL2BAN"
+  prompt_yes_no ADD_SWAP "Add 1G swap if missing? yes/no" "$ADD_SWAP"
+  prompt TELEMT_MAX_TCP_CONNS "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
+fi
 
 [[ "$LETSENCRYPT_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || die "Email must be a plain email address."
 valid_port "$SSH_PORT" || die "SSH port must be a number from 1 to 65535."
@@ -445,9 +878,9 @@ Type y or yes to continue:
 EOF
 if [[ "$ASSUME_YES" != "1" ]]; then
   read -r confirm
-  confirm="${confirm,,}"
+  confirm="$(lower "$confirm")"
   case "$confirm" in
-    y|yes) ;;
+    y|yes|д|да) ;;
     *) die "Cancelled." ;;
   esac
 else
@@ -834,7 +1267,7 @@ tls_emulation = true
 tls_front_dir = "tlsfront"
 tls_full_cert_ttl_secs = 0
 alpn_enforce = true
-
+$(exclusive_mask_block)
 [access]
 replay_check_len = 65536
 ignore_time_skew = false

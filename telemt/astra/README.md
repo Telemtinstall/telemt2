@@ -103,6 +103,25 @@ tmux attach -t telemt-install
 
 Если `tmux` не установлен, можно просто запустить скрипт повторно. Скрипт сохраняет прогресс и пропускает уже завершённые шаги.
 
+
+### Как обновлять уже установленный Telemt
+
+Скачайте свежий установщик и запустите update-режим. Он сохранит существующие настройки, пользователей, секреты, nginx/SSH-конфиги и сертификаты.
+
+```bash
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh --update -lang ru
+```
+
+Если текущий Docker compose закреплён на `image@sha256:...`, update пересоздаст контейнер на том же digest. Чтобы явно перейти на другой image/tag, передайте:
+
+```bash
+TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt_astra.sh --update -lang ru
+```
+
+IDN-домены поддерживаются: если ввести кириллицу, скрипт переведёт домен в punycode; если ввести `xn--...`, скрипт проверит, что это корректный punycode.
+
 ### Что спросит скрипт
 
 1. Домен прокси:
@@ -914,6 +933,25 @@ ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_astra.sh
 /root/install_telemt_astra.sh
 ```
+
+
+### Updating an Existing Telemt Install
+
+Download the fresh installer and run update mode. It preserves existing settings, users, secrets, nginx/SSH configs, and certificates.
+
+```bash
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh --update -lang en
+```
+
+If the current Docker compose file is pinned to `image@sha256:...`, update recreates the container with the same digest. To explicitly move to another image/tag, pass:
+
+```bash
+TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt_astra.sh --update -lang en
+```
+
+IDN domains are supported: Cyrillic input is converted to punycode; existing `xn--...` input is validated as real punycode.
 
 ### Batch Installation install_telemt_batch_astra.sh
 
