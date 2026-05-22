@@ -10,6 +10,8 @@
   - `sni` can add one route to an existing Telemt nginx stream map after backup and `nginx -t`.
 - Added DNS A-record validation against the current server IPv4 and local-only HAProxy stats binding for the WhatsApp proxy installer.
 - Added optional `ufw`/`firewalld` port opening for the WhatsApp proxy installer without rewriting custom firewall rules.
+- Improved WhatsApp proxy nginx stream detection for alternate Telemt config names and blocked reuse of an already-routed Telemt SNI domain.
+- Made WhatsApp proxy DNS and port/mode preflight run on every resume so changing the domain cannot reuse stale checks.
 
 ## 2026-05-22
 

@@ -285,6 +285,7 @@ find_telemt_stream_conf() {
   local path
   for path in \
     /etc/nginx/modules-enabled/60-stream-sni.conf \
+    /etc/nginx/modules-enabled/60-telemt-stream-sni.conf \
     /etc/nginx/modules-enabled/90-stream-sni.conf \
     /etc/nginx/stream-conf.d/telemt-sni.conf; do
     if [[ -f "$path" ]] && grep -q 'telemt_backend' "$path" && grep -q 'ssl_preread' "$path"; then
@@ -292,7 +293,42 @@ find_telemt_stream_conf() {
       return 0
     fi
   done
+
+  if [[ -d /etc/nginx ]]; then
+    while IFS= read -r path; do
+      if grep -q 'telemt_backend' "$path" && grep -q 'ssl_preread' "$path"; then
+        printf '%s\n' "$path"
+        return 0
+      fi
+    done < <(find /etc/nginx -type f -name '*.conf' 2>/dev/null)
+  fi
+
   return 1
+}
+
+route_backend_for_domain() {
+  local conf="$1"
+  local domain="$2"
+  awk -v domain="$domain" '
+    $1 == domain {
+      gsub(/;$/, "", $2)
+      print $2
+      exit
+    }
+  ' "$conf"
+}
+
+ensure_domain_not_already_routed_elsewhere() {
+  local backend=""
+  [[ -n "$NGINX_STREAM_CONF" && -f "$NGINX_STREAM_CONF" ]] || return 0
+  backend="$(route_backend_for_domain "$NGINX_STREAM_CONF" "$PROXY_DOMAIN")"
+  [[ -n "$backend" ]] || return 0
+
+  if [[ "$backend" == "127.0.0.1:${LOCAL_TLS_PORT}" ]]; then
+    return 0
+  fi
+
+  die "SNI domain $PROXY_DOMAIN is already routed in $NGINX_STREAM_CONF to $backend. Use a separate domain for WhatsApp proxy, for example wa.<your-domain>, with an A record pointing to this server."
 }
 
 select_mode() {
@@ -327,6 +363,7 @@ select_mode() {
     [[ -n "$listener443" ]] || die "SNI mode is for an existing nginx stream on 443/tcp. Use direct mode if 443 is free."
     NGINX_STREAM_CONF="${NGINX_STREAM_CONF:-$(find_telemt_stream_conf || true)}"
     [[ -n "$NGINX_STREAM_CONF" ]] || die "Cannot find a known Telemt nginx stream config to patch safely."
+    ensure_domain_not_already_routed_elsewhere
     SELECTED_MODE="sni"
     return 0
   fi
@@ -339,6 +376,7 @@ select_mode() {
   NGINX_STREAM_CONF="$(find_telemt_stream_conf || true)"
   if [[ -n "$NGINX_STREAM_CONF" ]]; then
     echo "Found Telemt nginx stream config: $NGINX_STREAM_CONF"
+    ensure_domain_not_already_routed_elsewhere
     if confirm "Use SNI mode and add only one route for $PROXY_DOMAIN to existing stream map? [y/N]: "; then
       SELECTED_MODE="sni"
       return 0
@@ -463,8 +501,9 @@ patch_nginx_stream() {
   [[ "$SELECTED_MODE" == "sni" ]] || return 0
   [[ -n "$NGINX_STREAM_CONF" && -f "$NGINX_STREAM_CONF" ]] || die "nginx stream config not found."
 
-  if grep -Eq "^[[:space:]]*${PROXY_DOMAIN}[[:space:]]+" "$NGINX_STREAM_CONF"; then
-    echo "SNI route for $PROXY_DOMAIN already exists in $NGINX_STREAM_CONF."
+  ensure_domain_not_already_routed_elsewhere
+  if [[ "$(route_backend_for_domain "$NGINX_STREAM_CONF" "$PROXY_DOMAIN")" == "127.0.0.1:${LOCAL_TLS_PORT}" ]]; then
+    echo "SNI route for $PROXY_DOMAIN already points to 127.0.0.1:${LOCAL_TLS_PORT} in $NGINX_STREAM_CONF."
     return 0
   fi
 
@@ -604,10 +643,12 @@ EOF
 
   validate_input
 
-  run_step "dns" "DNS preflight" dns_preflight
+  step "DNS preflight"
+  dns_preflight
   save_resume_config
   run_step "packages" "Install packages" install_packages
-  run_step "mode" "Port and mode preflight" select_mode
+  step "Port and mode preflight"
+  select_mode
   save_resume_config
 
   cat <<EOF

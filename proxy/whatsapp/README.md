@@ -21,6 +21,7 @@ RU:
 - если активен `ufw` или `firewalld`, открывает только нужные TCP-порты;
 - держит HAProxy stats `8199` только локально на `127.0.0.1:<local_stats_port>`;
 - если `443/tcp` занят Telemt/nginx, предлагает SNI-режим и добавляет только один route в существующий Telemt nginx stream-map;
+- если указанный домен уже используется Telemt в nginx stream-map, останавливается и просит отдельный домен;
 - делает бэкап nginx/compose перед изменениями;
 - не меняет Telemt-секреты, `telemt.toml`, пользователей Telemt и существующие Docker-контейнеры Telemt.
 
@@ -34,6 +35,7 @@ EN:
 - if `ufw` or `firewalld` is active, opens only the required TCP ports;
 - keeps HAProxy stats `8199` local only on `127.0.0.1:<local_stats_port>`;
 - if `443/tcp` is already owned by Telemt/nginx, offers SNI mode and adds only one route to the existing Telemt nginx stream map;
+- if the requested domain is already used by Telemt in the nginx stream map, stops and asks for a separate domain;
 - backs up nginx/compose files before changes;
 - does not change Telemt secrets, `telemt.toml`, Telemt users, or existing Telemt Docker containers.
 
@@ -50,6 +52,10 @@ EN: Used when `443/tcp` is free. The Docker container binds public `443/tcp` dir
 RU: Используется, когда `443/tcp` уже занят nginx stream от Telemt. Контейнер слушает `127.0.0.1:18443`, а nginx stream направляет только указанный SNI-домен на WhatsApp proxy. Существующий Telemt route остаётся на месте.
 
 EN: Used when `443/tcp` is already owned by the Telemt nginx stream frontend. The container listens on `127.0.0.1:18443`, and nginx stream routes only the requested SNI domain to WhatsApp proxy. Existing Telemt routes remain in place.
+
+RU: Для SNI-режима нужен отдельный домен. Нельзя использовать тот же домен, который уже ведёт на Telemt, потому что один SNI hostname на одном `443/tcp` может быть направлен только в один backend.
+
+EN: SNI mode needs a separate domain. You cannot use the same domain that already routes to Telemt, because one SNI hostname on one `443/tcp` can route to only one backend.
 
 `auto`
 
