@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-23
+
+### Added
+
+- Added experimental `proxy/whatsapp/` installer for the official WhatsApp Chat Proxy Docker image.
+- Added guarded `direct` and `sni` modes for WhatsApp proxy:
+  - `direct` requires free public `443/tcp`;
+  - `sni` can add one route to an existing Telemt nginx stream map after backup and `nginx -t`.
+- Added DNS A-record validation against the current server IPv4 and local-only HAProxy stats binding for the WhatsApp proxy installer.
+- Added optional `ufw`/`firewalld` port opening for the WhatsApp proxy installer without rewriting custom firewall rules.
+
 ## 2026-05-22
 
 ### Added

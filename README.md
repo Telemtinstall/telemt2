@@ -13,6 +13,7 @@ RU: Эти скрипты являются обычными Bash-установ�
 - Xray для VLESS: официальный проект `XTLS/Xray-core`, `https://github.com/XTLS/Xray-core`.
 - wstunnel для экспериментального WireGuard-over-WebSocket: официальный проект `erebe/wstunnel`, `https://github.com/erebe/wstunnel`.
 - AmneziaWG: официальные пакеты/репозитории AmneziaWG, когда они используются установщиком.
+- WhatsApp Chat Proxy: официальный проект `WhatsApp/proxy` и Docker image `facebook/whatsapp_proxy`, `https://github.com/WhatsApp/proxy`.
 
 EN: These scripts are ordinary Bash installers intended to make Telemt with HTTPS camouflage and VPN service setup easier. They are not official installers for Telemt, WireGuard, OpenVPN, AmneziaWG, Xray, or any other upstream project. This repository does not contain embedded binaries, VPN clients, proxy servers, certificates, or keys. The scripts download and install software from official operating-system repositories and upstream project sources:
 
@@ -23,6 +24,7 @@ EN: These scripts are ordinary Bash installers intended to make Telemt with HTTP
 - Xray for VLESS: official `XTLS/Xray-core` project, `https://github.com/XTLS/Xray-core`.
 - wstunnel for experimental WireGuard-over-WebSocket: official `erebe/wstunnel` project, `https://github.com/erebe/wstunnel`.
 - AmneziaWG: official AmneziaWG packages/repositories when used by the installer.
+- WhatsApp Chat Proxy: official `WhatsApp/proxy` project and Docker image `facebook/whatsapp_proxy`, `https://github.com/WhatsApp/proxy`.
 
 This repository intentionally uses placeholders only:
 
@@ -94,6 +96,11 @@ vpn/
     awgctl.sh
     README.md
 
+proxy/
+  whatsapp/
+    install_whatsapp_proxy.sh
+    README.md
+
 utils/
   certbot_helper.sh
   README.md
@@ -113,6 +120,7 @@ WireGuard                       -> vpn/wg/
 WireGuard over wstunnel, test   -> vpn/wg-experimental/
 OpenVPN                         -> vpn/openvpn/
 AmneziaWG, test                 -> vpn/amneziawg/
+WhatsApp Chat Proxy, test       -> proxy/whatsapp/
 Certificate helper              -> utils/
 ```
 
@@ -131,6 +139,10 @@ Each service and utility directory has its own `README.md` with Russian and Engl
 `vpn/amneziawg/` installs AmneziaWG. It supports plain UDP mode and a mode with an HTTPS camouflage site on TCP 443 plus AmneziaWG on UDP 443. Client configs are intended for AmneziaVPN-compatible clients, not ordinary WireGuard clients.
 
 `utils/` contains helper scripts that are useful across installers. `certbot_helper.sh` issues Let's Encrypt certificates with certbot-style `-d` domain arguments, optional interactive prompts, DNS preflight, and certbot auto-renewal setup.
+
+## Proxy Directories / Proxy-Каталоги
+
+`proxy/whatsapp/` installs the official WhatsApp Chat Proxy Docker image in an experimental guarded layout. It can run directly on a free `443/tcp`, or add one SNI route to an existing Telemt nginx stream setup after DNS/port checks and backup. It does not change Telemt secrets or existing Telemt containers.
 
 ## Download From GitHub / Скачать С GitHub
 
