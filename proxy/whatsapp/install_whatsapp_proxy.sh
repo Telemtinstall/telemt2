@@ -15,6 +15,8 @@ ENABLE_DOCKER_LOGS="${ENABLE_DOCKER_LOGS:-no}"
 ASSUME_YES="${ASSUME_YES:-0}"
 INSTALL_RETRIES="${INSTALL_RETRIES:-3}"
 RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-5}"
+LANG_MODE="${LANG_MODE:-en}"
+UPDATE_MODE="${UPDATE_MODE:-0}"
 
 APP_DIR="/opt/whatsapp-proxy"
 COMPOSE_FILE="$APP_DIR/docker-compose.yml"
@@ -30,6 +32,65 @@ BACKUP_DIR=""
 SERVER_PUBLIC_IPV4=""
 SELECTED_MODE=""
 NGINX_STREAM_CONF=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  install_whatsapp_proxy.sh [options]
+
+Options:
+  -lang ru|en       Use Russian or English prompts.
+  -ru, --ru         Shortcut for -lang ru.
+  -en, --en         Shortcut for -lang en.
+  -update, --update Update existing WhatsApp proxy Docker image/container only.
+  -y, --yes         Assume yes where possible.
+  -h, --help        Show this help.
+
+Examples:
+  ./install_whatsapp_proxy.sh -lang ru
+  ./install_whatsapp_proxy.sh -update -lang ru
+EOF
+}
+
+parse_args() {
+  while (($# > 0)); do
+    case "$1" in
+      -lang|--lang)
+        shift
+        [[ $# -gt 0 ]] || die "Missing value for -lang."
+        case "$1" in
+          ru|-ru|--ru) LANG_MODE="ru" ;;
+          en|-en|--en) LANG_MODE="en" ;;
+          *) die "Unsupported language: $1. Use ru or en." ;;
+        esac
+        ;;
+      -ru|--ru)
+        LANG_MODE="ru"
+        ;;
+      -en|--en)
+        LANG_MODE="en"
+        ;;
+      -update|--update)
+        UPDATE_MODE="1"
+        ;;
+      -y|--yes)
+        ASSUME_YES="1"
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "Unknown option: $1"
+        ;;
+    esac
+    shift
+  done
+}
+
+is_ru() {
+  [[ "$LANG_MODE" == "ru" ]]
+}
 
 step() {
   step_no=$((step_no + 1))
@@ -200,6 +261,7 @@ EOF
 }
 
 load_resume_config() {
+  local requested_lang="$LANG_MODE"
   if [[ "${RESET_INSTALL_STATE:-0}" == "1" ]]; then
     rm -f "$STATE_FILE" "$RESUME_CONFIG"
   fi
@@ -208,6 +270,53 @@ load_resume_config() {
     # shellcheck disable=SC1090
     . "$RESUME_CONFIG"
   fi
+  LANG_MODE="$requested_lang"
+}
+
+load_existing_settings() {
+  local parsed=""
+  local requested_lang="$LANG_MODE"
+
+  if [[ -f "$RESUME_CONFIG" ]]; then
+    # shellcheck disable=SC1090
+    . "$RESUME_CONFIG"
+  fi
+  LANG_MODE="$requested_lang"
+
+  if [[ -f "$ENV_FILE" ]]; then
+    parsed="$(awk -F= '$1 == "SSL_DNS" {print $2; exit}' "$ENV_FILE")"
+    [[ -n "$parsed" ]] && PROXY_DOMAIN="$parsed"
+    parsed="$(awk -F= '$1 == "PUBLIC_IP" {print $2; exit}' "$ENV_FILE")"
+    [[ -n "$parsed" ]] && SERVER_PUBLIC_IPV4="$parsed"
+  fi
+
+  if [[ -f "$COMPOSE_FILE" ]]; then
+    parsed="$(awk '$1 == "image:" {print $2; exit}' "$COMPOSE_FILE")"
+    [[ -n "$parsed" ]] && WHATSAPP_IMAGE="$parsed"
+    parsed="$(sed -n 's/.*127\.0\.0\.1:\([0-9][0-9]*\):443\/tcp.*/\1/p' "$COMPOSE_FILE" | head -n 1)"
+    [[ -n "$parsed" ]] && LOCAL_TLS_PORT="$parsed"
+    parsed="$(sed -n 's/.*127\.0\.0\.1:\([0-9][0-9]*\):8199\/tcp.*/\1/p' "$COMPOSE_FILE" | head -n 1)"
+    [[ -n "$parsed" ]] && LOCAL_STATS_PORT="$parsed"
+
+    if grep -Eq '^[[:space:]]*-[[:space:]]*"0\.0\.0\.0:443:443/tcp"' "$COMPOSE_FILE"; then
+      SELECTED_MODE="${SELECTED_MODE:-direct}"
+    else
+      SELECTED_MODE="${SELECTED_MODE:-sni}"
+    fi
+
+    if grep -Eq '^[[:space:]]*-[[:space:]]*"0\.0\.0\.0:587:587/tcp"' "$COMPOSE_FILE"; then
+      PUBLIC_587="${PUBLIC_587:-yes}"
+    else
+      PUBLIC_587="${PUBLIC_587:-no}"
+    fi
+  fi
+
+  PROXY_DOMAIN="${PROXY_DOMAIN:-}"
+  WHATSAPP_IMAGE="${WHATSAPP_IMAGE:-facebook/whatsapp_proxy:latest}"
+  LOCAL_TLS_PORT="${LOCAL_TLS_PORT:-18443}"
+  LOCAL_STATS_PORT="${LOCAL_STATS_PORT:-18199}"
+  PUBLIC_587="${PUBLIC_587:-yes}"
+  SELECTED_MODE="${SELECTED_MODE:-sni}"
 }
 
 public_ipv4() {
@@ -572,6 +681,32 @@ start_proxy() {
   compose_cmd -f "$COMPOSE_FILE" up -d
 }
 
+update_existing_install() {
+  [[ "$(id -u)" == "0" ]] || die "Run as root."
+  [[ -f "$COMPOSE_FILE" ]] || die "Existing compose file not found: $COMPOSE_FILE. Run installer first."
+
+  load_existing_settings
+  validate_input
+
+  step "Load existing installation"
+  echo "domain=$PROXY_DOMAIN"
+  echo "mode=$SELECTED_MODE"
+  echo "image=$WHATSAPP_IMAGE"
+  echo "compose=$COMPOSE_FILE"
+
+  step "Backup current state"
+  backup_current_state
+  save_resume_config
+
+  step "Pull and recreate container"
+  retry_command "docker pull $WHATSAPP_IMAGE" docker pull "$WHATSAPP_IMAGE"
+  compose_cmd -f "$COMPOSE_FILE" up -d --force-recreate
+
+  step "Verify"
+  verify_install
+  print_summary
+}
+
 verify_install() {
   local attempt cert_output health_status
 
@@ -626,6 +761,41 @@ verify_install() {
 }
 
 print_summary() {
+  local media_line="587/tcp"
+  if [[ "$PUBLIC_587" != "yes" ]]; then
+    media_line="disabled/not published"
+  fi
+
+  if is_ru; then
+    cat <<EOF
+
+WhatsApp Chat Proxy установлен.
+
+Домен:        $PROXY_DOMAIN
+Режим:        $SELECTED_MODE
+Docker image: $WHATSAPP_IMAGE
+Публичный 443: $([[ "$SELECTED_MODE" == "direct" ]] && echo "контейнер напрямую" || echo "nginx SNI -> 127.0.0.1:${LOCAL_TLS_PORT}")
+Публичный 587: $PUBLIC_587
+Stats:        http://127.0.0.1:${LOCAL_STATS_PORT}/
+Compose:      $COMPOSE_FILE
+Backup:       $BACKUP_DIR
+
+Как подключиться в WhatsApp:
+  Proxy host / Server: $PROXY_DOMAIN
+  Основной порт:       443/tcp
+  Media порт:          $media_line
+
+В приложении WhatsApp обычно вводится только домен proxy:
+  $PROXY_DOMAIN
+
+Примечания:
+  - Публично используются только 443/tcp и, если включён, 587/tcp для media.
+  - Stats 8199 открыт только локально: 127.0.0.1:${LOCAL_STATS_PORT}.
+  - Существующие Telemt-секреты и конфиги не менялись.
+EOF
+    return 0
+  fi
+
   cat <<EOF
 
 Installed WhatsApp Chat Proxy.
@@ -642,6 +812,11 @@ Backup:       $BACKUP_DIR
 Client value to enter in WhatsApp proxy settings:
   $PROXY_DOMAIN
 
+Connection details:
+  Proxy host / Server: $PROXY_DOMAIN
+  Main port:           443/tcp
+  Media port:          $media_line
+
 Notes:
   - This installer exposes only the minimal public ports: 443/tcp and optionally 587/tcp.
   - Stats port 8199 is kept local only via 127.0.0.1:${LOCAL_STATS_PORT}.
@@ -650,9 +825,27 @@ EOF
 }
 
 main() {
+  parse_args "$@"
+
+  if [[ "$UPDATE_MODE" == "1" ]]; then
+    update_existing_install
+    return 0
+  fi
+
   load_resume_config
 
-  cat <<'EOF'
+  if is_ru; then
+    cat <<'EOF'
+Экспериментальный установщик WhatsApp Chat Proxy.
+
+Перед запуском:
+  1. Используйте только свой домен.
+  2. Создайте DNS A-запись: <домен> -> IPv4 этого сервера.
+  3. Если Telemt уже занимает 443/tcp через nginx stream, выбирайте SNI-режим только после проверки плана.
+  4. Держите текущую SSH-сессию открытой.
+EOF
+  else
+    cat <<'EOF'
 Experimental WhatsApp Chat Proxy installer.
 
 Before running:
@@ -661,16 +854,27 @@ Before running:
   3. If Telemt already owns 443/tcp through nginx stream, choose SNI mode only after checking the plan.
   4. Keep the current SSH session open.
 EOF
+  fi
 
   [[ "$(id -u)" == "0" ]] || die "Run as root."
 
-  prompt PROXY_DOMAIN "WhatsApp proxy domain"
-  prompt INSTALL_MODE "Install mode: auto/direct/sni" "$INSTALL_MODE"
-  prompt WHATSAPP_IMAGE "Docker image" "$WHATSAPP_IMAGE"
-  prompt PUBLIC_587 "Expose public 587/tcp for whatsapp.net/media yes/no" "$PUBLIC_587"
-  prompt LOCAL_TLS_PORT "Local WhatsApp TLS port for SNI mode" "$LOCAL_TLS_PORT"
-  prompt LOCAL_STATS_PORT "Local HAProxy stats port" "$LOCAL_STATS_PORT"
-  prompt ENABLE_DOCKER_LOGS "Enable Docker logs yes/no" "$ENABLE_DOCKER_LOGS"
+  if is_ru; then
+    prompt PROXY_DOMAIN "Домен WhatsApp proxy"
+    prompt INSTALL_MODE "Режим установки: auto/direct/sni" "$INSTALL_MODE"
+    prompt WHATSAPP_IMAGE "Docker image" "$WHATSAPP_IMAGE"
+    prompt PUBLIC_587 "Открыть публичный 587/tcp для whatsapp.net/media yes/no" "$PUBLIC_587"
+    prompt LOCAL_TLS_PORT "Локальный TLS-порт WhatsApp для SNI-режима" "$LOCAL_TLS_PORT"
+    prompt LOCAL_STATS_PORT "Локальный порт HAProxy stats" "$LOCAL_STATS_PORT"
+    prompt ENABLE_DOCKER_LOGS "Включить Docker-логи yes/no" "$ENABLE_DOCKER_LOGS"
+  else
+    prompt PROXY_DOMAIN "WhatsApp proxy domain"
+    prompt INSTALL_MODE "Install mode: auto/direct/sni" "$INSTALL_MODE"
+    prompt WHATSAPP_IMAGE "Docker image" "$WHATSAPP_IMAGE"
+    prompt PUBLIC_587 "Expose public 587/tcp for whatsapp.net/media yes/no" "$PUBLIC_587"
+    prompt LOCAL_TLS_PORT "Local WhatsApp TLS port for SNI mode" "$LOCAL_TLS_PORT"
+    prompt LOCAL_STATS_PORT "Local HAProxy stats port" "$LOCAL_STATS_PORT"
+    prompt ENABLE_DOCKER_LOGS "Enable Docker logs yes/no" "$ENABLE_DOCKER_LOGS"
+  fi
 
   validate_input
 
@@ -682,7 +886,22 @@ EOF
   select_mode
   save_resume_config
 
-  cat <<EOF
+  if is_ru; then
+    cat <<EOF
+
+План установки:
+  домен:           $PROXY_DOMAIN
+  публичный IPv4:  $SERVER_PUBLIC_IPV4
+  режим:           $SELECTED_MODE
+  Docker image:    $WHATSAPP_IMAGE
+  публичный 443/tcp: $([[ "$SELECTED_MODE" == "direct" ]] && echo "контейнер напрямую" || echo "существующий nginx SNI route")
+  публичный 587/tcp: $PUBLIC_587
+  локальный TLS:   127.0.0.1:$LOCAL_TLS_PORT
+  локальный stats: 127.0.0.1:$LOCAL_STATS_PORT
+  Docker-логи:     $ENABLE_DOCKER_LOGS
+EOF
+  else
+    cat <<EOF
 
 Install plan:
   domain:          $PROXY_DOMAIN
@@ -695,9 +914,21 @@ Install plan:
   local stats:     127.0.0.1:$LOCAL_STATS_PORT
   Docker logs:     $ENABLE_DOCKER_LOGS
 EOF
+  fi
 
   if [[ "$SELECTED_MODE" == "sni" ]]; then
-    cat <<EOF
+    if is_ru; then
+      cat <<EOF
+  nginx file:      $NGINX_STREAM_CONF
+
+SNI-режим выполнит:
+  - оставит текущий nginx 443 listener;
+  - сделает backup $NGINX_STREAM_CONF;
+  - добавит один map route: $PROXY_DOMAIN -> 127.0.0.1:$LOCAL_TLS_PORT;
+  - выполнит nginx -t перед reload и восстановит backup при ошибке.
+EOF
+    else
+      cat <<EOF
   nginx file:      $NGINX_STREAM_CONF
 
 SNI mode will:
@@ -706,9 +937,14 @@ SNI mode will:
   - add one map route: $PROXY_DOMAIN -> 127.0.0.1:$LOCAL_TLS_PORT;
   - run nginx -t before reload and restore backup on failure.
 EOF
+    fi
   fi
 
-  confirm "Type y/yes/да to continue: " || die "Cancelled."
+  if is_ru; then
+    confirm "Введите y/yes/да для продолжения: " || die "Cancelled."
+  else
+    confirm "Type y/yes/да to continue: " || die "Cancelled."
+  fi
 
   run_step "backup" "Backup current state" backup_current_state
   save_resume_config

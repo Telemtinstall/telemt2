@@ -13,6 +13,8 @@
 - Improved WhatsApp proxy nginx stream detection for alternate Telemt config names and blocked reuse of an already-routed Telemt SNI domain.
 - Made WhatsApp proxy DNS and port/mode preflight run on every resume so changing the domain cannot reuse stale checks.
 - Improved WhatsApp proxy final verification with retries for HAProxy stats and SNI certificate checks.
+- Added `-lang ru` / `-lang en` and `-update` options to the WhatsApp proxy installer.
+- Added explicit WhatsApp connection details to the final installer output: host/server, `443/tcp`, and optional media `587/tcp`.
 
 ## 2026-05-22
 

@@ -68,7 +68,7 @@ EN: Default. If `443/tcp` is free, selects `direct`. If `443/tcp` is busy and a 
 ```bash
 wget -O /root/install_whatsapp_proxy.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/proxy/whatsapp/install_whatsapp_proxy.sh
 chmod +x /root/install_whatsapp_proxy.sh
-/root/install_whatsapp_proxy.sh
+/root/install_whatsapp_proxy.sh -lang ru
 ```
 
 Or with `curl`:
@@ -76,7 +76,7 @@ Or with `curl`:
 ```bash
 curl -fsSL -o /root/install_whatsapp_proxy.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/proxy/whatsapp/install_whatsapp_proxy.sh
 chmod +x /root/install_whatsapp_proxy.sh
-/root/install_whatsapp_proxy.sh
+/root/install_whatsapp_proxy.sh -lang ru
 ```
 
 Download this directory with `git`:
@@ -87,7 +87,29 @@ cd /tmp/telemt2
 git sparse-checkout set proxy/whatsapp
 cd proxy/whatsapp
 chmod +x ./install_whatsapp_proxy.sh
-./install_whatsapp_proxy.sh
+./install_whatsapp_proxy.sh -lang ru
+```
+
+## Update / Обновление
+
+RU: Режим обновления не меняет nginx/SNI-route, домен, локальные порты и существующий compose. Он берёт текущие настройки из `/opt/whatsapp-proxy/docker-compose.yml` и `/opt/whatsapp-proxy/whatsapp-proxy.env`, тянет свежий Docker image и пересоздаёт контейнер.
+
+EN: Update mode does not change nginx/SNI routing, domain, local ports, or the existing compose layout. It reads current settings from `/opt/whatsapp-proxy/docker-compose.yml` and `/opt/whatsapp-proxy/whatsapp-proxy.env`, pulls the current Docker image, and recreates the container.
+
+```bash
+curl -fsSL -o /root/install_whatsapp_proxy.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/proxy/whatsapp/install_whatsapp_proxy.sh
+chmod +x /root/install_whatsapp_proxy.sh
+/root/install_whatsapp_proxy.sh -update -lang ru
+```
+
+## Options / Опции
+
+```text
+-lang ru          Русский режим интерфейса.
+-lang en          English interface.
+-update           Update existing Docker container only.
+-y                Assume yes where possible.
+-h, --help        Show help.
 ```
 
 ## Questions / Вопросы Установщика
@@ -142,6 +164,7 @@ RU:
 - Нельзя безопасно посадить второй сервис на уже занятый `443/tcp`, если 443 держит не nginx stream или если нельзя маршрутизировать по SNI.
 - Если скрипт не нашёл знакомый Telemt nginx stream-map, он не будет править nginx автоматически.
 - После установки в WhatsApp нужно указать только домен прокси.
+- В конце установки скрипт показывает, как подключиться: host/server, основной порт `443/tcp` и media-порт `587/tcp`, если он включён.
 
 EN:
 
@@ -149,3 +172,4 @@ EN:
 - You cannot safely place a second service on an already occupied `443/tcp` unless 443 is owned by nginx stream or can be routed by SNI.
 - If the script cannot find a known Telemt nginx stream map, it will not edit nginx automatically.
 - After installation, enter only the proxy domain in WhatsApp.
+- At the end, the installer prints connection details: host/server, main port `443/tcp`, and media port `587/tcp` if enabled.
