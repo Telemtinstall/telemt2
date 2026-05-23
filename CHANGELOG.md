@@ -15,6 +15,7 @@
 - Improved WhatsApp proxy final verification with retries for HAProxy stats and SNI certificate checks.
 - Added `-lang ru` / `-lang en` and `-update` options to the WhatsApp proxy installer.
 - Added explicit WhatsApp connection details to the final installer output: host/server, `443/tcp`, and optional media `587/tcp`.
+- Expanded WhatsApp proxy documentation with clean-server/Telemt-nginx requirements, SNI routing scheme, and detailed installer prompt explanations.
 
 ## 2026-05-22
 

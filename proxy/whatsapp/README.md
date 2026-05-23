@@ -9,6 +9,52 @@ Source:
 - Official repository: `https://github.com/WhatsApp/proxy`
 - Official image: `facebook/whatsapp_proxy:latest`
 
+## Server Requirements / Требования К Серверу
+
+RU:
+
+- Рекомендуемый вариант: чистый Debian/Ubuntu VPS без чужих сайтов, панелей и занятых портов.
+- Допустимый вариант: сервер, где уже установлен Telemt и внешний `443/tcp` уже обслуживает nginx `stream` с SNI-routing.
+- Не запускайте на сервере, где `443/tcp` занят Apache/Caddy/панелью/другим Docker-контейнером без nginx stream: скрипт остановится, чтобы не сломать существующие сайты.
+- Для режима `sni` нужен отдельный домен для WhatsApp proxy, например `<WHATSAPP_PROXY_DOMAIN>`. Нельзя использовать тот же домен, который уже ведёт на Telemt.
+- Для домена WhatsApp proxy должна быть A-запись на IPv4 этого сервера. Скрипт проверяет DNS до изменения nginx.
+- `587/tcp` желательно оставить свободным и открытым снаружи: он используется как дополнительный публичный порт для `whatsapp.net/media`.
+
+EN:
+
+- Recommended: a clean Debian/Ubuntu VPS without existing websites, control panels, or occupied ports.
+- Supported: a server where Telemt is already installed and public `443/tcp` is already handled by nginx `stream` with SNI routing.
+- Do not run it on a server where `443/tcp` is owned by Apache/Caddy/a hosting panel/another Docker container without nginx stream. The installer will stop to avoid breaking existing sites.
+- `sni` mode needs a separate WhatsApp proxy domain, for example `<WHATSAPP_PROXY_DOMAIN>`. Do not reuse the domain that already routes to Telemt.
+- The WhatsApp proxy domain must have an A record pointing to this server IPv4. The installer checks DNS before changing nginx.
+- `587/tcp` should preferably be free and reachable from the internet: it is used as an additional public port for `whatsapp.net/media`.
+
+## How One 443 Port Is Shared / Как Делится Один 443 Порт
+
+RU: Если на сервере уже есть Telemt через nginx stream, WhatsApp proxy добавляется как отдельный SNI backend. nginx не расшифровывает TLS, а только читает имя домена из TLS ClientHello и направляет TCP-поток в нужный локальный сервис.
+
+EN: If Telemt already runs behind nginx stream, WhatsApp proxy is added as a separate SNI backend. nginx does not decrypt TLS; it only reads the domain name from the TLS ClientHello and routes the TCP stream to the correct local service.
+
+```text
+Internet
+  |
+  | TCP 443
+  v
+nginx stream listens on 0.0.0.0:443
+  |
+  | reads SNI from TLS ClientHello
+  |
+  +-- SNI = <TELEMT_DOMAIN>           -> 127.0.0.1:1443  -> Telemt
+  |
+  +-- SNI = <WHATSAPP_PROXY_DOMAIN>   -> 127.0.0.1:18443 -> WhatsApp proxy
+  |
+  +-- any other SNI/default           -> 127.0.0.1:8443  -> camouflage site
+```
+
+RU: Один и тот же SNI-домен нельзя направить одновременно в Telemt и WhatsApp proxy. Поэтому для WhatsApp proxy нужен отдельный домен или поддомен.
+
+EN: The same SNI domain cannot route to Telemt and WhatsApp proxy at the same time. Use a separate domain or subdomain for WhatsApp proxy.
+
 ## What It Does / Что Делает
 
 RU:
@@ -116,45 +162,89 @@ chmod +x /root/install_whatsapp_proxy.sh
 
 `WhatsApp proxy domain`
 
-RU: Домен, который будет введён в WhatsApp как proxy host. У домена должна быть A-запись на IPv4 этого сервера.
+RU: Домен, который будет введён в WhatsApp как proxy host. У домена должна быть A-запись на IPv4 этого сервера. Если на сервере уже работает Telemt, укажите отдельный домен, например `<WHATSAPP_PROXY_DOMAIN>`, а не домен Telemt. Если A-записи нет или она указывает на другой IP, установка остановится до изменения nginx.
 
-EN: Domain that will be entered in WhatsApp as the proxy host. It must have an A record pointing to this server IPv4.
+EN: Domain that will be entered in WhatsApp as the proxy host. It must have an A record pointing to this server IPv4. If Telemt already runs on the server, use a separate domain such as `<WHATSAPP_PROXY_DOMAIN>`, not the Telemt domain. If the A record is missing or points elsewhere, installation stops before nginx changes.
 
 `Install mode: auto/direct/sni`
 
-RU: Обычно оставьте `auto`. `direct` требует свободный `443/tcp`. `sni` нужен, если `443/tcp` уже занят nginx stream от Telemt.
+RU: Обычно оставьте `auto`.
 
-EN: Usually keep `auto`. `direct` requires free `443/tcp`. `sni` is for an existing Telemt nginx stream on `443/tcp`.
+- `auto`: скрипт сам выбирает режим. Если `443/tcp` свободен, будет `direct`; если `443/tcp` занят nginx stream от Telemt, предложит `sni`; если безопасно встроиться нельзя, остановится.
+- `direct`: использовать только на чистом сервере со свободным `443/tcp`. Контейнер WhatsApp proxy будет слушать публичный `443/tcp` напрямую.
+- `sni`: использовать, если `443/tcp` уже занят nginx stream от Telemt. Скрипт добавит один route `<WHATSAPP_PROXY_DOMAIN> -> 127.0.0.1:18443` после backup и `nginx -t`.
+
+EN: Usually keep `auto`.
+
+- `auto`: the installer chooses automatically. If `443/tcp` is free it uses `direct`; if `443/tcp` is owned by a Telemt nginx stream it offers `sni`; if safe integration is not possible it stops.
+- `direct`: use only on a clean server with free `443/tcp`. The WhatsApp proxy container binds public `443/tcp` directly.
+- `sni`: use when `443/tcp` is already owned by the Telemt nginx stream. The installer adds one route `<WHATSAPP_PROXY_DOMAIN> -> 127.0.0.1:18443` after backup and `nginx -t`.
 
 `Docker image`
 
-RU: По умолчанию `facebook/whatsapp_proxy:latest`.
+RU: По умолчанию `facebook/whatsapp_proxy:latest`. Обычно нажмите Enter. Менять стоит только если вы сознательно используете другой официальный tag/image.
 
-EN: Default is `facebook/whatsapp_proxy:latest`.
+EN: Default is `facebook/whatsapp_proxy:latest`. Usually press Enter. Change it only if you intentionally use another official tag/image.
 
 `Expose public 587/tcp for whatsapp.net/media yes/no`
 
-RU: Рекомендуется `yes`, если порт свободен. Официальная документация указывает `443` и `587` как минимальный публичный набор для сообщений и media.
+RU: Рекомендуется `yes`, если порт свободен. Скрипт опубликует `0.0.0.0:587 -> container:587`. Если порт занят, скрипт предложит отключить публикацию `587` и продолжить, но media может работать хуже или не работать.
 
-EN: Recommended `yes` if the port is free. Official docs mention `443` and `587` as the minimal public set for messages and media.
+EN: Recommended `yes` if the port is free. The installer publishes `0.0.0.0:587 -> container:587`. If the port is busy, it offers to disable public `587` and continue, but media may work worse or fail.
 
 `Local WhatsApp TLS port for SNI mode`
 
-RU: Локальный порт контейнера для SNI-режима, по умолчанию `18443`. Наружу он не открывается.
+RU: Локальный порт контейнера для SNI-режима, по умолчанию `18443`. Наружу он не открывается. nginx stream будет направлять `<WHATSAPP_PROXY_DOMAIN>` на `127.0.0.1:18443`. Обычно нажмите Enter.
 
-EN: Local container port for SNI mode, default `18443`. It is not exposed publicly.
+EN: Local container port for SNI mode, default `18443`. It is not exposed publicly. nginx stream routes `<WHATSAPP_PROXY_DOMAIN>` to `127.0.0.1:18443`. Usually press Enter.
 
 `Local HAProxy stats port`
 
-RU: Локальная статистика HAProxy, по умолчанию `18199`. Открывается только на `127.0.0.1`.
+RU: Локальная статистика HAProxy, по умолчанию `18199`. Открывается только на `127.0.0.1`, наружу не публикуется. Обычно нажмите Enter.
 
-EN: Local HAProxy stats, default `18199`. Bound only to `127.0.0.1`.
+EN: Local HAProxy stats, default `18199`. Bound only to `127.0.0.1`, not exposed publicly. Usually press Enter.
 
 `Enable Docker logs yes/no`
 
-RU: По умолчанию `no`, чтобы не писать журналы соединений и не забивать диск. Если нужно отлаживать, выберите `yes`.
+RU: По умолчанию `no`, чтобы не писать журналы соединений и не забивать диск. Если нужно временно отлаживать контейнер через `docker logs`, выберите `yes`. Для приватности и экономии диска оставьте `no`.
 
-EN: Default is `no` to avoid connection logs and disk growth. Choose `yes` for debugging.
+EN: Default is `no` to avoid connection logs and disk growth. Choose `yes` only if you need temporary debugging with `docker logs`. For privacy and disk safety, keep `no`.
+
+After the questions / После вопросов:
+
+RU:
+
+- скрипт показывает план установки;
+- если выбран SNI-режим, показывает nginx-файл, который будет изменён;
+- просит подтвердить `y`, `yes` или `да`;
+- делает backup;
+- пишет Docker Compose;
+- при необходимости добавляет SNI-route;
+- запускает контейнер;
+- в конце выводит данные подключения:
+
+```text
+Proxy host / Server: <WHATSAPP_PROXY_DOMAIN>
+Main port:           443/tcp
+Media port:          587/tcp
+```
+
+EN:
+
+- the installer prints the installation plan;
+- in SNI mode it prints the nginx file that will be edited;
+- asks for `y`, `yes`, or `да` confirmation;
+- creates a backup;
+- writes Docker Compose;
+- adds the SNI route if needed;
+- starts the container;
+- prints final connection details:
+
+```text
+Proxy host / Server: <WHATSAPP_PROXY_DOMAIN>
+Main port:           443/tcp
+Media port:          587/tcp
+```
 
 ## Notes / Важно
 
