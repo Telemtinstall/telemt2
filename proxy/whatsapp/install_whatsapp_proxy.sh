@@ -573,24 +573,55 @@ start_proxy() {
 }
 
 verify_install() {
+  local attempt cert_output health_status
+
   echo "Listening sockets:"
   ss -ltnp | awk '$4 ~ /:(443|587|8199|18199|18443)$/ || $4 ~ /127.0.0.1:'"${LOCAL_TLS_PORT}"'$/ || $4 ~ /127.0.0.1:'"${LOCAL_STATS_PORT}"'$/ {print}' || true
 
   echo
   echo "Container:"
   docker ps --filter "name=${CONTAINER_NAME}" --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+  health_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+  [[ -n "$health_status" ]] && echo "health=${health_status}"
 
   echo
   echo "Local stats check:"
-  curl -fsS --max-time 5 "http://127.0.0.1:${LOCAL_STATS_PORT}/" >/dev/null &&
-    echo "OK: HAProxy stats is reachable on 127.0.0.1:${LOCAL_STATS_PORT}" ||
-    echo "WARN: stats page is not reachable yet. Check: docker logs ${CONTAINER_NAME}"
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if curl -fsS --max-time 5 "http://127.0.0.1:${LOCAL_STATS_PORT}/" >/dev/null; then
+      echo "OK: HAProxy stats is reachable on 127.0.0.1:${LOCAL_STATS_PORT}"
+      break
+    fi
+    sleep 2
+  done
+  if (( attempt == 10 )); then
+    echo "WARN: stats page is not reachable yet."
+    if [[ "$ENABLE_DOCKER_LOGS" == "yes" ]]; then
+      echo "Check: docker logs ${CONTAINER_NAME}"
+    else
+      echo "Docker logs are disabled by installer choice; temporarily enable logs for deeper debugging."
+    fi
+  fi
 
   if [[ "$SELECTED_MODE" == "sni" ]]; then
     echo
     echo "SNI check:"
-    timeout 8 openssl s_client -connect "127.0.0.1:443" -servername "$PROXY_DOMAIN" </dev/null 2>/dev/null |
-      openssl x509 -noout -subject -issuer 2>/dev/null || echo "WARN: openssl SNI check did not return a certificate."
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+      cert_output="$(
+        echo |
+          timeout 8 openssl s_client -connect "127.0.0.1:443" -servername "$PROXY_DOMAIN" 2>/dev/null |
+          openssl x509 -noout -subject -issuer -ext subjectAltName 2>/dev/null || true
+      )"
+      if printf '%s\n' "$cert_output" | grep -Fq "DNS:${PROXY_DOMAIN}"; then
+        printf '%s\n' "$cert_output"
+        echo "OK: nginx SNI routes ${PROXY_DOMAIN} to WhatsApp proxy."
+        break
+      fi
+      sleep 2
+    done
+    if (( attempt == 10 )); then
+      [[ -n "$cert_output" ]] && printf '%s\n' "$cert_output"
+      echo "WARN: SNI check did not return a certificate containing DNS:${PROXY_DOMAIN}."
+    fi
   fi
 }
 
