@@ -5,6 +5,7 @@
 ### Changed
 
 - Removed HTTP/2 from generated Telemt nginx mask-site listeners for Debian/Ubuntu, Astra Linux, and AlmaLinux compatibility. The mask site only needs plain HTTPS; Telemt traffic still goes through nginx stream SNI routing.
+- Added `--fix-nginx` / `-fix` emergency mode for Debian/Ubuntu, Astra Linux, and AlmaLinux Telemt installers. It backs up changed nginx files, removes only incompatible `http2` directives, runs `nginx -t`, and reloads nginx without touching Telemt secrets, Docker, certificates, or users.
 
 ## 2026-05-23
 

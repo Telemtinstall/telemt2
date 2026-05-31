@@ -248,6 +248,36 @@ EN: If Docker compose uses a digest-pinned image such as `image@sha256:...`, pla
 TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt.sh --update -lang ru
 ```
 
+## Telemt Nginx Fix Mode / Ремонт Nginx
+
+RU: Если после обновления nginx падает с ошибкой `unknown directive "http2"` и `nginx -t` не проходит, используйте аварийный режим. Он чинит только nginx-конфиги: делает бэкап измененных файлов, удаляет несовместимые строки `http2 on;` и `listen ... http2;`, затем запускает `nginx -t` и reload. Telemt-секреты, пользователи, Docker, сертификаты и `telemt.toml` не трогаются.
+
+EN: If nginx fails after an update with `unknown directive "http2"` and `nginx -t` does not pass, use emergency fix mode. It repairs only nginx configs: backs up changed files, removes incompatible `http2 on;` and `listen ... http2;` syntax, then runs `nginx -t` and reloads nginx. Telemt secrets, users, Docker, certificates, and `telemt.toml` are not touched.
+
+Debian 13 / Ubuntu:
+
+```bash
+wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
+chmod +x /root/install_telemt.sh
+/root/install_telemt.sh --fix-nginx -lang ru
+```
+
+Astra Linux:
+
+```bash
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+chmod +x /root/install_telemt_astra.sh
+/root/install_telemt_astra.sh --fix-nginx -lang ru
+```
+
+AlmaLinux:
+
+```bash
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+/root/install_telemt_alma.sh --fix-nginx -lang ru
+```
+
 ## Telemt Installer Questions / Вопросы Установщика Telemt
 
 RU: При обычной установке одиночный Telemt-установщик спрашивает:

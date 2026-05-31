@@ -23,6 +23,7 @@ ASSUME_YES="${ASSUME_YES:-0}"
 SCRIPT_LANG="${SCRIPT_LANG:-en}"
 SCRIPT_LANG_FROM_CLI=0
 UPDATE_MODE="${UPDATE_MODE:-0}"
+FIX_NGINX_MODE="${FIX_NGINX_MODE:-0}"
 BACKUP_ROOT="/root/telemt-install-backups"
 STATE_FILE="/root/.install_telemt.state"
 RESUME_CONFIG="/root/.install_telemt.config"
@@ -134,16 +135,20 @@ is_ru() {
 usage() {
   cat <<'EOF'
 Usage:
-  install_telemt.sh [--update] [-lang ru|en]
+  install_telemt.sh [--update] [--fix-nginx] [-lang ru|en]
 
 Examples:
   ./install_telemt.sh
   ./install_telemt.sh -lang ru
   ./install_telemt.sh --update -lang ru
+  ./install_telemt.sh --fix-nginx -lang ru
 
 Options:
   -update, --update  Update Telemt container/image and restart it while preserving
                      telemt.toml, secrets, proxy links, nginx and SSH settings.
+  -fix, --fix-nginx  Repair nginx configs after an incompatible HTTP/2 syntax error.
+                     It backs up /etc/nginx, removes only "http2 on;" and
+                     "listen ... http2;" forms, then runs nginx -t and reloads nginx.
   -lang, --lang      Installer language selector: ru or en.
   -h, --help         Show this help.
 EOF
@@ -155,6 +160,9 @@ parse_args() {
     case "$1" in
       -update|--update|update)
         UPDATE_MODE=1
+        ;;
+      -fix|--fix|--fix-nginx|--fix-http2|fix)
+        FIX_NGINX_MODE=1
         ;;
       -lang|--lang)
         shift
@@ -336,6 +344,66 @@ write_file_root() {
   cat > "$path"
   chown "$owner" "$path"
   chmod "$mode" "$path"
+}
+
+run_fix_nginx_mode() {
+  local backup_dir changed file
+  have nginx || die "nginx is not installed."
+  backup_dir="${BACKUP_ROOT}/nginx-http2-fix-$(date +%Y%m%d-%H%M%S)"
+  install -d -m 0700 "$backup_dir"
+
+  if is_ru; then
+    echo "Режим fix: чиню только nginx-конфиги. Telemt, секреты, Docker и сертификаты не трогаю."
+    echo "Бэкап измененных файлов: $backup_dir"
+  else
+    echo "Fix mode: repairing nginx configs only. Telemt, secrets, Docker, and certificates are not touched."
+    echo "Changed-file backup: $backup_dir"
+  fi
+
+  echo
+  echo "nginx -t before fix:"
+  nginx -t 2>&1 || true
+
+  changed=0
+  while IFS= read -r -d '' file; do
+    [[ -f "$file" ]] || continue
+    if grep -Eq '^[[:space:]]*http2[[:space:]]+on[[:space:]]*;|^[[:space:]]*listen[[:space:]][^;]*[[:space:]]http2([[:space:]]|;)' "$file"; then
+      install -d -m 0700 "$backup_dir$(dirname "$file")"
+      cp -a "$file" "$backup_dir$file"
+      sed -i \
+        -e '/^[[:space:]]*http2[[:space:]][[:space:]]*on[[:space:]]*;/d' \
+        -e 's/[[:space:]]http2[[:space:]]*;/;/' \
+        -e 's/[[:space:]]http2[[:space:]][[:space:]]*/ /g' \
+        "$file"
+      echo "fixed: $file"
+      changed=1
+    fi
+  done < <(find /etc/nginx -type f \( -name '*.conf' -o -path '/etc/nginx/sites-available/*' -o -path '/etc/nginx/sites-enabled/*' -o -path '/etc/nginx/modules-enabled/*' \) -print0 2>/dev/null)
+
+  if [[ "$changed" == "0" ]]; then
+    if is_ru; then
+      echo "Несовместимых директив http2 не найдено."
+    else
+      echo "No incompatible http2 directives were found."
+    fi
+  fi
+
+  echo
+  echo "nginx -t after fix:"
+  if nginx -t; then
+    systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
+    if is_ru; then
+      echo "Готово: nginx config валиден."
+    else
+      echo "Done: nginx config is valid."
+    fi
+  else
+    if is_ru; then
+      die "nginx все еще не проходит проверку. Смотри ошибку выше. Бэкап измененных файлов: $backup_dir"
+    else
+      die "nginx still fails validation. See the error above. Changed-file backup: $backup_dir"
+    fi
+  fi
 }
 
 backup_path() {
@@ -759,6 +827,11 @@ fi
 
 if [[ "$UPDATE_MODE" == "1" ]]; then
   run_update_mode
+  exit 0
+fi
+
+if [[ "$FIX_NGINX_MODE" == "1" ]]; then
+  run_fix_nginx_mode
   exit 0
 fi
 
