@@ -1374,45 +1374,166 @@ if step_done nginx_config && nginx_http_redirect_current; then
 else
   step "Configure nginx mask site and SNI routing"
   ensure_https_frontdoor_available
+  mask_site_started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   install -d -m 0755 /etc/nginx/conf.d /etc/nginx/stream-conf.d
   install -d -m 0755 /var/www/"$PUBLIC_HOST"
   write_file_root /var/www/"$PUBLIC_HOST"/index.html 0644 root:root <<EOF
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${PUBLIC_HOST}</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f6f7f9; color: #1d2733; }
-    main { min-height: 100vh; display: grid; place-items: center; padding: 32px; box-sizing: border-box; }
-    section { width: min(720px, 100%); }
-    h1 { margin: 0 0 14px; font-size: clamp(32px, 6vw, 56px); font-weight: 650; letter-spacing: 0; }
-    p { margin: 0 0 18px; font-size: 18px; line-height: 1.55; color: #52606d; }
-    .meta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; font-size: 14px; color: #6b7785; }
-    .meta span { border: 1px solid #d9dee5; border-radius: 6px; padding: 8px 10px; background: #fff; }
-    @media (prefers-color-scheme: dark) {
-      body { background: #11161c; color: #edf2f7; }
-      p { color: #a9b4c0; }
-      .meta { color: #9aa7b4; }
-      .meta span { background: #171f28; border-color: #2a3542; }
+    :root {
+      color-scheme: dark;
+      --bg: #202020;
+      --panel: #f4f4f1;
+      --text: #f7f7f5;
+      --muted: #b9b9b4;
+      --ink: #2a2a2a;
+      --accent: #8fd3ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 78% 32%, rgba(143,211,255,.08), transparent 28%),
+        linear-gradient(135deg, #242424 0%, var(--bg) 100%);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 40px 22px;
+    }
+    main {
+      width: min(980px, 100%);
+      display: grid;
+      gap: 56px;
+    }
+    .domain {
+      color: var(--muted);
+      font-size: 15px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 56px;
+      align-items: center;
+    }
+    h1 {
+      font-size: clamp(44px, 8vw, 86px);
+      line-height: .92;
+      margin: 0 0 20px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .timer-label {
+      margin: 34px 0 14px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .timer {
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 28px 30px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(80px, 1fr));
+      gap: 18px;
+      width: min(650px, 100%);
+      box-shadow: 0 24px 60px rgba(0,0,0,.26);
+    }
+    .num {
+      display: block;
+      font-size: clamp(34px, 6vw, 58px);
+      font-weight: 300;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .unit {
+      display: block;
+      margin-top: 10px;
+      color: #676761;
+      font-size: 11px;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+    }
+    .machine {
+      position: relative;
+      width: 240px;
+      height: 240px;
+      border: 13px solid rgba(255,255,255,.22);
+      border-radius: 50%;
+    }
+    .machine:before {
+      content: "";
+      position: absolute;
+      inset: 42px;
+      border: 13px solid rgba(255,255,255,.19);
+      border-left-color: transparent;
+      border-radius: 50%;
+      animation: spin 14s linear infinite;
+    }
+    .machine:after {
+      content: "";
+      position: absolute;
+      width: 170px;
+      height: 92px;
+      right: -54px;
+      bottom: 8px;
+      border: 13px solid rgba(255,255,255,.22);
+      border-radius: 18px;
+      background:
+        linear-gradient(rgba(255,255,255,.22), rgba(255,255,255,.22)) 24px 24px / 118px 10px no-repeat,
+        linear-gradient(rgba(255,255,255,.22), rgba(255,255,255,.22)) 24px 52px / 118px 10px no-repeat;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 760px) {
+      main { gap: 34px; }
+      .hero { grid-template-columns: 1fr; gap: 28px; }
+      .machine { display: none; }
+      .timer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
 <body>
   <main>
-    <section>
-      <h1>${PUBLIC_HOST}</h1>
-      <p>Digital infrastructure, network diagnostics, and private systems maintenance.</p>
-      <p>For service requests, scheduled access, or operational questions, contact your project administrator.</p>
-      <div class="meta">
-        <span>${PUBLIC_HOST}</span>
-        <span>HTTPS enabled</span>
-        <span>2026</span>
+    <div class="domain">${PUBLIC_HOST}</div>
+    <section class="hero" aria-label="Статус сайта">
+      <div>
+        <h1>Сайт уже работает</h1>
+        <div class="timer-label">Работает с момента установки:</div>
+        <div class="timer" aria-live="polite">
+          <div><span class="num" id="days">0</span><span class="unit">дней</span></div>
+          <div><span class="num" id="hours">00</span><span class="unit">часов</span></div>
+          <div><span class="num" id="minutes">00</span><span class="unit">минут</span></div>
+          <div><span class="num" id="seconds">00</span><span class="unit">секунд</span></div>
+        </div>
       </div>
+      <div class="machine" aria-hidden="true"></div>
     </section>
   </main>
+  <script>
+    const startedAt = new Date("${mask_site_started_at}");
+    const pad = function(value) { return String(value).padStart(2, "0"); };
+    function updateTimer() {
+      const diff = Math.max(0, Date.now() - startedAt.getTime());
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor(totalSeconds % 86400 / 3600);
+      const minutes = Math.floor(totalSeconds % 3600 / 60);
+      const seconds = totalSeconds % 60;
+      document.getElementById("days").textContent = String(days);
+      document.getElementById("hours").textContent = pad(hours);
+      document.getElementById("minutes").textContent = pad(minutes);
+      document.getElementById("seconds").textContent = pad(seconds);
+    }
+    updateTimer();
+    setInterval(updateTimer, 1000);
+  </script>
 </body>
 </html>
 EOF
