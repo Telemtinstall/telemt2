@@ -457,10 +457,17 @@ run_fix_nginx_mode() {
   if [[ -f /opt/telemt-config/docker-compose.yml ]]; then
     if (cd /opt/telemt-config && compose_cmd config >/dev/null); then
       echo "OK: docker compose config"
-      if (cd /opt/telemt-config && compose_cmd up -d >/dev/null); then
-        echo "OK: Telemt container started/reconciled"
+      if docker inspect telemt >/dev/null 2>&1; then
+        if docker start telemt >/dev/null 2>&1; then
+          echo "OK: existing Telemt container started"
+        else
+          echo "WARN: docker start telemt failed"
+          doctor_failed=1
+        fi
+      elif (cd /opt/telemt-config && COMPOSE_INTERACTIVE_NO_CLI=1 compose_cmd up -d --no-recreate >/dev/null); then
+        echo "OK: Telemt container created and started"
       else
-        echo "WARN: docker compose up -d failed in /opt/telemt-config"
+        echo "WARN: docker compose up -d --no-recreate failed in /opt/telemt-config"
         doctor_failed=1
       fi
     else
