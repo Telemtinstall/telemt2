@@ -347,7 +347,8 @@ write_file_root() {
 }
 
 run_fix_nginx_mode() {
-  local backup_dir changed file doctor_failed
+  local backup_dir changed file doctor_failed canonical_stream keep_stream
+  local -a stream_files
   doctor_failed=0
   have nginx || die "nginx is not installed."
   backup_dir="${BACKUP_ROOT}/nginx-http2-fix-$(date +%Y%m%d-%H%M%S)"
@@ -380,6 +381,37 @@ run_fix_nginx_mode() {
       changed=1
     fi
   done < <(find /etc/nginx -type f \( -name '*.conf' -o -path '/etc/nginx/sites-available/*' -o -path '/etc/nginx/sites-enabled/*' -o -path '/etc/nginx/modules-enabled/*' \) -print0 2>/dev/null)
+
+  canonical_stream="/etc/nginx/modules-enabled/60-stream-sni.conf"
+  keep_stream=""
+  stream_files=()
+  while IFS= read -r -d '' file; do
+    [[ -f "$file" ]] || continue
+    if grep -Eq '^[[:space:]]*stream[[:space:]]*\{' "$file"; then
+      stream_files+=("$file")
+      [[ -z "$keep_stream" ]] && keep_stream="$file"
+    fi
+  done < <(find /etc/nginx -type f \( -name '*.conf' -o -path '/etc/nginx/sites-available/*' -o -path '/etc/nginx/sites-enabled/*' -o -path '/etc/nginx/modules-enabled/*' \) -print0 2>/dev/null)
+
+  if (( ${#stream_files[@]} > 1 )); then
+    if [[ -f "$canonical_stream" ]] && grep -Eq '^[[:space:]]*stream[[:space:]]*\{' "$canonical_stream"; then
+      keep_stream="$canonical_stream"
+    fi
+    echo "Found duplicate nginx stream blocks. Keeping: $keep_stream"
+    for file in "${stream_files[@]}"; do
+      [[ "$file" == "$keep_stream" ]] && continue
+      if [[ "$file" == "/etc/nginx/nginx.conf" ]]; then
+        echo "WARN: duplicate stream block is inside /etc/nginx/nginx.conf; not disabling it automatically"
+        doctor_failed=1
+        continue
+      fi
+      install -d -m 0700 "$backup_dir$(dirname "$file")"
+      cp -a "$file" "$backup_dir$file"
+      rm -f "$file"
+      echo "disabled duplicate stream file: $file"
+      changed=1
+    done
+  fi
 
   if [[ "$changed" == "0" ]]; then
     if is_ru; then
