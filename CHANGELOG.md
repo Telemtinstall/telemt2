@@ -8,6 +8,7 @@
 - Added `--fix-nginx` / `-fix` emergency doctor mode for Debian/Ubuntu, Astra Linux, and AlmaLinux Telemt installers. It backs up changed nginx files, removes only incompatible `http2` directives, runs `nginx -t`, checks Docker/Compose, starts/reconciles the Telemt container, verifies `telemt.toml`, local API, certbot timer, and listening ports without changing Telemt secrets, users, or certificates.
 - The same doctor mode now detects duplicate top-level nginx `stream {}` files, keeps the installer-managed Telemt stream config, backs up and disables the extra stream files, then reruns `nginx -t`.
 - Doctor mode no longer asks Docker Compose to recreate an existing Telemt container. It uses `docker start telemt` when the container already exists, avoiding the Compose v1 "image has been removed, volume data could be lost" prompt.
+- Normal installer mode now refuses to run over an existing installation unless `RESET_INSTALL_STATE=1` is explicitly set. Existing installs should use `--update` or `--fix-nginx`.
 
 ## 2026-05-23
 

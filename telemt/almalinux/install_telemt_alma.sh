@@ -995,6 +995,49 @@ if [[ "$FIX_NGINX_MODE" == "1" ]]; then
   exit 0
 fi
 
+if [[ "${RESET_INSTALL_STATE:-0}" != "1" ]] && {
+  [[ -f /opt/telemt-config/telemt.toml ]] ||
+  [[ -f /opt/telemt-config/docker-compose.yml ]] ||
+  [[ -f /root/telemt-secret.env ]] ||
+  [[ -f "$RESUME_CONFIG" ]] ||
+  docker inspect telemt >/dev/null 2>&1
+}; then
+  if is_ru; then
+    cat >&2 <<'EOF'
+ОШИБКА: найдена существующая установка Telemt.
+
+Обычный запуск установщика предназначен для чистого сервера и остановлен,
+чтобы не повредить текущие nginx/Docker/Telemt настройки.
+
+Для безопасного обновления:
+  ./install_telemt_alma.sh --update -lang ru
+
+Для ремонта/диагностики:
+  ./install_telemt_alma.sh --fix-nginx -lang ru
+
+Для осознанной переустановки с нуля:
+  RESET_INSTALL_STATE=1 ./install_telemt_alma.sh -lang ru
+EOF
+  else
+    cat >&2 <<'EOF'
+ERROR: an existing Telemt installation was found.
+
+Normal installer mode is intended for a clean server and has been stopped
+to avoid damaging current nginx/Docker/Telemt settings.
+
+For a safe update:
+  ./install_telemt_alma.sh --update -lang en
+
+For repair/diagnostics:
+  ./install_telemt_alma.sh --fix-nginx -lang en
+
+For an intentional clean reinstall:
+  RESET_INSTALL_STATE=1 ./install_telemt_alma.sh -lang en
+EOF
+  fi
+  exit 1
+fi
+
 if [[ -z "$NGINX_ACTIVE_AT_START" ]]; then
   if systemctl is-active --quiet nginx 2>/dev/null; then
     NGINX_ACTIVE_AT_START=1

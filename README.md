@@ -254,6 +254,10 @@ RU: Если после обновления nginx падает с ошибко�
 
 EN: If nginx fails after an update with `unknown directive "http2"` or `stream directive is duplicate` and `nginx -t` does not pass, use emergency fix mode. It backs up changed nginx files, removes incompatible `http2 on;` and `listen ... http2;` syntax, and when duplicate top-level `stream {}` blocks are present it keeps the primary Telemt stream config and disables extra stream files. Then it runs `nginx -t` and reloads nginx. After that it checks Docker/Compose, starts the existing container through `docker start telemt` without recreate, verifies `telemt.toml`, the local API, `certbot.timer`, and listening ports. Telemt secrets, users, certificates, and `telemt.toml` contents are not rewritten.
 
+RU: Если установщик находит существующую установку, обычный запуск останавливается. Это защита от случайного запуска install-режима поверх живого сервера. Используйте `--update` для обновления или `--fix-nginx` для ремонта. Переустановка с нуля требует явного подтверждения через `RESET_INSTALL_STATE=1`.
+
+EN: If the installer finds an existing installation, normal mode stops. This protects live servers from accidentally running install mode again. Use `--update` for updates or `--fix-nginx` for repair. A clean reinstall requires explicit confirmation through `RESET_INSTALL_STATE=1`.
+
 Debian 13 / Ubuntu:
 
 ```bash
