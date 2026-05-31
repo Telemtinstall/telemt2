@@ -347,7 +347,8 @@ write_file_root() {
 }
 
 run_fix_nginx_mode() {
-  local backup_dir changed file
+  local backup_dir changed file doctor_failed
+  doctor_failed=0
   have nginx || die "nginx is not installed."
   backup_dir="${BACKUP_ROOT}/nginx-http2-fix-$(date +%Y%m%d-%H%M%S)"
   install -d -m 0700 "$backup_dir"
@@ -393,15 +394,97 @@ run_fix_nginx_mode() {
   if nginx -t; then
     systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
     if is_ru; then
-      echo "Готово: nginx config валиден."
+      echo "nginx config валиден."
     else
-      echo "Done: nginx config is valid."
+      echo "nginx config is valid."
     fi
   else
     if is_ru; then
       die "nginx все еще не проходит проверку. Смотри ошибку выше. Бэкап измененных файлов: $backup_dir"
     else
       die "nginx still fails validation. See the error above. Changed-file backup: $backup_dir"
+    fi
+  fi
+
+  echo
+  if is_ru; then
+    echo "Проверяю остальной стек Telemt без перезаписи секретов и конфигов."
+  else
+    echo "Checking the rest of the Telemt stack without rewriting secrets or configs."
+  fi
+
+  if have systemctl && systemctl list-unit-files docker.service >/dev/null 2>&1; then
+    if systemctl enable --now docker >/dev/null 2>&1; then
+      echo "OK: docker.service active/enabled"
+    else
+      echo "WARN: docker.service could not be started"
+      doctor_failed=1
+    fi
+  fi
+
+  if [[ -f /opt/telemt-config/docker-compose.yml ]]; then
+    if (cd /opt/telemt-config && compose_cmd config >/dev/null); then
+      echo "OK: docker compose config"
+      if (cd /opt/telemt-config && compose_cmd up -d >/dev/null); then
+        echo "OK: Telemt container started/reconciled"
+      else
+        echo "WARN: docker compose up -d failed in /opt/telemt-config"
+        doctor_failed=1
+      fi
+    else
+      echo "WARN: docker compose config failed in /opt/telemt-config"
+      doctor_failed=1
+    fi
+  else
+    echo "INFO: /opt/telemt-config/docker-compose.yml not found, skipping compose check"
+  fi
+
+  if [[ -f /opt/telemt-config/telemt.toml ]]; then
+    chmod 600 /opt/telemt-config/telemt.toml 2>/dev/null || true
+    chown 65532:65532 /opt/telemt-config/telemt.toml 2>/dev/null || true
+    if [[ -s /opt/telemt-config/telemt.toml ]]; then
+      echo "OK: /opt/telemt-config/telemt.toml exists"
+    else
+      echo "WARN: /opt/telemt-config/telemt.toml is empty"
+      doctor_failed=1
+    fi
+  else
+    echo "INFO: /opt/telemt-config/telemt.toml not found"
+  fi
+
+  if have curl && curl -fsS --max-time 3 http://127.0.0.1:9091/v1/users >/dev/null 2>&1; then
+    echo "OK: Telemt local API responds on 127.0.0.1:9091"
+  else
+    echo "WARN: Telemt local API did not respond on 127.0.0.1:9091"
+    doctor_failed=1
+  fi
+
+  if have systemctl && systemctl list-unit-files certbot.timer >/dev/null 2>&1; then
+    systemctl enable --now certbot.timer >/dev/null 2>&1 || true
+    if systemctl is-active --quiet certbot.timer; then
+      echo "OK: certbot.timer active"
+    else
+      echo "WARN: certbot.timer not active"
+      doctor_failed=1
+    fi
+  fi
+
+  if have ss; then
+    echo "Listening ports:"
+    ss -lntp 2>/dev/null | grep -E ':(80|443|8443|1443|9091)[[:space:]]' || true
+  fi
+
+  if [[ "$doctor_failed" == "0" ]]; then
+    if is_ru; then
+      echo "Готово: безопасный fix/doctor завершен."
+    else
+      echo "Done: safe fix/doctor completed."
+    fi
+  else
+    if is_ru; then
+      die "fix/doctor нашел проблемы, которые нельзя безопасно исправить автоматически. Смотри WARN выше."
+    else
+      die "fix/doctor found issues that cannot be safely repaired automatically. See WARN lines above."
     fi
   fi
 }
