@@ -1218,7 +1218,7 @@ server {
 }
 
 server {
-    listen 127.0.0.1:8443 ssl http2;
+    listen 127.0.0.1:8443 ssl;
     server_name ${PUBLIC_HOST};
     access_log off;
     error_log /var/log/nginx/${PUBLIC_HOST}.error.log crit;

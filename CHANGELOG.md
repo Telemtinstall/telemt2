@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-31
+
+### Changed
+
+- Removed HTTP/2 from generated Telemt nginx mask-site listeners for Debian/Ubuntu, Astra Linux, and AlmaLinux compatibility. The mask site only needs plain HTTPS; Telemt traffic still goes through nginx stream SNI routing.
+
 ## 2026-05-23
 
 ### Added
