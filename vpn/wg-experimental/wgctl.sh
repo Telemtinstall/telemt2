@@ -166,12 +166,57 @@ write_wstunnel_helper() {
   [[ -n "${WSTUNNEL_DOMAIN:-}" && -n "${WSTUNNEL_PATH:-}" ]] || return 0
 
   umask 077
-  cat > "$CLIENT_OUT_DIR/${name}-wstunnel-client.sh" <<EOF
+cat > "$CLIENT_OUT_DIR/${name}-wstunnel-client.sh" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
 # Run this on the client machine before starting WireGuard.
 # Then use ${CLIENT_OUT_DIR}/${name}.conf in WireGuard.
+
+resolve_remote_ipv4() {
+  local host="\$1"
+  if [[ "\$host" =~ ^([0-9]{1,3}\\.){3}[0-9]{1,3}$ ]]; then
+    printf '%s\n' "\$host"
+  elif command -v getent >/dev/null 2>&1; then
+    getent ahostsv4 "\$host" | awk '{print \$1; exit}'
+  elif command -v dig >/dev/null 2>&1; then
+    dig +short A "\$host" | awk 'NF {print; exit}'
+  elif command -v host >/dev/null 2>&1; then
+    host "\$host" | awk '/has address/ {print \$4; exit}'
+  fi
+}
+
+add_remote_host_route() {
+  local remote_ip default_line via dev gateway
+  remote_ip="\$(resolve_remote_ipv4 "${WSTUNNEL_DOMAIN}" || true)"
+  [[ -n "\$remote_ip" ]] || return 0
+
+  if command -v ip >/dev/null 2>&1; then
+    default_line="\$(ip -4 route show default | head -n 1 || true)"
+    via="\$(awk '{for (i=1;i<=NF;i++) if (\$i=="via") {print \$(i+1); exit}}' <<< "\$default_line")"
+    dev="\$(awk '{for (i=1;i<=NF;i++) if (\$i=="dev") {print \$(i+1); exit}}' <<< "\$default_line")"
+    [[ -n "\$dev" ]] || return 0
+    if [[ "\${EUID:-\$(id -u)}" -ne 0 ]]; then
+      echo "WARN: run this helper as root once to add route for ${WSTUNNEL_DOMAIN} and avoid WireGuard full-tunnel loop." >&2
+      return 0
+    fi
+    if [[ -n "\$via" ]]; then
+      ip route replace "\${remote_ip}/32" via "\$via" dev "\$dev" || true
+    else
+      ip route replace "\${remote_ip}/32" dev "\$dev" || true
+    fi
+  elif command -v route >/dev/null 2>&1; then
+    gateway="\$(route -n get default 2>/dev/null | awk '/gateway:/ {print \$2; exit}')"
+    [[ -n "\$gateway" ]] || return 0
+    if [[ "\${EUID:-\$(id -u)}" -ne 0 ]]; then
+      echo "WARN: run this helper with sudo once to add route for ${WSTUNNEL_DOMAIN} and avoid WireGuard full-tunnel loop." >&2
+      return 0
+    fi
+    route -n add -host "\$remote_ip" "\$gateway" 2>/dev/null || route -n change -host "\$remote_ip" "\$gateway" 2>/dev/null || true
+  fi
+}
+
+add_remote_host_route
 
 exec wstunnel client \\
   --tls-verify-certificate \\

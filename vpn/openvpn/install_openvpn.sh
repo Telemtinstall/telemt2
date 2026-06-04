@@ -39,6 +39,7 @@ UDP_STATUS_FILE="/run/openvpn/server-udp.status"
 TCP_STATUS_FILE="/run/openvpn/server-tcp.status"
 STATE_FILE="/root/.install_openvpn.state"
 RESUME_CONFIG="/root/.install_openvpn.config"
+CONFIG_HASH_FILE="/root/.install_openvpn.config.sha256"
 BACKUP_ROOT="/root/openvpn-install-backups"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -170,13 +171,34 @@ EOF
 
 load_resume_config() {
   if [[ "${RESET_INSTALL_STATE:-0}" == "1" ]]; then
-    rm -f "$STATE_FILE" "$RESUME_CONFIG"
+    rm -f "$STATE_FILE" "$RESUME_CONFIG" "$CONFIG_HASH_FILE"
   fi
   if [[ -f "$RESUME_CONFIG" ]]; then
     echo "Resume config found: $RESUME_CONFIG"
     # shellcheck disable=SC1090
     . "$RESUME_CONFIG"
   fi
+}
+
+file_sha256() {
+  if have sha256sum; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+reset_step_state_if_config_changed() {
+  local current old
+  [[ -f "$RESUME_CONFIG" ]] || return 0
+  current="$(file_sha256 "$RESUME_CONFIG")"
+  old="$(cat "$CONFIG_HASH_FILE" 2>/dev/null || true)"
+  if [[ -f "$STATE_FILE" && ( -z "$old" || "$old" != "$current" ) ]]; then
+    echo "Config changed since previous run; clearing completed-step state."
+    rm -f "$STATE_FILE"
+  fi
+  printf '%s\n' "$current" > "$CONFIG_HASH_FILE"
+  chmod 600 "$CONFIG_HASH_FILE"
 }
 
 valid_name() {
@@ -724,6 +746,32 @@ issue_certificate() {
   systemctl enable --now certbot.timer >/dev/null 2>&1 || true
 }
 
+acme_http01_preflight() {
+  [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
+  local root_dir token expected challenge_dir local_body public_body url
+  root_dir="$(mask_root)"
+  challenge_dir="$root_dir/.well-known/acme-challenge"
+  token="openvpn-$(openssl rand -hex 8 2>/dev/null || date +%s)"
+  expected="openvpn-acme-ok-${token}"
+  install -d -m 0755 "$challenge_dir"
+  printf '%s\n' "$expected" > "$challenge_dir/$token"
+
+  local_body="$(curl -fsS --max-time 10 -H "Host: ${MASK_DOMAIN}" "http://127.0.0.1/.well-known/acme-challenge/${token}" || true)"
+  if [[ "$local_body" != "$expected" ]]; then
+    rm -f "$challenge_dir/$token"
+    die "ACME HTTP-01 local preflight failed. nginx does not serve ${MASK_DOMAIN} challenge files from ${challenge_dir}."
+  fi
+
+  url="http://${MASK_DOMAIN}/.well-known/acme-challenge/${token}"
+  if [[ -n "$SERVER_PUBLIC_IPV4" ]]; then
+    public_body="$(curl -4fsS --max-time 15 --resolve "${MASK_DOMAIN}:80:${SERVER_PUBLIC_IPV4}" "$url" || true)"
+  else
+    public_body="$(curl -4fsS --max-time 15 "$url" || true)"
+  fi
+  rm -f "$challenge_dir/$token"
+  [[ "$public_body" == "$expected" ]] || die "ACME HTTP-01 public IPv4 preflight failed. Check DNS A record, port 80/tcp, provider firewall, and existing nginx sites."
+}
+
 write_mask_https_config() {
   [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
   local root_dir conf access_log error_log
@@ -755,7 +803,7 @@ server {
 }
 
 server {
-    listen 127.0.0.1:${MASK_BACKEND_PORT} ssl http2;
+    listen 127.0.0.1:${MASK_BACKEND_PORT} ssl;
     server_name ${MASK_DOMAIN};
     root ${root_dir};
 
@@ -780,6 +828,7 @@ EOF
 setup_https_mask() {
   [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
   write_mask_http_config
+  acme_http01_preflight
   issue_certificate
   write_mask_https_config
 }
@@ -838,6 +887,7 @@ main() {
   echo "  4. Keep the current SSH session open until a second login works."
   echo
   prompt_config
+  reset_step_state_if_config_changed
   print_plan
 
   run_step "backup" "Backup current state" backup_state

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-04
+
+### Fixed
+
+- Fixed VPN installer resume handling: completed-step state is cleared when saved installer input changes, so changed ports/domains/modes no longer reuse stale preflight/config steps.
+- Added ACME HTTP-01 preflight checks to VPN HTTPS-mask installers before running certbot.
+- Added explicit FORWARD rules and UFW route allowance to AmneziaWG and experimental WireGuard-over-wstunnel installers.
+- Added a client-side route guard to generated WireGuard-over-wstunnel helper scripts to avoid full-tunnel routing loops.
+- Removed unnecessary `http2` from the OpenVPN nginx mask backend listener for wider nginx compatibility.
+
 ## 2026-05-31
 
 ### Changed

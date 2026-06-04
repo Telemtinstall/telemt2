@@ -39,6 +39,7 @@ ENV_FILE="$AWG_DIR/awgctl.env"
 CTL_PATH="/usr/local/sbin/awgctl"
 STATE_FILE="/root/.install_amneziawg.state"
 RESUME_CONFIG="/root/.install_amneziawg.config"
+CONFIG_HASH_FILE="/root/.install_amneziawg.config.sha256"
 BACKUP_ROOT="/root/amneziawg-install-backups"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -177,13 +178,34 @@ EOF
 
 load_resume_config() {
   if [[ "${RESET_INSTALL_STATE:-0}" == "1" ]]; then
-    rm -f "$STATE_FILE" "$RESUME_CONFIG"
+    rm -f "$STATE_FILE" "$RESUME_CONFIG" "$CONFIG_HASH_FILE"
   fi
   if [[ -f "$RESUME_CONFIG" ]]; then
     echo "Resume config found: $RESUME_CONFIG"
     # shellcheck disable=SC1090
     . "$RESUME_CONFIG"
   fi
+}
+
+file_sha256() {
+  if have sha256sum; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+reset_step_state_if_config_changed() {
+  local current old
+  [[ -f "$RESUME_CONFIG" ]] || return 0
+  current="$(file_sha256 "$RESUME_CONFIG")"
+  old="$(cat "$CONFIG_HASH_FILE" 2>/dev/null || true)"
+  if [[ -f "$STATE_FILE" && ( -z "$old" || "$old" != "$current" ) ]]; then
+    echo "Config changed since previous run; clearing completed-step state."
+    rm -f "$STATE_FILE"
+  fi
+  printf '%s\n' "$current" > "$CONFIG_HASH_FILE"
+  chmod 600 "$CONFIG_HASH_FILE"
 }
 
 valid_name() {
@@ -591,8 +613,8 @@ H2 = ${AWG_H2}
 H3 = ${AWG_H3}
 H4 = ${AWG_H4}
 SaveConfig = false
-PostUp = sysctl -w net.ipv4.ip_forward=1 >/dev/null; iptables -t nat -C POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE
-PostDown = iptables -t nat -D POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || true
+PostUp = sysctl -w net.ipv4.ip_forward=1 >/dev/null; iptables -C FORWARD -i ${AWG_IFACE} -o ${wan_iface} -j ACCEPT 2>/dev/null || iptables -A FORWARD -i ${AWG_IFACE} -o ${wan_iface} -j ACCEPT; iptables -C FORWARD -i ${wan_iface} -o ${AWG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -A FORWARD -i ${wan_iface} -o ${AWG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -C POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE
+PostDown = iptables -D FORWARD -i ${AWG_IFACE} -o ${wan_iface} -j ACCEPT 2>/dev/null || true; iptables -D FORWARD -i ${wan_iface} -o ${AWG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || true
 EOF
   chmod 600 "$AWG_DIR/${AWG_IFACE}.conf"
 }
@@ -603,8 +625,13 @@ install_awgctl() {
 }
 
 configure_firewall() {
+  local wan_iface
+  wan_iface="$(out_iface || true)"
   if have ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "${AWG_PORT}/udp"
+    if [[ -n "$wan_iface" ]]; then
+      ufw route allow in on "$AWG_IFACE" out on "$wan_iface" || true
+    fi
     if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
       ufw allow "80/tcp"
       ufw allow "443/tcp"
@@ -675,6 +702,32 @@ issue_certificate() {
   systemctl enable --now certbot.timer >/dev/null 2>&1 || true
 }
 
+acme_http01_preflight() {
+  [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
+  local root_dir token expected challenge_dir local_body public_body url
+  root_dir="$(mask_root)"
+  challenge_dir="$root_dir/.well-known/acme-challenge"
+  token="awg-$(openssl rand -hex 8 2>/dev/null || date +%s)"
+  expected="awg-acme-ok-${token}"
+  install -d -m 0755 "$challenge_dir"
+  printf '%s\n' "$expected" > "$challenge_dir/$token"
+
+  local_body="$(curl -fsS --max-time 10 -H "Host: ${MASK_DOMAIN}" "http://127.0.0.1/.well-known/acme-challenge/${token}" || true)"
+  if [[ "$local_body" != "$expected" ]]; then
+    rm -f "$challenge_dir/$token"
+    die "ACME HTTP-01 local preflight failed. nginx does not serve ${MASK_DOMAIN} challenge files from ${challenge_dir}."
+  fi
+
+  url="http://${MASK_DOMAIN}/.well-known/acme-challenge/${token}"
+  if [[ -n "$SERVER_PUBLIC_IPV4" ]]; then
+    public_body="$(curl -4fsS --max-time 15 --resolve "${MASK_DOMAIN}:80:${SERVER_PUBLIC_IPV4}" "$url" || true)"
+  else
+    public_body="$(curl -4fsS --max-time 15 "$url" || true)"
+  fi
+  rm -f "$challenge_dir/$token"
+  [[ "$public_body" == "$expected" ]] || die "ACME HTTP-01 public IPv4 preflight failed. Check DNS A record, port 80/tcp, provider firewall, and existing nginx sites."
+}
+
 write_mask_https_config() {
   [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
   local root_dir conf access_log error_log
@@ -732,6 +785,7 @@ EOF
 setup_https_mask() {
   [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
   write_mask_http_config
+  acme_http01_preflight
   issue_certificate
   write_mask_https_config
 }
@@ -768,6 +822,7 @@ main() {
   echo "  4. Keep the current SSH session open until a second login works."
   echo
   prompt_config
+  reset_step_state_if_config_changed
   print_plan
 
   run_step "backup" "Backup current state" backup_state
