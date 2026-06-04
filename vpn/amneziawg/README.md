@@ -7,9 +7,36 @@
 
 Каталог содержит два самостоятельных скрипта для Debian/Ubuntu:
 
+### Быстрый старт
+
+Новая установка на чистом сервере:
+
 ```bash
+apt update
+apt install -y git ca-certificates
+cd /root
+git clone https://github.com/Telemtinstall/telemt2.git telemt2
+cd /root/telemt2
+git pull
+cd /root/telemt2/amneziawg
 chmod +x ./install_amneziawg.sh ./awgctl.sh
 ./install_amneziawg.sh
+```
+
+Если репозиторий уже скачан:
+
+```bash
+cd /root/telemt2
+git pull
+cd /root/telemt2/amneziawg
+chmod +x ./install_amneziawg.sh ./awgctl.sh
+./install_amneziawg.sh
+```
+
+Обновить локальные файлы из репозитория:
+
+```bash
+cd /root/telemt2 && git pull
 ```
 
 Это экспериментальный установщик. Сначала тестируйте на чистой машине. Если уже заняты `80`, `443`, `51820` или стоит другой nginx/VPN, возможны конфликты.

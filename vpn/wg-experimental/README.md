@@ -41,9 +41,34 @@ sing-box/Streisand-подобный клиент с отдельным конф�
 
 ### Как установить
 
+Новая установка на чистом сервере:
+
 ```bash
+apt update
+apt install -y git ca-certificates
+cd /root
+git clone https://github.com/Telemtinstall/telemt2.git telemt2
+cd /root/telemt2
+git pull
+cd /root/telemt2/wg-experimental
 chmod +x ./install_wg_wstunnel.sh ./wgctl.sh
 ./install_wg_wstunnel.sh
+```
+
+Если репозиторий уже скачан:
+
+```bash
+cd /root/telemt2
+git pull
+cd /root/telemt2/wg-experimental
+chmod +x ./install_wg_wstunnel.sh ./wgctl.sh
+./install_wg_wstunnel.sh
+```
+
+Обновить локальные файлы из репозитория:
+
+```bash
+cd /root/telemt2 && git pull
 ```
 
 Скрипт рассчитан на чистый сервер. Порты `80/tcp` и `443/tcp` должны быть свободны.

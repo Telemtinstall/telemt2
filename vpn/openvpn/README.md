@@ -7,9 +7,36 @@
 
 Каталог содержит два самостоятельных скрипта для Debian/Ubuntu:
 
+### Быстрый старт
+
+Новая установка на чистом сервере:
+
 ```bash
+apt update
+apt install -y git ca-certificates
+cd /root
+git clone https://github.com/Telemtinstall/telemt2.git telemt2
+cd /root/telemt2
+git pull
+cd /root/telemt2/openvpn
 chmod +x ./install_openvpn.sh ./openvpnctl.sh
 ./install_openvpn.sh
+```
+
+Если репозиторий уже скачан:
+
+```bash
+cd /root/telemt2
+git pull
+cd /root/telemt2/openvpn
+chmod +x ./install_openvpn.sh ./openvpnctl.sh
+./install_openvpn.sh
+```
+
+Обновить локальные файлы из репозитория:
+
+```bash
+cd /root/telemt2 && git pull
 ```
 
 Скрипт рассчитан на чистый сервер. Если на машине уже заняты `80`, `443`, `50001` или стоит другой nginx/OpenVPN, сначала проверьте конфликты, иначе можно сломать существующий сервис.

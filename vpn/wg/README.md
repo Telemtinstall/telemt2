@@ -7,9 +7,36 @@
 
 Каталог содержит два самостоятельных скрипта для Debian/Ubuntu:
 
+### Быстрый старт
+
+Новая установка на чистом сервере:
+
 ```bash
+apt update
+apt install -y git ca-certificates
+cd /root
+git clone https://github.com/Telemtinstall/telemt2.git telemt2
+cd /root/telemt2
+git pull
+cd /root/telemt2/wg
 chmod +x ./install_wg.sh ./wgctl.sh
 ./install_wg.sh
+```
+
+Если репозиторий уже скачан:
+
+```bash
+cd /root/telemt2
+git pull
+cd /root/telemt2/wg
+chmod +x ./install_wg.sh ./wgctl.sh
+./install_wg.sh
+```
+
+Обновить локальные файлы из репозитория:
+
+```bash
+cd /root/telemt2 && git pull
 ```
 
 Скрипт рассчитан на чистый сервер. Если на машине уже заняты `80`, `443`, `51820` или стоит другой nginx/WireGuard, сначала проверьте конфликты.
