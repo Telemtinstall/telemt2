@@ -1042,6 +1042,7 @@ write_optional_awg_params() {
   [[ -n "$AWG_I3" ]] && printf 'I3 = %s\n' "$AWG_I3"
   [[ -n "$AWG_I4" ]] && printf 'I4 = %s\n' "$AWG_I4"
   [[ -n "$AWG_I5" ]] && printf 'I5 = %s\n' "$AWG_I5"
+  return 0
 }
 
 write_awg_config() {
@@ -1301,6 +1302,7 @@ main() {
   run_step "server_keys" "Генерация ключей сервера" generate_server_keys
   run_step "env" "Запись управляющего env-файла" write_env
   run_step "config" "Запись конфига AmneziaWG" write_awg_config
+  unmark_done "ctl"
   run_step "ctl" "Установка awgctl" install_awgctl
   run_step "firewall" "Открытие портов в ufw, если он активен" configure_firewall
   run_step "mask" "Настройка HTTPS-маскировки при необходимости" setup_https_mask

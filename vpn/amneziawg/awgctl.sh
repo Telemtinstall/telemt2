@@ -208,6 +208,55 @@ write_optional_awg_params() {
   [[ -n "${AWG_I3:-}" ]] && printf 'I3 = %s\n' "$AWG_I3"
   [[ -n "${AWG_I4:-}" ]] && printf 'I4 = %s\n' "$AWG_I4"
   [[ -n "${AWG_I5:-}" ]] && printf 'I5 = %s\n' "$AWG_I5"
+  return 0
+}
+
+client_config_complete() {
+  local conf="$CLIENT_OUT_DIR/${1}.conf"
+  [[ -r "$conf" ]] || return 1
+  grep -Eq '^\[Interface\]$' "$conf" || return 1
+  grep -Eq '^PrivateKey = .+' "$conf" || return 1
+  grep -Eq '^\[Peer\]$' "$conf" || return 1
+  grep -Eq '^PublicKey = .+' "$conf" || return 1
+  grep -Eq '^PresharedKey = .+' "$conf" || return 1
+  grep -Eq '^Endpoint = .+' "$conf" || return 1
+  grep -Eq '^AllowedIPs = .+' "$conf" || return 1
+  return 0
+}
+
+client_private_key_from_config() {
+  local conf="$CLIENT_OUT_DIR/${1}.conf"
+  awk -F ' = ' '$1 == "PrivateKey" {print $2; exit}' "$conf"
+}
+
+peer_psk_from_server_config() {
+  local name="$1"
+  awk -F ' = ' -v start="# BEGIN_AWG_CLIENT ${name}" -v end="# END_AWG_CLIENT ${name}" '
+    $0 == start {inside=1; next}
+    $0 == end {exit}
+    inside && $1 == "PresharedKey" {print $2; exit}
+  ' "$AWG_CONFIG"
+}
+
+repair_client_config() {
+  local name="$1"
+  local private_key psk ip
+
+  if client_config_complete "$name"; then
+    return 0
+  fi
+  [[ -r "$CLIENT_DIR/${name}.env" ]] || die "клиентский env не найден: ${CLIENT_DIR}/${name}.env"
+  # shellcheck disable=SC1090
+  . "$CLIENT_DIR/${name}.env"
+  ip="${CLIENT_IP:-}"
+  [[ -n "$ip" ]] || die "не удалось исправить конфиг ${name}: в env нет CLIENT_IP."
+  private_key="$(client_private_key_from_config "$name")"
+  [[ -n "$private_key" ]] || die "не удалось исправить конфиг ${name}: нет PrivateKey. Создайте клиента заново: awgctl delete ${name} && awgctl add ${name}"
+  psk="$(peer_psk_from_server_config "$name")"
+  [[ -n "$psk" ]] || die "не удалось исправить конфиг ${name}: не найден PresharedKey в ${AWG_CONFIG}."
+  write_client_config "$name" "$private_key" "$psk" "$ip"
+  client_config_complete "$name" || die "не удалось исправить конфиг ${name}: после пересборки он все еще неполный."
+  echo "Конфиг клиента ${name} был неполным, я пересобрал его: ${CLIENT_OUT_DIR}/${name}.conf" >&2
 }
 
 cmd_add() {
@@ -240,6 +289,7 @@ EOF
 
   append_peer_config "$name" "$public_key" "$psk" "$ip"
   write_client_config "$name" "$private_key" "$psk" "$ip"
+  client_config_complete "$name" || die "клиентский конфиг создан неполным: ${CLIENT_OUT_DIR}/${name}.conf"
 
   if awg show "$AWG_IFACE" >/dev/null 2>&1; then
     awg set "$AWG_IFACE" peer "$public_key" preshared-key <(printf '%s\n' "$psk") allowed-ips "${ip}/32"
@@ -311,6 +361,7 @@ cmd_show() {
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
   [[ -n "$name" ]] || die "клиент не выбран."
   [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "конфиг клиента не найден: $name"
+  repair_client_config "$name"
   cat "$CLIENT_OUT_DIR/${name}.conf"
   if [[ "$qr_flag" == "--qr" || "$qr_flag" == "qr" ]]; then
     echo
@@ -330,6 +381,7 @@ cmd_qr() {
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
   [[ -n "$name" ]] || die "клиент не выбран."
   [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "конфиг клиента не найден: $name"
+  repair_client_config "$name"
   if ! have qrencode; then
     die "qrencode не установлен. Выполните: apt-get install -y qrencode"
   fi
