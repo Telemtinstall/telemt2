@@ -112,7 +112,7 @@ MTU по умолчанию — `1280`. При необходимости его
 Автоматические значения соблюдают диапазоны из документации AmneziaWG 2.0: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, `H1-H4` не пересекаются. Для диагностического профиля `plain` допускаются нулевые значения.
 По умолчанию используется UDP-порт `1234`, потому что в официальном troubleshooting отмечено: некоторые провайдеры в РФ могут блокировать UDP-порты выше `9999`. Если порт `1234` не подходит, пробуйте `AWG_PORT=443`.
 Если apt/PPA дает типовую ошибку, установщик сначала пробует исправить ее сам: удаляет старую битую запись AmneziaWG PPA и перебирает поддерживаемые ветки PPA. Если исправить не получилось, причина выводится на русском языке.
-При повторной установке первый клиент пересоздается под текущие параметры, поэтому нужно заново импортировать QR.
+Если имя первого клиента уже занято, установщик создает следующего клиента с числовым суффиксом: `pipiska1`, `pipiska2`, `pipiska3` и так далее.
 
 ### Профили обфускации
 
@@ -171,6 +171,8 @@ awgctl qr client1
 awgctl traffic
 awgctl delete client1
 ```
+
+Если выполнить `awgctl add` без имени и просто нажать Enter, будет создан `pipiska1`. Если такое имя уже занято, будет выбран следующий свободный номер.
 
 Конфиги клиентов:
 
@@ -288,7 +290,7 @@ The default MTU is `1280`. Override it with the `AWG_MTU` environment variable i
 Generated values follow AmneziaWG 2.0 documentation ranges: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, and non-overlapping `H1-H4`. The diagnostic `plain` profile allows zero values.
 The default UDP port is `1234` because the official troubleshooting notes that some providers in Russia may block UDP ports above `9999`. If `1234` does not work, try `AWG_PORT=443`.
 For common apt/PPA failures, the installer first tries to repair the problem: it removes stale broken AmneziaWG PPA entries and tries supported PPA suites. If it cannot recover, it prints the reason in Russian.
-On reinstall, the first client is recreated for the current parameters, so import the new QR again.
+If the first client name already exists, the installer creates the next numbered client: `pipiska1`, `pipiska2`, `pipiska3`, and so on.
 
 ### Obfuscation Profiles
 
@@ -335,6 +337,8 @@ awgctl qr client1
 awgctl traffic
 awgctl delete client1
 ```
+
+If you run `awgctl add` without a name and press Enter, it creates `pipiska1`. If that name already exists, the next free number is used.
 
 Client configs:
 

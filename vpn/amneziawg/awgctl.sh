@@ -87,6 +87,38 @@ client_exists() {
   [[ -f "$CLIENT_DIR/$1.env" ]]
 }
 
+client_name_exists() {
+  [[ -e "$CLIENT_DIR/$1.env" || -e "$CLIENT_OUT_DIR/$1.conf" ]]
+}
+
+next_client_name() {
+  local requested="${1:-pipiska1}"
+  local prefix number candidate
+
+  if ! client_name_exists "$requested"; then
+    printf '%s' "$requested"
+    return 0
+  fi
+
+  if [[ "$requested" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    number="${BASH_REMATCH[2]}"
+  else
+    prefix="${requested}"
+    number=1
+  fi
+
+  while :; do
+    number=$((10#$number + 1))
+    candidate="${prefix}${number}"
+    valid_name "$candidate" || die "не удалось подобрать имя клиента после ${requested}: получилось некорректное имя ${candidate}."
+    if ! client_name_exists "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+}
+
 bytes_human() {
   local bytes="${1:-0}"
   awk -v b="$bytes" 'BEGIN {
@@ -187,7 +219,10 @@ cmd_add() {
     name="${name:-pipiska1}"
   fi
   valid_name "$name" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
-  client_exists "$name" && die "клиент уже существует: $name"
+  if client_name_exists "$name"; then
+    name="$(next_client_name "$name")"
+    echo "Клиент уже существует, создаю следующего: $name"
+  fi
 
   private_key="$(awg genkey)"
   public_key="$(printf '%s' "$private_key" | awg pubkey)"

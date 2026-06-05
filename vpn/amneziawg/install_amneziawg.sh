@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # AmneziaWG installer for a fresh Debian/Ubuntu server.
 # Modes:
-#   1. Plain AmneziaWG: UDP 51820 by default.
+#   1. Plain AmneziaWG: UDP 1234 by default.
 #   2. HTTPS mask site: nginx serves a real HTTPS site on TCP 443,
 #      AmneziaWG listens on UDP 443. TCP and UDP do not conflict.
 
@@ -254,6 +254,38 @@ reset_step_state_if_config_changed() {
 
 valid_name() {
   [[ "$1" =~ ^[A-Za-z0-9._@-]{1,64}$ ]]
+}
+
+client_name_exists() {
+  [[ -e "$CLIENT_DIR/$1.env" || -e "$CLIENT_OUT_DIR/$1.conf" ]]
+}
+
+next_client_name() {
+  local requested="${1:-pipiska1}"
+  local prefix number candidate
+
+  if ! client_name_exists "$requested"; then
+    printf '%s' "$requested"
+    return 0
+  fi
+
+  if [[ "$requested" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    number="${BASH_REMATCH[2]}"
+  else
+    prefix="${requested}"
+    number=1
+  fi
+
+  while :; do
+    number=$((10#$number + 1))
+    candidate="${prefix}${number}"
+    valid_name "$candidate" || die "не удалось подобрать имя клиента после ${requested}: получилось некорректное имя ${candidate}."
+    if ! client_name_exists "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
 }
 
 valid_port() {
@@ -571,6 +603,7 @@ prompt_config() {
   prompt AWG_JMAX "AmneziaWG junk max size Jmax" "$AWG_JMAX"
   CLIENT_NAME="${CLIENT_NAME:-pipiska1}"
   prompt CLIENT_NAME "Имя первого клиента" "$CLIENT_NAME"
+  CLIENT_NAME="$(next_client_name "$CLIENT_NAME")"
 
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     logs_answer="$([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)"
@@ -1205,8 +1238,9 @@ start_service() {
 
 ensure_first_client() {
   if [[ -f "$CLIENT_DIR/${CLIENT_NAME}.env" ]]; then
-    echo "Клиент уже существует: $CLIENT_NAME. Пересоздаю его под текущие параметры AmneziaWG."
-    "$CTL_PATH" delete "$CLIENT_NAME" || die "не удалось удалить старого клиента $CLIENT_NAME."
+    CLIENT_NAME="$(next_client_name "$CLIENT_NAME")"
+    echo "Клиент уже существует, создаю следующего: $CLIENT_NAME"
+    save_resume_config
   fi
   "$CTL_PATH" add "$CLIENT_NAME"
 }
