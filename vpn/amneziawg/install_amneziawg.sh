@@ -15,7 +15,8 @@ AWG_SERVER_IP="${AWG_SERVER_IP:-10.88.88.1}"
 AWG_DNS="${AWG_DNS:-1.1.1.1,8.8.8.8}"
 AWG_MTU="${AWG_MTU:-1280}"
 AWG_OBFS_PROFILE="${AWG_OBFS_PROFILE:-mobile}"
-CLIENT_NAME="${CLIENT_NAME:-pipiska1}"
+CLIENT_NAME_WAS_SET="${CLIENT_NAME+x}"
+CLIENT_NAME="${CLIENT_NAME:-}"
 AWG_JC="${AWG_JC:-}"
 AWG_JMIN="${AWG_JMIN:-}"
 AWG_JMAX="${AWG_JMAX:-}"
@@ -163,6 +164,16 @@ mark_done() {
   touch "$STATE_FILE"
   chmod 600 "$STATE_FILE"
   grep -Fxq "$id" "$STATE_FILE" 2>/dev/null || echo "$id" >> "$STATE_FILE"
+}
+
+unmark_done() {
+  local id="$1"
+  local tmp
+  [[ -f "$STATE_FILE" ]] || return 0
+  tmp="$(mktemp)"
+  grep -Fxv "$id" "$STATE_FILE" > "$tmp" || true
+  install -m 0600 "$tmp" "$STATE_FILE"
+  rm -f "$tmp"
 }
 
 run_step() {
@@ -569,7 +580,7 @@ mask_default_email() {
 }
 
 prompt_config() {
-  local mask_answer logs_answer s1_max s2_max
+  local mask_answer logs_answer s1_max s2_max requested_client_name suggested_client_name
   detect_public_ipv4 || true
 
   mask_answer="$([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo yes || echo no)"
@@ -601,9 +612,20 @@ prompt_config() {
   prompt AWG_JC "AmneziaWG junk packet count Jc" "$AWG_JC"
   prompt AWG_JMIN "AmneziaWG junk min size Jmin" "$AWG_JMIN"
   prompt AWG_JMAX "AmneziaWG junk max size Jmax" "$AWG_JMAX"
-  CLIENT_NAME="${CLIENT_NAME:-pipiska1}"
-  prompt CLIENT_NAME "Имя первого клиента" "$CLIENT_NAME"
-  CLIENT_NAME="$(next_client_name "$CLIENT_NAME")"
+  if [[ -n "$CLIENT_NAME_WAS_SET" ]]; then
+    requested_client_name="${CLIENT_NAME:-pipiska1}"
+  else
+    requested_client_name="pipiska1"
+  fi
+  suggested_client_name="$(next_client_name "$requested_client_name")"
+  CLIENT_NAME="$suggested_client_name"
+  prompt CLIENT_NAME "Имя первого клиента" "$suggested_client_name"
+  valid_name "$CLIENT_NAME" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
+  if client_name_exists "$CLIENT_NAME"; then
+    suggested_client_name="$(next_client_name "$CLIENT_NAME")"
+    warn "клиент ${CLIENT_NAME} уже существует, будет создан ${suggested_client_name}."
+    CLIENT_NAME="$suggested_client_name"
+  fi
 
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     logs_answer="$([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)"
@@ -641,7 +663,6 @@ prompt_config() {
   fi
   validate_awg_headers
   valid_awg_text_param "$AWG_I1" && valid_awg_text_param "$AWG_I2" && valid_awg_text_param "$AWG_I3" && valid_awg_text_param "$AWG_I4" && valid_awg_text_param "$AWG_I5" || die "некорректные I1-I5: параметр слишком длинный или содержит перенос строки."
-  valid_name "$CLIENT_NAME" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     valid_domain "$MASK_DOMAIN" || die "домен маскировки должен быть корректным доменным именем."
     valid_email "$LETSENCRYPT_EMAIL" || die "email для Let's Encrypt некорректный."
@@ -1243,11 +1264,14 @@ ensure_first_client() {
     save_resume_config
   fi
   "$CTL_PATH" add "$CLIENT_NAME"
+  unmark_done "service"
+  unmark_done "verify"
 }
 
 verify_install() {
   systemctl is-active --quiet "awg-quick@${AWG_IFACE}" || die "служба awg-quick@${AWG_IFACE} не активна."
   awg show "$AWG_IFACE" >/dev/null || die "интерфейс AmneziaWG ${AWG_IFACE} недоступен."
+  awg show "$AWG_IFACE" dump | tail -n +2 | grep -q . || die "в активном интерфейсе ${AWG_IFACE} нет клиентов. Запустите: systemctl restart awg-quick@${AWG_IFACE}"
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     systemctl is-active --quiet nginx || die "nginx не активен."
   fi
@@ -1280,8 +1304,8 @@ main() {
   run_step "ctl" "Установка awgctl" install_awgctl
   run_step "firewall" "Открытие портов в ufw, если он активен" configure_firewall
   run_step "mask" "Настройка HTTPS-маскировки при необходимости" setup_https_mask
-  run_step "service" "Запуск AmneziaWG" start_service
   run_step "first_client" "Создание первого клиента" ensure_first_client
+  run_step "service" "Запуск AmneziaWG" start_service
   run_step "verify" "Проверка установки" verify_install
   mark_done "done"
   save_resume_config
