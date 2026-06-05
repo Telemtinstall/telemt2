@@ -1,5 +1,8 @@
 # Telemt AlmaLinux Installer
 
+> RU: Это не официальный установщик Telemt или AlmaLinux-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is not an official Telemt or AlmaLinux package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 Эти файлы предназначены для AlmaLinux-серверов и не заменяют Debian/Ubuntu-скрипты.
@@ -15,8 +18,6 @@ add_key.sh                      вспомогательный скрипт дл
 Установщик поднимает весь стек Telemt для AlmaLinux: Docker CE с плагином Docker Compose, Telemt в Docker, HTTP -> HTTPS редирект на `80/tcp`, nginx Stream SNI-маршрутизацию на `443/tcp`, маскировочный HTTPS-сайт на `127.0.0.1:8443`, Telemt backend на `127.0.0.1:1443` и локальный Telemt API на `127.0.0.1:9091`.
 
 Также он выпускает Let's Encrypt сертификат, включает автопродление с certbot hooks для остановки/запуска nginx при standalone-renew, настраивает `firewalld`, SSH-port настройки, отключает nginx access logs и runtime-логи Docker-контейнера Telemt, а в конце добавляет утилиту `telemt-report`. Fail2ban и swap включаются только по отдельным вопросам.
-
-Telemt запускается из официального образа `ghcr.io/telemt/telemt:latest`; конфиг монтируется как `/opt/telemt-config -> /etc/telemt`, runtime-кеш вынесен в tmpfs `/run/telemt`, а CPU/RAM/PID лимиты не задаются, чтобы не резать загрузку медиа и много клиентов. `use_middle_proxy = false`, upstream прямой, API включен только локально и в read-only режиме.
 
 ### Важные отличия AlmaLinux-версии
 
@@ -80,14 +81,14 @@ scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -97,8 +98,8 @@ chmod +x /root/install_telemt_alma.sh
 dnf install -y git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set almalinux
-cp almalinux/install_telemt_alma.sh /root/
+git sparse-checkout set telemt/almalinux
+cp telemt/almalinux/install_telemt_alma.sh /root/
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -109,6 +110,25 @@ ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_alma.sh
 /root/install_telemt_alma.sh
 ```
+
+
+### Как обновлять уже установленный Telemt
+
+Скачайте свежий установщик и запустите update-режим. Он сохранит существующие настройки, пользователей, секреты, nginx/SSH-конфиги и сертификаты.
+
+```bash
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+/root/install_telemt_alma.sh --update -lang ru
+```
+
+Если текущий Docker compose закреплён на `image@sha256:...`, update пересоздаст контейнер на том же digest. Чтобы явно перейти на другой image/tag, передайте:
+
+```bash
+TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt_alma.sh --update -lang ru
+```
+
+IDN-домены поддерживаются: если ввести кириллицу, скрипт переведёт домен в punycode; если ввести `xn--...`, скрипт проверит, что это корректный punycode.
 
 После установки ссылка будет сохранена на сервере:
 
@@ -226,8 +246,6 @@ The installer brings up the full Telemt stack for AlmaLinux: Docker CE with the 
 
 It also issues a Let's Encrypt certificate, enables renewal with certbot hooks that stop/start nginx for standalone renewal, configures `firewalld`, SSH-port settings, disables nginx access logs and Telemt Docker runtime logs, and installs the `telemt-report` utility. Fail2ban and swap are enabled only when selected in the prompts.
 
-Telemt runs from the official `ghcr.io/telemt/telemt:latest` image; config is mounted as `/opt/telemt-config -> /etc/telemt`, runtime cache uses tmpfs `/run/telemt`, and no CPU/RAM/PID limits are set so media loading and many clients are not artificially throttled. `use_middle_proxy = false`, upstream is direct, and the API is local read-only.
-
 ### AlmaLinux-specific differences
 
 In the AlmaLinux version, packages are installed with `dnf`, EPEL is enabled for `certbot` and, if selected, `fail2ban`, and Docker is installed from the official `docker-ce` repository. The nginx site config is created as `/etc/nginx/conf.d/<domain>.conf`, and the stream config is created as `/etc/nginx/stream-conf.d/telemt-sni.conf`.
@@ -290,14 +308,14 @@ scp install_telemt_alma.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/almalinux/install_telemt_alma.sh
+curl -fsSL -o /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -307,8 +325,8 @@ If you specifically want to use `git`, download only the AlmaLinux directory:
 dnf install -y git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set almalinux
-cp almalinux/install_telemt_alma.sh /root/
+git sparse-checkout set telemt/almalinux
+cp telemt/almalinux/install_telemt_alma.sh /root/
 chmod +x /root/install_telemt_alma.sh
 ```
 
@@ -417,3 +435,22 @@ The Telemt secret is saved separately and is not changed on a normal rerun:
 ```text
 /root/telemt-secret.env
 ```
+
+
+### Updating an Existing Telemt Install
+
+Download the fresh installer and run update mode. It preserves existing settings, users, secrets, nginx/SSH configs, and certificates.
+
+```bash
+wget -O /root/install_telemt_alma.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/almalinux/install_telemt_alma.sh
+chmod +x /root/install_telemt_alma.sh
+/root/install_telemt_alma.sh --update -lang en
+```
+
+If the current Docker compose file is pinned to `image@sha256:...`, update recreates the container with the same digest. To explicitly move to another image/tag, pass:
+
+```bash
+TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt_alma.sh --update -lang en
+```
+
+IDN domains are supported: Cyrillic input is converted to punycode; existing `xn--...` input is validated as real punycode.

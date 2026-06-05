@@ -1,5 +1,8 @@
 # add_key.sh
 
+> RU: Это вспомогательный Bash-скрипт из этого репозитория, а не официальный инструмент OpenSSH. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+> EN: This is a helper Bash script from this repository, not an official OpenSSH tool. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+
 ## RU
 
 `add_key.sh` — общий вспомогательный скрипт для подготовки SSH-доступа перед установкой Telemt. Его задача простая: положить ваш публичный SSH-ключ на сервер и проверить, что после этого вход по ключу действительно работает.
@@ -18,14 +21,14 @@
 Как скачать `add_key.sh` с GitHub:
 
 ```bash
-wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
 Или через `curl`:
 
 ```bash
-curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
@@ -134,14 +137,14 @@ The script does not disable SSH passwords and does not modify the SSH server con
 How to download `add_key.sh` from GitHub:
 
 ```bash
-wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+wget -O add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
 Or with `curl`:
 
 ```bash
-curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/common/add_key.sh
+curl -fsSL -o add_key.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/common/add_key.sh
 chmod +x ./add_key.sh
 ```
 
