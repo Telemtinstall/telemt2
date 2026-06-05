@@ -973,15 +973,16 @@ setup_https_mask() {
 }
 
 start_service() {
-  systemctl enable --now "awg-quick@${AWG_IFACE}" || die "не удалось запустить awg-quick@${AWG_IFACE}. Проверьте конфиг ${AWG_DIR}/${AWG_IFACE}.conf и вывод: journalctl -u awg-quick@${AWG_IFACE} --no-pager -n 50"
+  systemctl enable "awg-quick@${AWG_IFACE}" >/dev/null || die "не удалось включить автозапуск awg-quick@${AWG_IFACE}."
+  systemctl restart "awg-quick@${AWG_IFACE}" || die "не удалось перезапустить awg-quick@${AWG_IFACE}. Проверьте конфиг ${AWG_DIR}/${AWG_IFACE}.conf и вывод: journalctl -u awg-quick@${AWG_IFACE} --no-pager -n 50"
 }
 
 ensure_first_client() {
   if [[ -f "$CLIENT_DIR/${CLIENT_NAME}.env" ]]; then
-    echo "Клиент уже существует: $CLIENT_NAME"
-  else
-    "$CTL_PATH" add "$CLIENT_NAME"
+    echo "Клиент уже существует: $CLIENT_NAME. Пересоздаю его под текущие параметры AmneziaWG."
+    "$CTL_PATH" delete "$CLIENT_NAME" || die "не удалось удалить старого клиента $CLIENT_NAME."
   fi
+  "$CTL_PATH" add "$CLIENT_NAME"
 }
 
 verify_install() {

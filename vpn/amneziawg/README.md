@@ -109,6 +109,7 @@ Enable nginx access logs for mask site? yes/no [no]
 MTU по умолчанию — `1280`. При необходимости его можно переопределить переменной окружения `AWG_MTU`.
 Автоматические значения соблюдают диапазоны AmneziaWG: `Jc=0..10`, `Jmin/Jmax=64..1024`, `S1/S2=0..64`.
 Если apt/PPA дает типовую ошибку, установщик сначала пробует исправить ее сам: удаляет старую битую запись AmneziaWG PPA и перебирает поддерживаемые ветки PPA. Если исправить не получилось, причина выводится на русском языке.
+При повторной установке первый клиент пересоздается под текущие параметры, поэтому нужно заново импортировать QR.
 
 ### Что делает установщик
 
@@ -257,6 +258,7 @@ Enable nginx access logs for mask site? yes/no [no]
 The default MTU is `1280`. Override it with the `AWG_MTU` environment variable if needed.
 Generated values follow AmneziaWG ranges: `Jc=0..10`, `Jmin/Jmax=64..1024`, `S1/S2=0..64`.
 For common apt/PPA failures, the installer first tries to repair the problem: it removes stale broken AmneziaWG PPA entries and tries supported PPA suites. If it cannot recover, it prints the reason in Russian.
+On reinstall, the first client is recreated for the current parameters, so import the new QR again.
 
 ### Installer actions
 
