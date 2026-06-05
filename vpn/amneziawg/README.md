@@ -148,10 +148,12 @@ awgctl qr dns1
 6. Если включена маскировка, ставит nginx/certbot, создает сайт, выпускает SSL и включает certbot.timer.
 7. Открывает порты через ufw, если ufw активен.
 8. Запускает awg-quick@awg0.
-9. Создает первого клиента и печатает конфиг/QR.
+9. Создает первого клиента через awgctl и печатает QR.
 ```
 
 ### Управление клиентами
+
+`awgctl` устанавливается как системная команда в `/usr/local/sbin/awgctl` и доступен через `/usr/local/bin/awgctl`, поэтому его можно запускать из любого каталога.
 
 ```bash
 awgctl add
@@ -173,6 +175,8 @@ awgctl delete client1
 ```
 
 Если выполнить `awgctl add` без имени и просто нажать Enter, будет создан `pipiska1`. Если такое имя уже занято, будет выбран следующий свободный номер.
+
+После `awgctl add <name>` показывается QR для импорта. Текстовый конфиг можно посмотреть отдельно: `awgctl show <name>`.
 
 Конфиги клиентов:
 
@@ -314,10 +318,12 @@ plain   - diagnostic WG-like mode with zero obfuscation.
 6. If masking is enabled, installs nginx/certbot, creates a site, issues SSL, and enables certbot.timer.
 7. Opens ports through ufw if ufw is active.
 8. Starts awg-quick@awg0.
-9. Creates the first client and prints config/QR.
+9. Creates the first client through awgctl and prints QR.
 ```
 
 ### Client management
+
+`awgctl` is installed as a system command at `/usr/local/sbin/awgctl` and exposed through `/usr/local/bin/awgctl`, so it can be run from any directory.
 
 ```bash
 awgctl add
@@ -339,6 +345,8 @@ awgctl delete client1
 ```
 
 If you run `awgctl add` without a name and press Enter, it creates `pipiska1`. If that name already exists, the next free number is used.
+
+After `awgctl add <name>`, the command prints the QR for import. To view the text config separately, run `awgctl show <name>`.
 
 Client configs:
 

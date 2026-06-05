@@ -48,6 +48,7 @@ CLIENT_OUT_DIR="/root/amneziawg-clients"
 MASK_ROOT_BASE="/var/www"
 ENV_FILE="$AWG_DIR/awgctl.env"
 CTL_PATH="/usr/local/sbin/awgctl"
+CTL_BIN_PATH="/usr/local/bin/awgctl"
 STATE_FILE="/root/.install_amneziawg.state"
 RESUME_CONFIG="/root/.install_amneziawg.config"
 CONFIG_HASH_FILE="/root/.install_amneziawg.config.sha256"
@@ -746,7 +747,7 @@ EOF
 backup_state() {
   BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
   mkdir -p "$BACKUP_DIR"
-  for path in "$AWG_DIR" "$CTL_PATH" "$ENV_FILE"; do
+  for path in "$AWG_DIR" "$CTL_PATH" "$CTL_BIN_PATH" "$ENV_FILE"; do
     [[ -e "$path" || -L "$path" ]] && cp -a "$path" "$BACKUP_DIR"/
   done
   echo "Бэкап: $BACKUP_DIR"
@@ -1084,7 +1085,9 @@ EOF
 
 install_awgctl() {
   [[ -f "$SCRIPT_DIR/awgctl.sh" ]] || die "файл awgctl.sh должен лежать рядом с install_amneziawg.sh."
+  install -d -m 0755 "$(dirname "$CTL_PATH")" "$(dirname "$CTL_BIN_PATH")"
   install -m 0755 "$SCRIPT_DIR/awgctl.sh" "$CTL_PATH"
+  ln -sfn "$CTL_PATH" "$CTL_BIN_PATH"
 }
 
 configure_firewall() {
