@@ -103,7 +103,7 @@ Obfuscation profile [mobile]
 AmneziaWG junk packet count Jc [random]
 AmneziaWG junk min size Jmin [random]
 AmneziaWG junk max size Jmax [random]
-First client name
+First client name [pipiska1]
 Enable nginx access logs for mask site? yes/no [no]
 ```
 
@@ -279,7 +279,7 @@ Obfuscation profile [mobile]
 AmneziaWG junk packet count Jc [random]
 AmneziaWG junk min size Jmin [random]
 AmneziaWG junk max size Jmax [random]
-First client name
+First client name [pipiska1]
 Enable nginx access logs for mask site? yes/no [no]
 ```
 

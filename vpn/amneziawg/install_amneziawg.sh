@@ -15,7 +15,7 @@ AWG_SERVER_IP="${AWG_SERVER_IP:-10.88.88.1}"
 AWG_DNS="${AWG_DNS:-1.1.1.1,8.8.8.8}"
 AWG_MTU="${AWG_MTU:-1280}"
 AWG_OBFS_PROFILE="${AWG_OBFS_PROFILE:-mobile}"
-CLIENT_NAME="${CLIENT_NAME:-}"
+CLIENT_NAME="${CLIENT_NAME:-pipiska1}"
 AWG_JC="${AWG_JC:-}"
 AWG_JMIN="${AWG_JMIN:-}"
 AWG_JMAX="${AWG_JMAX:-}"
@@ -569,6 +569,7 @@ prompt_config() {
   prompt AWG_JC "AmneziaWG junk packet count Jc" "$AWG_JC"
   prompt AWG_JMIN "AmneziaWG junk min size Jmin" "$AWG_JMIN"
   prompt AWG_JMAX "AmneziaWG junk max size Jmax" "$AWG_JMAX"
+  CLIENT_NAME="${CLIENT_NAME:-pipiska1}"
   prompt CLIENT_NAME "Имя первого клиента" "$CLIENT_NAME"
 
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then

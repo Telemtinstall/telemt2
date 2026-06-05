@@ -183,7 +183,8 @@ cmd_add() {
   local private_key public_key psk ip created_at
 
   if [[ -z "$name" ]]; then
-    read -r -p "Имя клиента: " name
+    read -r -p "Имя клиента [pipiska1]: " name
+    name="${name:-pipiska1}"
   fi
   valid_name "$name" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
   client_exists "$name" && die "клиент уже существует: $name"
