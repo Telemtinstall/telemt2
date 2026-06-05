@@ -48,6 +48,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 step_no=0
 BACKUP_DIR=""
 SERVER_PUBLIC_IPV4=""
+LAST_STEP=""
 
 step() {
   step_no=$((step_no + 1))
@@ -55,9 +56,29 @@ step() {
 }
 
 die() {
-  echo "ERROR: $*" >&2
+  echo "ОШИБКА: $*" >&2
   exit 1
 }
+
+warn() {
+  echo "ПРЕДУПРЕЖДЕНИЕ: $*" >&2
+}
+
+on_unhandled_error() {
+  local rc="$1"
+  local line="$2"
+  local cmd="$3"
+
+  echo >&2
+  echo "ОШИБКА: скрипт остановился неожиданно." >&2
+  [[ -n "$LAST_STEP" ]] && echo "Шаг: $LAST_STEP" >&2
+  echo "Строка: $line" >&2
+  echo "Команда: $cmd" >&2
+  echo "Что делать: пришлите этот блок и последние строки вывода установщика." >&2
+  exit "$rc"
+}
+
+trap 'on_unhandled_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 have() {
   command -v "$1" >/dev/null 2>&1
@@ -75,10 +96,10 @@ retry_command() {
     fi
     rc=$?
     if (( attempt >= INSTALL_RETRIES )); then
-      echo "ERROR: ${label} failed after ${INSTALL_RETRIES} attempts." >&2
+      echo "ОШИБКА: не удалось выполнить: ${label}. Попыток: ${INSTALL_RETRIES}." >&2
       return "$rc"
     fi
-    echo "WARN: ${label} failed with exit code ${rc}. Retrying in ${RETRY_DELAY_SECONDS}s (${attempt}/${INSTALL_RETRIES})..." >&2
+    warn "не удалось выполнить: ${label} (код ${rc}). Повтор через ${RETRY_DELAY_SECONDS}s (${attempt}/${INSTALL_RETRIES})..."
     sleep "$RETRY_DELAY_SECONDS"
     attempt=$((attempt + 1))
   done
@@ -141,12 +162,16 @@ run_step() {
   local title="$2"
   shift 2
   if step_done "$id"; then
-    step "$title (already done)"
+    step "$title (уже выполнено)"
     return 0
   fi
   step "$title"
-  "$@"
+  LAST_STEP="$title"
+  if ! "$@"; then
+    die "шаг не выполнен: $title"
+  fi
   mark_done "$id"
+  LAST_STEP=""
 }
 
 save_resume_config() {
@@ -184,7 +209,7 @@ load_resume_config() {
     rm -f "$STATE_FILE" "$RESUME_CONFIG" "$CONFIG_HASH_FILE"
   fi
   if [[ -f "$RESUME_CONFIG" ]]; then
-    echo "Resume config found: $RESUME_CONFIG"
+    echo "Найден resume-конфиг: $RESUME_CONFIG"
     # shellcheck disable=SC1090
     . "$RESUME_CONFIG"
   fi
@@ -204,7 +229,7 @@ reset_step_state_if_config_changed() {
   current="$(file_sha256 "$RESUME_CONFIG")"
   old="$(cat "$CONFIG_HASH_FILE" 2>/dev/null || true)"
   if [[ -f "$STATE_FILE" && ( -z "$old" || "$old" != "$current" ) ]]; then
-    echo "Config changed since previous run; clearing completed-step state."
+    echo "Конфиг изменился после прошлого запуска; очищаю список выполненных шагов."
     rm -f "$STATE_FILE"
   fi
   printf '%s\n' "$current" > "$CONFIG_HASH_FILE"
@@ -297,16 +322,16 @@ valid_positive_int() {
 }
 
 detect_os() {
-  [[ $EUID -eq 0 ]] || die "Run this script as root."
-  [[ -r /etc/os-release ]] || die "Cannot detect OS."
+  [[ $EUID -eq 0 ]] || die "запустите скрипт от root."
+  [[ -r /etc/os-release ]] || die "не удалось определить ОС: нет /etc/os-release."
   # shellcheck disable=SC1091
   . /etc/os-release
   case "${ID:-}" in
     debian|ubuntu) ;;
-    *) die "Only Debian/Ubuntu are supported. Detected ID=${ID:-unknown}." ;;
+    *) die "поддерживаются только Debian/Ubuntu. Обнаружено: ID=${ID:-unknown}." ;;
   esac
-  have systemctl || die "systemd is required."
-  have apt-get || die "apt-get is required."
+  have systemctl || die "нужен systemd, но команда systemctl не найдена."
+  have apt-get || die "нужен apt-get, но команда apt-get не найдена."
 }
 
 detect_public_ipv4() {
@@ -341,55 +366,55 @@ prompt_config() {
   ensure_awg_obfuscation_params
 
   mask_answer="$([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo yes || echo no)"
-  prompt mask_answer "Enable HTTPS mask site? yes/no" "$mask_answer"
-  ENABLE_HTTPS_MASK="$(bool_value "$mask_answer")" || die "Mask answer must be yes or no."
+  prompt mask_answer "Включить HTTPS-маскировку? yes/no" "$mask_answer"
+  ENABLE_HTTPS_MASK="$(bool_value "$mask_answer")" || die "ответ про HTTPS-маскировку должен быть yes/no."
 
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
-    prompt MASK_DOMAIN "Mask domain with DNS A record to this server" "$MASK_DOMAIN"
+    prompt MASK_DOMAIN "Домен маскировки с DNS A-записью на этот сервер" "$MASK_DOMAIN"
     PUBLIC_ENDPOINT="$MASK_DOMAIN"
     LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-$(mask_default_email)}"
-    prompt LETSENCRYPT_EMAIL "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
+    prompt LETSENCRYPT_EMAIL "Email для Let's Encrypt" "$LETSENCRYPT_EMAIL"
     if [[ "$AWG_PORT" == "51820" ]]; then
       AWG_PORT="443"
     fi
-    prompt AWG_PORT "AmneziaWG UDP port" "$AWG_PORT"
+    prompt AWG_PORT "UDP-порт AmneziaWG" "$AWG_PORT"
   else
-    prompt PUBLIC_ENDPOINT "Public endpoint IP/host for clients" "$PUBLIC_ENDPOINT"
-    prompt AWG_PORT "AmneziaWG UDP port" "$AWG_PORT"
+    prompt PUBLIC_ENDPOINT "Публичный IP/host для клиентов" "$PUBLIC_ENDPOINT"
+    prompt AWG_PORT "UDP-порт AmneziaWG" "$AWG_PORT"
   fi
 
-  prompt AWG_IFACE "AmneziaWG interface" "$AWG_IFACE"
-  prompt AWG_SUBNET "VPN IPv4 subnet" "$AWG_SUBNET"
-  prompt AWG_SERVER_IP "Server VPN IPv4" "$AWG_SERVER_IP"
-  prompt AWG_DNS "Client DNS, comma separated IPv4" "$AWG_DNS"
+  prompt AWG_IFACE "Интерфейс AmneziaWG" "$AWG_IFACE"
+  prompt AWG_SUBNET "VPN IPv4-сеть" "$AWG_SUBNET"
+  prompt AWG_SERVER_IP "VPN IPv4 сервера" "$AWG_SERVER_IP"
+  prompt AWG_DNS "DNS клиентов, IPv4 через запятую" "$AWG_DNS"
   prompt AWG_JC "AmneziaWG junk packet count Jc" "$AWG_JC"
   prompt AWG_JMIN "AmneziaWG junk min size Jmin" "$AWG_JMIN"
   prompt AWG_JMAX "AmneziaWG junk max size Jmax" "$AWG_JMAX"
-  prompt CLIENT_NAME "First client name" "$CLIENT_NAME"
+  prompt CLIENT_NAME "Имя первого клиента" "$CLIENT_NAME"
 
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     logs_answer="$([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)"
-    prompt logs_answer "Enable nginx access logs for mask site? yes/no" "$logs_answer"
-    ENABLE_NGINX_LOGS="$(bool_value "$logs_answer")" || die "Logs answer must be yes or no."
+    prompt logs_answer "Включить nginx access logs для маскировочного сайта? yes/no" "$logs_answer"
+    ENABLE_NGINX_LOGS="$(bool_value "$logs_answer")" || die "ответ про nginx logs должен быть yes/no."
   else
     ENABLE_NGINX_LOGS=0
   fi
 
-  valid_endpoint "$PUBLIC_ENDPOINT" || die "Endpoint must be IPv4 or hostname with letters, digits, dot, dash."
-  [[ "$AWG_IFACE" =~ ^[A-Za-z0-9_.-]{1,32}$ ]] || die "Invalid AmneziaWG interface."
-  valid_port "$AWG_PORT" || die "Invalid UDP port: $AWG_PORT"
-  valid_cidr "$AWG_SUBNET" || die "VPN subnet must be IPv4 CIDR with prefix 8..30."
-  valid_ipv4 "$AWG_SERVER_IP" || die "Invalid server VPN IPv4: $AWG_SERVER_IP"
-  valid_dns_list "$AWG_DNS" || die "DNS list must contain IPv4 addresses separated by commas."
-  valid_mtu "$AWG_MTU" || die "MTU must be an integer between 576 and 1420."
-  valid_positive_int "$AWG_JC" && (( AWG_JC <= 128 )) || die "Invalid Jc: $AWG_JC"
-  valid_positive_int "$AWG_JMIN" && valid_positive_int "$AWG_JMAX" && (( AWG_JMIN <= AWG_JMAX && AWG_JMAX <= 1280 )) || die "Invalid Jmin/Jmax."
-  valid_positive_int "$AWG_S1" && valid_positive_int "$AWG_S2" || die "Invalid S1/S2."
-  valid_positive_int "$AWG_H1" && valid_positive_int "$AWG_H2" && valid_positive_int "$AWG_H3" && valid_positive_int "$AWG_H4" || die "Invalid H1-H4."
-  valid_name "$CLIENT_NAME" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
+  valid_endpoint "$PUBLIC_ENDPOINT" || die "endpoint должен быть IPv4 или hostname из букв, цифр, точки и дефиса."
+  [[ "$AWG_IFACE" =~ ^[A-Za-z0-9_.-]{1,32}$ ]] || die "некорректное имя интерфейса AmneziaWG."
+  valid_port "$AWG_PORT" || die "некорректный UDP-порт: $AWG_PORT."
+  valid_cidr "$AWG_SUBNET" || die "VPN-сеть должна быть IPv4 CIDR с prefix 8..30."
+  valid_ipv4 "$AWG_SERVER_IP" || die "некорректный VPN IPv4 сервера: $AWG_SERVER_IP."
+  valid_dns_list "$AWG_DNS" || die "DNS должен быть списком IPv4-адресов через запятую."
+  valid_mtu "$AWG_MTU" || die "MTU должен быть числом от 576 до 1420."
+  valid_positive_int "$AWG_JC" && (( AWG_JC <= 128 )) || die "некорректный Jc: $AWG_JC."
+  valid_positive_int "$AWG_JMIN" && valid_positive_int "$AWG_JMAX" && (( AWG_JMIN <= AWG_JMAX && AWG_JMAX <= 1280 )) || die "некорректные Jmin/Jmax."
+  valid_positive_int "$AWG_S1" && valid_positive_int "$AWG_S2" || die "некорректные S1/S2."
+  valid_positive_int "$AWG_H1" && valid_positive_int "$AWG_H2" && valid_positive_int "$AWG_H3" && valid_positive_int "$AWG_H4" || die "некорректные H1-H4."
+  valid_name "$CLIENT_NAME" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
-    valid_domain "$MASK_DOMAIN" || die "Mask domain must be a valid domain name."
-    valid_email "$LETSENCRYPT_EMAIL" || die "Let's Encrypt email is invalid."
+    valid_domain "$MASK_DOMAIN" || die "домен маскировки должен быть корректным доменным именем."
+    valid_email "$LETSENCRYPT_EMAIL" || die "email для Let's Encrypt некорректный."
   fi
 
   preflight_dns
@@ -404,8 +429,8 @@ preflight_dns() {
     endpoint_ip="$(resolve_domain_ipv4 "$PUBLIC_ENDPOINT" || true)"
     if [[ -n "$endpoint_ip" && "$endpoint_ip" != "$SERVER_PUBLIC_IPV4" ]]; then
       echo
-      echo "WARN: endpoint domain resolves to $endpoint_ip, but this server public IPv4 is $SERVER_PUBLIC_IPV4."
-      confirm "Continue anyway? y/yes: " || die "Cancelled because endpoint DNS does not match this server."
+      warn "endpoint-домен указывает на $endpoint_ip, а публичный IPv4 этого сервера: $SERVER_PUBLIC_IPV4."
+      confirm "Продолжить всё равно? y/yes: " || die "отменено: DNS endpoint не указывает на этот сервер."
     fi
   fi
 
@@ -413,13 +438,13 @@ preflight_dns() {
     return 0
   fi
 
-  [[ -n "$SERVER_PUBLIC_IPV4" ]] || die "Cannot detect this server public IPv4 for mask DNS preflight."
+  [[ -n "$SERVER_PUBLIC_IPV4" ]] || die "не удалось определить публичный IPv4 сервера для проверки DNS маскировки."
   old_mask="$MASK_DOMAIN"
   mask_ip="$(resolve_domain_ipv4 "$MASK_DOMAIN" || true)"
   if [[ -z "$mask_ip" ]]; then
     echo
-    echo "WARN: DNS A record for $MASK_DOMAIN was not found."
-    if confirm "Continue without HTTPS mask site? y/yes: "; then
+    warn "DNS A-запись для $MASK_DOMAIN не найдена."
+    if confirm "Продолжить без HTTPS-маскировки? y/yes: "; then
       ENABLE_HTTPS_MASK=0
       MASK_DOMAIN=""
       LETSENCRYPT_EMAIL=""
@@ -428,12 +453,12 @@ preflight_dns() {
       fi
       return 0
     fi
-    die "Cancelled because mask domain has no A record."
+    die "отменено: у домена маскировки нет A-записи."
   fi
   if [[ "$mask_ip" != "$SERVER_PUBLIC_IPV4" ]]; then
     echo
-    echo "WARN: $MASK_DOMAIN resolves to $mask_ip, but this server public IPv4 is $SERVER_PUBLIC_IPV4."
-    if confirm "Continue without HTTPS mask site? y/yes: "; then
+    warn "$MASK_DOMAIN указывает на $mask_ip, а публичный IPv4 этого сервера: $SERVER_PUBLIC_IPV4."
+    if confirm "Продолжить без HTTPS-маскировки? y/yes: "; then
       ENABLE_HTTPS_MASK=0
       MASK_DOMAIN=""
       LETSENCRYPT_EMAIL=""
@@ -442,27 +467,27 @@ preflight_dns() {
       fi
       return 0
     fi
-    die "Cancelled because mask domain does not point to this server."
+    die "отменено: домен маскировки не указывает на этот сервер."
   fi
 }
 
 print_plan() {
   cat <<EOF
 
-Install plan:
+План установки:
   endpoint:        ${PUBLIC_ENDPOINT}:${AWG_PORT}/udp
-  interface:       ${AWG_IFACE}
-  subnet:          ${AWG_SUBNET}
-  server IP:       ${AWG_SERVER_IP}
-  client DNS:      ${AWG_DNS}
+  интерфейс:       ${AWG_IFACE}
+  сеть:            ${AWG_SUBNET}
+  IP сервера:      ${AWG_SERVER_IP}
+  DNS клиентов:    ${AWG_DNS}
   MTU:             ${AWG_MTU}
-  obfuscation:     Jc=${AWG_JC}, Jmin=${AWG_JMIN}, Jmax=${AWG_JMAX}, S1=${AWG_S1}, S2=${AWG_S2}
-  HTTPS mask site: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "yes, https://${MASK_DOMAIN}/ on TCP 443" || echo no)
-  nginx logs:      $([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)
-  first client:    ${CLIENT_NAME}
+  обфускация:      Jc=${AWG_JC}, Jmin=${AWG_JMIN}, Jmax=${AWG_JMAX}, S1=${AWG_S1}, S2=${AWG_S2}
+  HTTPS-маскировка: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "да, https://${MASK_DOMAIN}/ на TCP 443" || echo нет)
+  nginx logs:      $([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo да || echo нет)
+  первый клиент:   ${CLIENT_NAME}
 
 EOF
-  confirm "Type y or yes to continue: " || die "Cancelled."
+  confirm "Введите y или yes для продолжения: " || die "отменено пользователем."
 }
 
 backup_state() {
@@ -471,7 +496,7 @@ backup_state() {
   for path in "$AWG_DIR" "$CTL_PATH" "$ENV_FILE"; do
     [[ -e "$path" || -L "$path" ]] && cp -a "$path" "$BACKUP_DIR"/
   done
-  echo "backup_dir=$BACKUP_DIR"
+  echo "Бэкап: $BACKUP_DIR"
 }
 
 port_listening_tcp() {
@@ -486,16 +511,83 @@ port_listening_udp() {
 
 port_preflight() {
   if port_listening_udp "$AWG_PORT"; then
-    die "UDP port $AWG_PORT is already in use. Use a clean server or choose another port."
+    die "UDP-порт $AWG_PORT уже занят. Выберите другой порт или остановите сервис, который его использует."
   fi
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     if port_listening_tcp 80; then
-      die "TCP port 80 is already in use. HTTPS mask needs port 80 for Let's Encrypt."
+      die "TCP-порт 80 уже занят. Для HTTPS-маскировки он нужен Let's Encrypt."
     fi
     if port_listening_tcp 443; then
-      die "TCP port 443 is already in use. HTTPS mask needs nginx on TCP 443."
+      die "TCP-порт 443 уже занят. Для HTTPS-маскировки nginx должен слушать TCP 443."
     fi
   fi
+}
+
+apt_explain_failure() {
+  local log_file="$1"
+
+  if grep -Eq "does not have a Release file|404 .*Release" "$log_file"; then
+    warn "apt подключил репозиторий, у которого нет Release-файла для этой версии Ubuntu/Debian."
+    warn "Если это AmneziaWG PPA, скрипт попробует другую поддерживаемую ветку."
+  elif grep -Eq "Temporary failure resolving|Could not resolve|Name or service not known" "$log_file"; then
+    warn "похоже, на сервере проблема с DNS или сетевым доступом к репозиториям."
+  elif grep -Eq "NO_PUBKEY|GPG error|EXPKEYSIG|The following signatures" "$log_file"; then
+    warn "apt не доверяет ключу репозитория. Скрипт попробует заново установить ключ AmneziaWG PPA."
+  elif grep -Eq "Unable to locate package amneziawg" "$log_file"; then
+    warn "apt не видит пакет amneziawg в подключенных репозиториях."
+  else
+    warn "apt вернул ошибку. Ниже последние строки вывода:"
+  fi
+
+  tail -n 20 "$log_file" >&2 || true
+}
+
+apt_update_checked() {
+  local label="$1"
+  local ppa_release_mode="${2:-return}"
+  local attempt=1
+  local rc=0
+  local log_file="/tmp/amneziawg-apt-update.log"
+
+  while (( attempt <= INSTALL_RETRIES )); do
+    : > "$log_file"
+    if apt-get update 2>&1 | tee "$log_file"; then
+      rc=0
+    else
+      rc="${PIPESTATUS[0]}"
+    fi
+
+    if (( rc == 0 )) && ! grep -Eq "does not have a Release file|404 .*Release|Failed to fetch .*ppa.launchpadcontent.net/amnezia" "$log_file"; then
+      return 0
+    fi
+
+    apt_explain_failure "$log_file"
+    if grep -Eq "ppa.launchpadcontent.net/amnezia|amnezia/ppa" "$log_file" && grep -Eq "does not have a Release file|404 .*Release" "$log_file"; then
+      if [[ "$ppa_release_mode" == "remove" ]]; then
+        warn "убираю старую сломанную запись AmneziaWG PPA и повторяю apt update."
+        remove_amnezia_ppa_entries
+      else
+        return 2
+      fi
+    fi
+
+    if (( attempt >= INSTALL_RETRIES )); then
+      echo "ОШИБКА: не удалось выполнить apt update: ${label}. Попыток: ${INSTALL_RETRIES}." >&2
+      return "${rc:-1}"
+    fi
+    warn "apt update не прошел (${label}). Повтор через ${RETRY_DELAY_SECONDS}s (${attempt}/${INSTALL_RETRIES})..."
+    sleep "$RETRY_DELAY_SECONDS"
+    attempt=$((attempt + 1))
+  done
+
+  return "${rc:-1}"
+}
+
+apt_package_has_candidate() {
+  local package="$1"
+  local candidate
+  candidate="$(apt-cache policy "$package" | awk '/Candidate:/ {print $2; exit}')"
+  [[ -n "$candidate" && "$candidate" != "(none)" ]]
 }
 
 install_packages() {
@@ -503,36 +595,55 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   packages=(ca-certificates curl gnupg dirmngr lsb-release iproute2 iptables qrencode)
   remove_amnezia_ppa_entries
-  retry_command "apt-get update" apt-get update
-  retry_command "apt-get install base tools" apt-get install -y "${packages[@]}"
+  apt_update_checked "обновление базовых репозиториев" remove
+  retry_command "установка базовых пакетов" apt-get install -y "${packages[@]}"
 }
 
 install_mask_packages() {
   [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
   export DEBIAN_FRONTEND=noninteractive
-  retry_command "install nginx and certbot" apt-get install -y nginx certbot
+  retry_command "установка nginx и certbot" apt-get install -y nginx certbot
 }
 
-select_awg_ppa_codename() {
+append_unique_candidate() {
+  local list="$1"
+  local candidate="$2"
+  [[ -n "$candidate" ]] || { printf '%s' "$list"; return 0; }
+  if [[ " $list " == *" $candidate "* ]]; then
+    printf '%s' "$list"
+  else
+    printf '%s %s' "$list" "$candidate"
+  fi
+}
+
+awg_ppa_candidates() {
   local os_id="$1"
   local os_codename="$2"
+  local candidates=""
 
   if [[ -n "$AWG_PPA_CODENAME" ]]; then
-    echo "$AWG_PPA_CODENAME"
+    candidates="$(append_unique_candidate "$candidates" "$AWG_PPA_CODENAME")"
+    printf '%s\n' $candidates
     return 0
   fi
 
   case "${os_id}:${os_codename}" in
     ubuntu:trusty|ubuntu:xenial|ubuntu:bionic|ubuntu:focal|ubuntu:jammy|ubuntu:noble|ubuntu:oracular|ubuntu:plucky)
-      echo "$os_codename"
+      candidates="$(append_unique_candidate "$candidates" "$os_codename")"
       ;;
     ubuntu:*)
-      echo "noble"
+      candidates="$(append_unique_candidate "$candidates" "noble")"
+      candidates="$(append_unique_candidate "$candidates" "jammy")"
+      candidates="$(append_unique_candidate "$candidates" "focal")"
       ;;
     *)
-      echo "focal"
+      candidates="$(append_unique_candidate "$candidates" "focal")"
+      candidates="$(append_unique_candidate "$candidates" "jammy")"
+      candidates="$(append_unique_candidate "$candidates" "noble")"
       ;;
   esac
+
+  printf '%s\n' $candidates
 }
 
 remove_amnezia_ppa_entries() {
@@ -548,7 +659,7 @@ remove_amnezia_ppa_entries() {
 }
 
 install_amneziawg_tools() {
-  local os_id os_codename repo_codename keyring
+  local os_id os_codename repo_codename keyring installed
   if have awg && have awg-quick; then
     awg --version || true
     return 0
@@ -558,26 +669,48 @@ install_amneziawg_tools() {
   . /etc/os-release
   os_id="${ID:-}"
   os_codename="${VERSION_CODENAME:-}"
-  repo_codename="$(select_awg_ppa_codename "$os_id" "$os_codename")"
   keyring="/etc/apt/keyrings/amneziawg.gpg"
   install -d -m 0755 /etc/apt/keyrings
 
-  echo "Using AmneziaWG PPA suite: ${repo_codename} (detected OS: ${os_id} ${os_codename:-unknown})"
-  remove_amnezia_ppa_entries
-  retry_command "download AmneziaWG PPA key" curl -fsSL \
+  retry_command "скачивание ключа AmneziaWG PPA" curl -fsSL \
     "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x75c9dd72c799870e310542e24166f2c257290828" \
     -o /tmp/amneziawg-ppa.key
-  gpg --dearmor < /tmp/amneziawg-ppa.key > "$keyring"
+  if ! gpg --dearmor < /tmp/amneziawg-ppa.key > "$keyring"; then
+    rm -f /tmp/amneziawg-ppa.key
+    die "не удалось сохранить ключ AmneziaWG PPA в $keyring."
+  fi
   rm -f /tmp/amneziawg-ppa.key
-  cat > /etc/apt/sources.list.d/amneziawg.list <<EOF
+
+  installed=0
+  for repo_codename in $(awg_ppa_candidates "$os_id" "$os_codename"); do
+    echo "Пробую AmneziaWG PPA suite: ${repo_codename} (система: ${os_id} ${os_codename:-unknown})"
+    remove_amnezia_ppa_entries
+    cat > /etc/apt/sources.list.d/amneziawg.list <<EOF
 deb [signed-by=${keyring}] https://ppa.launchpadcontent.net/amnezia/ppa/ubuntu ${repo_codename} main
 EOF
 
-  retry_command "apt-get update with AmneziaWG repo" apt-get update
-  apt-get install -y "linux-headers-$(uname -r)" || true
-  retry_command "install AmneziaWG package" apt-get install -y amneziawg
-  have awg || die "awg command was not installed."
-  have awg-quick || die "awg-quick command was not installed."
+    if ! apt_update_checked "обновление apt с AmneziaWG PPA (${repo_codename})" return; then
+      warn "ветка PPA ${repo_codename} не подошла или временно недоступна. Пробую следующую."
+      continue
+    fi
+
+    if ! apt_package_has_candidate amneziawg; then
+      warn "в ветке PPA ${repo_codename} пакет amneziawg не найден. Пробую следующую."
+      continue
+    fi
+
+    apt-get install -y "linux-headers-$(uname -r)" || warn "не удалось установить linux-headers для текущего ядра. Продолжаю: пакет amneziawg иногда ставится без них."
+    if retry_command "установка пакета amneziawg из PPA ${repo_codename}" apt-get install -y amneziawg; then
+      installed=1
+      break
+    fi
+
+    warn "пакет amneziawg не установился из ветки ${repo_codename}. Пробую следующую."
+  done
+
+  (( installed == 1 )) || die "не удалось установить amneziawg ни из одной ветки PPA. Проверьте сеть/apt или задайте вручную: AWG_PPA_CODENAME=noble ./install_amneziawg.sh"
+  have awg || die "команда awg не появилась после установки пакета amneziawg."
+  have awg-quick || die "команда awg-quick не появилась после установки пакета amneziawg."
   awg --version || true
 }
 
@@ -636,8 +769,8 @@ write_awg_config() {
   local wan_iface
   private_key="$(cat "$AWG_DIR/server_private.key")"
   prefix="${AWG_SUBNET#*/}"
-  wan_iface="$(out_iface)"
-  [[ -n "$wan_iface" ]] || die "Cannot detect outbound network interface."
+  wan_iface="$(out_iface || true)"
+  [[ -n "$wan_iface" ]] || die "не удалось определить внешний сетевой интерфейс для NAT."
 
   umask 077
   cat > "$AWG_DIR/${AWG_IFACE}.conf" <<EOF
@@ -663,7 +796,7 @@ EOF
 }
 
 install_awgctl() {
-  [[ -f "$SCRIPT_DIR/awgctl.sh" ]] || die "awgctl.sh must be next to install_amneziawg.sh."
+  [[ -f "$SCRIPT_DIR/awgctl.sh" ]] || die "файл awgctl.sh должен лежать рядом с install_amneziawg.sh."
   install -m 0755 "$SCRIPT_DIR/awgctl.sh" "$CTL_PATH"
 }
 
@@ -724,9 +857,9 @@ server {
 }
 EOF
   ln -sf "$conf" "/etc/nginx/sites-enabled/awg-mask-${MASK_DOMAIN}.conf"
-  nginx -t
-  systemctl enable --now nginx
-  systemctl reload nginx
+  nginx -t || die "nginx не принял HTTP-конфиг маскировочного сайта."
+  systemctl enable --now nginx || die "не удалось запустить nginx."
+  systemctl reload nginx || die "не удалось перечитать конфиг nginx."
 }
 
 issue_certificate() {
@@ -736,11 +869,11 @@ issue_certificate() {
   if [[ -r "/etc/letsencrypt/live/${MASK_DOMAIN}/fullchain.pem" ]]; then
     echo "Certificate already exists for ${MASK_DOMAIN}."
   else
-    retry_command "certbot certificate issue" certbot certonly \
+    retry_command "выпуск Let's Encrypt сертификата через certbot" certbot certonly \
       --webroot -w "$root_dir" \
       -d "$MASK_DOMAIN" \
       --non-interactive --agree-tos \
-      --email "$LETSENCRYPT_EMAIL"
+      --email "$LETSENCRYPT_EMAIL" || die "certbot не смог выпустить сертификат. Проверьте DNS A-запись, порт 80/tcp и firewall провайдера."
   fi
   systemctl enable --now certbot.timer >/dev/null 2>&1 || true
 }
@@ -758,7 +891,7 @@ acme_http01_preflight() {
   local_body="$(curl -fsS --max-time 10 -H "Host: ${MASK_DOMAIN}" "http://127.0.0.1/.well-known/acme-challenge/${token}" || true)"
   if [[ "$local_body" != "$expected" ]]; then
     rm -f "$challenge_dir/$token"
-    die "ACME HTTP-01 local preflight failed. nginx does not serve ${MASK_DOMAIN} challenge files from ${challenge_dir}."
+    die "локальная проверка ACME HTTP-01 не прошла: nginx не отдает challenge-файлы ${MASK_DOMAIN} из ${challenge_dir}."
   fi
 
   url="http://${MASK_DOMAIN}/.well-known/acme-challenge/${token}"
@@ -768,7 +901,7 @@ acme_http01_preflight() {
     public_body="$(curl -4fsS --max-time 15 "$url" || true)"
   fi
   rm -f "$challenge_dir/$token"
-  [[ "$public_body" == "$expected" ]] || die "ACME HTTP-01 public IPv4 preflight failed. Check DNS A record, port 80/tcp, provider firewall, and existing nginx sites."
+  [[ "$public_body" == "$expected" ]] || die "публичная проверка ACME HTTP-01 по IPv4 не прошла. Проверьте DNS A-запись, порт 80/tcp, firewall провайдера и существующие nginx-сайты."
 }
 
 write_mask_https_config() {
@@ -821,8 +954,8 @@ server {
     }
 }
 EOF
-  nginx -t
-  systemctl reload nginx
+  nginx -t || die "nginx не принял HTTPS-конфиг маскировочного сайта."
+  systemctl reload nginx || die "не удалось перечитать конфиг nginx после настройки HTTPS."
 }
 
 setup_https_mask() {
@@ -834,74 +967,74 @@ setup_https_mask() {
 }
 
 start_service() {
-  systemctl enable --now "awg-quick@${AWG_IFACE}"
+  systemctl enable --now "awg-quick@${AWG_IFACE}" || die "не удалось запустить awg-quick@${AWG_IFACE}. Проверьте конфиг ${AWG_DIR}/${AWG_IFACE}.conf и вывод: journalctl -u awg-quick@${AWG_IFACE} --no-pager -n 50"
 }
 
 ensure_first_client() {
   if [[ -f "$CLIENT_DIR/${CLIENT_NAME}.env" ]]; then
-    echo "Client already exists: $CLIENT_NAME"
+    echo "Клиент уже существует: $CLIENT_NAME"
   else
     "$CTL_PATH" add "$CLIENT_NAME"
   fi
 }
 
 verify_install() {
-  systemctl is-active --quiet "awg-quick@${AWG_IFACE}" || die "awg-quick@${AWG_IFACE} is not active."
-  awg show "$AWG_IFACE" >/dev/null || die "AmneziaWG interface is not available."
+  systemctl is-active --quiet "awg-quick@${AWG_IFACE}" || die "служба awg-quick@${AWG_IFACE} не активна."
+  awg show "$AWG_IFACE" >/dev/null || die "интерфейс AmneziaWG ${AWG_IFACE} недоступен."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
-    systemctl is-active --quiet nginx || die "nginx is not active."
+    systemctl is-active --quiet nginx || die "nginx не активен."
   fi
 }
 
 main() {
   detect_os
   load_resume_config
-  echo "AmneziaWG installer for Debian/Ubuntu."
+  echo "Установщик AmneziaWG для Debian/Ubuntu."
   echo
-  echo "Before running:"
-  echo "  1. Use a clean server, especially when HTTPS masking uses TCP 80/443."
-  echo "  2. If HTTPS masking is enabled, create DNS A record: <mask-domain> -> this server IPv4."
-  echo "  3. Make sure the selected AmneziaWG UDP port is reachable from the internet."
-  echo "  4. Keep the current SSH session open until a second login works."
+  echo "Перед запуском:"
+  echo "  1. Лучше использовать чистый сервер, особенно если HTTPS-маскировка занимает TCP 80/443."
+  echo "  2. Если включаете HTTPS-маскировку, заранее создайте DNS A-запись: <domain> -> IPv4 сервера."
+  echo "  3. Убедитесь, что выбранный UDP-порт AmneziaWG доступен из интернета."
+  echo "  4. Не закрывайте текущую SSH-сессию, пока не проверите второй вход."
   echo
   prompt_config
   reset_step_state_if_config_changed
   print_plan
 
-  run_step "backup" "Backup current state" backup_state
-  run_step "packages" "Install base packages" install_packages
-  run_step "ports" "Port preflight" port_preflight
-  run_step "awg_tools" "Install AmneziaWG tools" install_amneziawg_tools
-  run_step "mask_packages" "Install nginx/certbot if needed" install_mask_packages
-  run_step "sysctl" "Enable IPv4 forwarding" configure_sysctl
-  run_step "server_keys" "Generate server keys" generate_server_keys
-  run_step "env" "Write control environment" write_env
-  run_step "config" "Write AmneziaWG config" write_awg_config
-  run_step "ctl" "Install awgctl" install_awgctl
-  run_step "firewall" "Open firewall ports if ufw is active" configure_firewall
-  run_step "mask" "Configure HTTPS mask if enabled" setup_https_mask
-  run_step "service" "Start AmneziaWG" start_service
-  run_step "first_client" "Create first client" ensure_first_client
-  run_step "verify" "Verify" verify_install
+  run_step "backup" "Бэкап текущего состояния" backup_state
+  run_step "packages" "Установка базовых пакетов" install_packages
+  run_step "ports" "Проверка портов" port_preflight
+  run_step "awg_tools" "Установка AmneziaWG tools" install_amneziawg_tools
+  run_step "mask_packages" "Установка nginx/certbot при необходимости" install_mask_packages
+  run_step "sysctl" "Включение IPv4 forwarding" configure_sysctl
+  run_step "server_keys" "Генерация ключей сервера" generate_server_keys
+  run_step "env" "Запись управляющего env-файла" write_env
+  run_step "config" "Запись конфига AmneziaWG" write_awg_config
+  run_step "ctl" "Установка awgctl" install_awgctl
+  run_step "firewall" "Открытие портов в ufw, если он активен" configure_firewall
+  run_step "mask" "Настройка HTTPS-маскировки при необходимости" setup_https_mask
+  run_step "service" "Запуск AmneziaWG" start_service
+  run_step "first_client" "Создание первого клиента" ensure_first_client
+  run_step "verify" "Проверка установки" verify_install
   mark_done "done"
   save_resume_config
 
-  step "Done"
+  step "Готово"
   cat <<EOF
-Installed AmneziaWG.
+AmneziaWG установлен.
 
 Endpoint: ${PUBLIC_ENDPOINT}:${AWG_PORT}/udp
-Interface: ${AWG_IFACE}
-HTTPS mask site: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "https://${MASK_DOMAIN}/ on TCP 443" || echo no)
-First client: ${CLIENT_NAME}
+Интерфейс: ${AWG_IFACE}
+HTTPS-маскировка: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "https://${MASK_DOMAIN}/ на TCP 443" || echo нет)
+Первый клиент: ${CLIENT_NAME}
 
-Client config:
+Конфиг клиента:
   ${CLIENT_OUT_DIR}/${CLIENT_NAME}.conf
 
-Show QR:
+Показать QR:
   awgctl qr ${CLIENT_NAME}
 
-Manage clients:
+Управление клиентами:
   awgctl add
   awgctl delete
   awgctl list
@@ -909,7 +1042,7 @@ Manage clients:
   awgctl qr
   awgctl traffic
 
-Backups:
+Бэкапы:
   ${BACKUP_DIR}
 EOF
 }
