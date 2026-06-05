@@ -18,7 +18,7 @@ cd /root
 git clone https://github.com/Telemtinstall/telemt2.git telemt2
 cd /root/telemt2
 git pull
-cd /root/telemt2/amneziawg
+cd /root/telemt2/vpn/amneziawg
 chmod +x ./install_amneziawg.sh ./awgctl.sh
 ./install_amneziawg.sh
 ```
@@ -28,7 +28,7 @@ chmod +x ./install_amneziawg.sh ./awgctl.sh
 ```bash
 cd /root/telemt2
 git pull
-cd /root/telemt2/amneziawg
+cd /root/telemt2/vpn/amneziawg
 chmod +x ./install_amneziawg.sh ./awgctl.sh
 ./install_amneziawg.sh
 ```

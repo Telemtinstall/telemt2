@@ -18,7 +18,7 @@ cd /root
 git clone https://github.com/Telemtinstall/telemt2.git telemt2
 cd /root/telemt2
 git pull
-cd /root/telemt2/openvpn
+cd /root/telemt2/vpn/openvpn
 chmod +x ./install_openvpn.sh ./openvpnctl.sh
 ./install_openvpn.sh
 ```
@@ -28,7 +28,7 @@ chmod +x ./install_openvpn.sh ./openvpnctl.sh
 ```bash
 cd /root/telemt2
 git pull
-cd /root/telemt2/openvpn
+cd /root/telemt2/vpn/openvpn
 chmod +x ./install_openvpn.sh ./openvpnctl.sh
 ./install_openvpn.sh
 ```

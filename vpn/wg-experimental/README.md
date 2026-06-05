@@ -50,7 +50,7 @@ cd /root
 git clone https://github.com/Telemtinstall/telemt2.git telemt2
 cd /root/telemt2
 git pull
-cd /root/telemt2/wg-experimental
+cd /root/telemt2/vpn/wg-experimental
 chmod +x ./install_wg_wstunnel.sh ./wgctl.sh
 ./install_wg_wstunnel.sh
 ```
@@ -60,7 +60,7 @@ chmod +x ./install_wg_wstunnel.sh ./wgctl.sh
 ```bash
 cd /root/telemt2
 git pull
-cd /root/telemt2/wg-experimental
+cd /root/telemt2/vpn/wg-experimental
 chmod +x ./install_wg_wstunnel.sh ./wgctl.sh
 ./install_wg_wstunnel.sh
 ```

@@ -18,7 +18,7 @@ cd /root
 git clone https://github.com/Telemtinstall/telemt2.git telemt2
 cd /root/telemt2
 git pull
-cd /root/telemt2/wg
+cd /root/telemt2/vpn/wg
 chmod +x ./install_wg.sh ./wgctl.sh
 ./install_wg.sh
 ```
@@ -28,7 +28,7 @@ chmod +x ./install_wg.sh ./wgctl.sh
 ```bash
 cd /root/telemt2
 git pull
-cd /root/telemt2/wg
+cd /root/telemt2/vpn/wg
 chmod +x ./install_wg.sh ./wgctl.sh
 ./install_wg.sh
 ```
