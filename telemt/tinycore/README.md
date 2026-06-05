@@ -35,6 +35,8 @@ add_key.sh                          вспомогательный скрипт 
 
 По умолчанию используется последний release Telemt и закреплённый `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для закрепления конкретной версии передайте `TELEMT_RELEASE=<version>`. Если хотите не использовать upstream `.sha256`, можно также передать `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
 
+Telemt на Tiny Core запускается без Docker из native binary. Настройки такие же по смыслу: TLS mode only, `use_middle_proxy = false`, direct upstream, локальный read-only API, `config_strict = true`, лимит подключений по умолчанию `5000`.
+
 ### Что Ставит
 
 Скрипт ставит базовые зависимости (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), а также optional-компоненты `jq` и `iproute2`, если они доступны. Для сертификатов используется `acme.sh`, а Telemt ставится как нативный бинарник.
@@ -265,6 +267,8 @@ Use a new Tiny Core server without existing websites, control panels, or network
 Official Telemt currently publishes `linux-musl` binaries for `x86_64` and `aarch64`. 32-bit Tiny Core x86 is not supported by this script.
 
 By default, the installer uses the latest Telemt release and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To pin a specific release, pass `TELEMT_RELEASE=<version>`. If you do not want to use upstream `.sha256`, you can also pass `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
+
+On Tiny Core, Telemt runs without Docker from a native binary. The effective settings match the other installers: TLS mode only, `use_middle_proxy = false`, direct upstream, local read-only API, `config_strict = true`, and default connection limit `5000`.
 
 ### What It Installs
 

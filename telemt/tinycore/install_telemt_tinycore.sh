@@ -804,7 +804,7 @@ mask = true
 mask_host = "127.0.0.1"
 mask_port = 8443
 tls_emulation = true
-tls_front_dir = "tlsfront"
+tls_front_dir = "/tmp/telemt-tlsfront"
 tls_full_cert_ttl_secs = 0
 alpn_enforce = true
 $(exclusive_mask_block)

@@ -19,6 +19,8 @@ add_key.sh                      вспомогательный скрипт дл
 
 Также он выпускает Let's Encrypt сертификат, включает автопродление с certbot hooks для остановки/запуска nginx при standalone-renew, настраивает `firewalld`, SSH-port настройки, отключает nginx access logs и runtime-логи Docker-контейнера Telemt, а в конце добавляет утилиту `telemt-report`. Fail2ban и swap включаются только по отдельным вопросам.
 
+Telemt запускается из официального образа `ghcr.io/telemt/telemt:latest`; конфиг монтируется как `/opt/telemt-config -> /etc/telemt`, runtime-кеш вынесен в tmpfs `/run/telemt`, а CPU/RAM/PID лимиты не задаются, чтобы не резать загрузку медиа и много клиентов. `use_middle_proxy = false`, upstream прямой, API включен только локально и в read-only режиме.
+
 ### Важные отличия AlmaLinux-версии
 
 В AlmaLinux-версии пакеты ставятся через `dnf`, EPEL включается для `certbot` и, если выбран fail2ban, для `fail2ban`, а Docker ставится из официального `docker-ce` репозитория. Nginx site-конфиг создаётся как `/etc/nginx/conf.d/<domain>.conf`, stream-конфиг как `/etc/nginx/stream-conf.d/telemt-sni.conf`.
@@ -245,6 +247,8 @@ add_key.sh                      helper for copying an SSH public key
 The installer brings up the full Telemt stack for AlmaLinux: Docker CE with the compose plugin, Telemt in Docker, an HTTP -> HTTPS redirect on `80/tcp`, nginx Stream SNI routing on `443/tcp`, an HTTPS mask site on `127.0.0.1:8443`, a Telemt backend on `127.0.0.1:1443`, and a local-only Telemt API on `127.0.0.1:9091`.
 
 It also issues a Let's Encrypt certificate, enables renewal with certbot hooks that stop/start nginx for standalone renewal, configures `firewalld`, SSH-port settings, disables nginx access logs and Telemt Docker runtime logs, and installs the `telemt-report` utility. Fail2ban and swap are enabled only when selected in the prompts.
+
+Telemt runs from the official `ghcr.io/telemt/telemt:latest` image; config is mounted as `/opt/telemt-config -> /etc/telemt`, runtime cache uses tmpfs `/run/telemt`, and no CPU/RAM/PID limits are set so media loading and many clients are not artificially throttled. `use_middle_proxy = false`, upstream is direct, and the API is local read-only.
 
 ### AlmaLinux-specific differences
 

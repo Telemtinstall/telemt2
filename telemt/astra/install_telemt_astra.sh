@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # then installs nginx SNI routing + Telemt + local API firewall.
 # SSH key-only login, fail2ban, and swap are opt-in prompts.
 
-TELEMT_IMAGE_DEFAULT="whn0thacked/telemt-docker@sha256:cf9b970f2d13937328372e903e40b971e4a5319cd005930453a89a80ba2365e4"
+TELEMT_IMAGE_DEFAULT="ghcr.io/telemt/telemt:latest"
 TELEMT_IMAGE_FROM_ENV="${TELEMT_IMAGE:+1}"
 
 PUBLIC_HOST="${PUBLIC_HOST:-}"
@@ -630,6 +630,17 @@ compose_cmd() {
   fi
 }
 
+remove_old_telemt_container_for_recreate() {
+  local cid found
+  found=0
+  cid="$(docker ps -aq --filter 'name=^/telemt$' 2>/dev/null || true)"
+  if [[ -n "$cid" ]]; then
+    found=1
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+  fi
+  [[ "$found" == "1" ]] && echo "Removed old Telemt container before recreate to avoid docker-compose v1 ContainerConfig/removed-image bug."
+}
+
 ensure_compose() {
   if docker compose version >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1; then
     return 0
@@ -894,6 +905,7 @@ EOF
   cd /opt/telemt-config
   compose_cmd config >/dev/null
   compose_cmd pull || true
+  remove_old_telemt_container_for_recreate
   compose_cmd up -d --force-recreate
   sleep 12
 
@@ -1585,6 +1597,8 @@ show_link = []
 [general]
 fast_mode = true
 use_middle_proxy = false
+config_strict = true
+log_level = "silent"
 
 [general.links]
 show = []
@@ -1611,6 +1625,9 @@ proxy_protocol = false
 enabled = true
 listen = "127.0.0.1:9091"
 read_only = true
+request_body_limit_bytes = 65536
+minimal_runtime_enabled = true
+minimal_runtime_cache_ttl_ms = 1000
 
 [[server.listeners]]
 ip = "127.0.0.1"
@@ -1622,7 +1639,7 @@ mask = true
 mask_host = "127.0.0.1"
 mask_port = 8443
 tls_emulation = true
-tls_front_dir = "tlsfront"
+tls_front_dir = "/tmp/telemt-tlsfront"
 tls_full_cert_ttl_secs = 0
 alpn_enforce = true
 $(exclusive_mask_block)
@@ -1653,7 +1670,7 @@ services:
     environment:
       RUST_LOG: "warn"
     volumes:
-      - /opt/telemt-config:/etc/telemt:ro
+      - /opt/telemt-config:/etc/telemt
     command: ["/etc/telemt/telemt.toml"]
     security_opt:
       - no-new-privileges=true
@@ -1662,6 +1679,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
+      - /run/telemt:rw,nosuid,nodev,noexec,size=16m
     logging:
       driver: "none"
     ulimits:
@@ -1673,6 +1691,7 @@ EOF
   cd /opt/telemt-config
   compose_cmd config >/dev/null
   compose_cmd pull
+  remove_old_telemt_container_for_recreate
   compose_cmd up -d
   mark_done telemt_config
 fi
@@ -1704,7 +1723,7 @@ services:
     environment:
       RUST_LOG: "warn"
     volumes:
-      - /opt/telemt-config:/etc/telemt:ro
+      - /opt/telemt-config:/etc/telemt
     command: ["/etc/telemt/telemt.toml"]
     security_opt:
       - no-new-privileges=true
@@ -1713,6 +1732,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
+      - /run/telemt:rw,nosuid,nodev,noexec,size=16m
     logging:
       driver: "none"
     ulimits:
@@ -1722,6 +1742,7 @@ services:
 EOF
     cd /opt/telemt-config
     compose_cmd config >/dev/null
+    remove_old_telemt_container_for_recreate
     compose_cmd up -d --force-recreate
   fi
 

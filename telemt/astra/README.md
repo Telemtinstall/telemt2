@@ -297,12 +297,15 @@ PubkeyAuthentication yes
 Telemt запускается в Docker:
 
 ```text
+image: ghcr.io/telemt/telemt:latest
 container_name: telemt
 network_mode: host
 user: 65532:65532
 read_only: true
 cap_drop: ALL
 no-new-privileges: true
+config mount: /opt/telemt-config -> /etc/telemt
+runtime tmpfs: /tmp, /run/telemt
 ```
 
 CPU/RAM/PID лимиты в `docker-compose.yml` не задаются, чтобы Telemt не упирался в искусственные ограничения при большом числе клиентов и загрузке медиа.
@@ -316,6 +319,8 @@ tls = true
 use_middle_proxy = false
 upstream = direct
 max_tcp_conns = <LIMIT>
+config_strict = true
+server.api.read_only = true
 ```
 
 ### Результат установки
@@ -793,12 +798,15 @@ PubkeyAuthentication yes
 Telemt runs in Docker:
 
 ```text
+image: ghcr.io/telemt/telemt:latest
 container_name: telemt
 network_mode: host
 user: 65532:65532
 read_only: true
 cap_drop: ALL
 no-new-privileges: true
+config mount: /opt/telemt-config -> /etc/telemt
+runtime tmpfs: /tmp, /run/telemt
 ```
 
 CPU/RAM/PID limits are not set in `docker-compose.yml`, so Telemt does not hit artificial limits when many clients load media.
@@ -812,6 +820,8 @@ tls = true
 use_middle_proxy = false
 upstream = direct
 max_tcp_conns = <LIMIT>
+config_strict = true
+server.api.read_only = true
 ```
 
 ### Installation Result

@@ -15,6 +15,8 @@ telemt/debian-13-ubuntu/install_telemt.sh
 
 Debian 11 требует отдельного сценария из-за старых версий `nftables`, `nginx`, `docker-compose` и частых случаев, когда `ufw` уже включён и закрывает `80/tcp` или `443/tcp`.
 
+Telemt запускается из официального образа `ghcr.io/telemt/telemt:latest`; конфиг монтируется как `/opt/telemt-config -> /etc/telemt`, runtime-кеш вынесен в tmpfs `/run/telemt`, CPU/RAM/PID лимиты не задаются.
+
 Скачать на сервер:
 
 ```bash
@@ -67,6 +69,8 @@ telemt/debian-13-ubuntu/install_telemt.sh
 ```
 
 Debian 11 needs a separate path because of older `nftables`, `nginx`, `docker-compose`, and common setups where `ufw` is already enabled and blocks `80/tcp` or `443/tcp`.
+
+Telemt runs from the official `ghcr.io/telemt/telemt:latest` image; config is mounted as `/opt/telemt-config -> /etc/telemt`, runtime cache uses tmpfs `/run/telemt`, and no CPU/RAM/PID limits are set.
 
 Download on the server:
 
