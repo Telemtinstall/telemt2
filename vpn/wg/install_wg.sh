@@ -13,6 +13,7 @@ WG_PORT="${WG_PORT:-51820}"
 WG_SUBNET="${WG_SUBNET:-10.66.66.0/24}"
 WG_SERVER_IP="${WG_SERVER_IP:-10.66.66.1}"
 WG_DNS="${WG_DNS:-1.1.1.1,8.8.8.8}"
+WG_MTU="${WG_MTU:-1280}"
 CLIENT_NAME="${CLIENT_NAME:-}"
 ENABLE_HTTPS_MASK="${ENABLE_HTTPS_MASK:-0}"
 MASK_DOMAIN="${MASK_DOMAIN:-}"
@@ -147,6 +148,7 @@ WG_PORT=$(printf '%q' "$WG_PORT")
 WG_SUBNET=$(printf '%q' "$WG_SUBNET")
 WG_SERVER_IP=$(printf '%q' "$WG_SERVER_IP")
 WG_DNS=$(printf '%q' "$WG_DNS")
+WG_MTU=$(printf '%q' "$WG_MTU")
 CLIENT_NAME=$(printf '%q' "$CLIENT_NAME")
 ENABLE_HTTPS_MASK=$(printf '%q' "$ENABLE_HTTPS_MASK")
 MASK_DOMAIN=$(printf '%q' "$MASK_DOMAIN")
@@ -235,6 +237,10 @@ valid_dns_list() {
     item="$(trim_value "$item")"
     valid_ipv4 "$item" || return 1
   done
+}
+
+valid_mtu() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 576 && "$1" <= 1420 ))
 }
 
 bool_value() {
@@ -328,6 +334,7 @@ prompt_config() {
   valid_cidr "$WG_SUBNET" || die "VPN subnet must be IPv4 CIDR with prefix 8..30."
   valid_ipv4 "$WG_SERVER_IP" || die "Invalid server VPN IPv4: $WG_SERVER_IP"
   valid_dns_list "$WG_DNS" || die "DNS list must contain IPv4 addresses separated by commas."
+  valid_mtu "$WG_MTU" || die "WireGuard MTU must be a number from 576 to 1420."
   valid_name "$CLIENT_NAME" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     valid_domain "$MASK_DOMAIN" || die "Mask domain must be a valid domain name."
@@ -397,6 +404,7 @@ Install plan:
   subnet:          ${WG_SUBNET}
   server IP:       ${WG_SERVER_IP}
   client DNS:      ${WG_DNS}
+  MTU:             ${WG_MTU}
   HTTPS mask site: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "yes, https://${MASK_DOMAIN}/ on TCP 443" || echo no)
   nginx logs:      $([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)
   first client:    ${CLIENT_NAME}
@@ -479,6 +487,7 @@ WG_PORT=$(printf '%q' "$WG_PORT")
 WG_SUBNET=$(printf '%q' "$WG_SUBNET")
 WG_SERVER_IP=$(printf '%q' "$WG_SERVER_IP")
 WG_DNS=$(printf '%q' "$WG_DNS")
+WG_MTU=$(printf '%q' "$WG_MTU")
 PUBLIC_ENDPOINT=$(printf '%q' "$PUBLIC_ENDPOINT")
 ENABLE_HTTPS_MASK=$(printf '%q' "$ENABLE_HTTPS_MASK")
 MASK_DOMAIN=$(printf '%q' "$MASK_DOMAIN")
@@ -501,6 +510,7 @@ write_wg_config() {
   cat > "$WG_DIR/${WG_IFACE}.conf" <<EOF
 [Interface]
 Address = ${WG_SERVER_IP}/${prefix}
+MTU = ${WG_MTU}
 ListenPort = ${WG_PORT}
 PrivateKey = ${private_key}
 SaveConfig = false
