@@ -306,11 +306,11 @@ rand_range() {
 }
 
 ensure_awg_obfuscation_params() {
-  AWG_JC="${AWG_JC:-$(rand_range 3 8)}"
-  AWG_JMIN="${AWG_JMIN:-$(rand_range 40 80)}"
-  AWG_JMAX="${AWG_JMAX:-$(rand_range 160 320)}"
-  AWG_S1="${AWG_S1:-$(rand_range 96 160)}"
-  AWG_S2="${AWG_S2:-$(rand_range 96 160)}"
+  AWG_JC="${AWG_JC:-$(rand_range 6 10)}"
+  AWG_JMIN="${AWG_JMIN:-$(rand_range 64 128)}"
+  AWG_JMAX="${AWG_JMAX:-$(rand_range 512 1024)}"
+  AWG_S1="${AWG_S1:-$(rand_range 16 64)}"
+  AWG_S2="${AWG_S2:-$(rand_range 16 64)}"
   AWG_H1="${AWG_H1:-$(rand_range 10000000 2000000000)}"
   AWG_H2="${AWG_H2:-$(rand_range 10000000 2000000000)}"
   AWG_H3="${AWG_H3:-$(rand_range 10000000 2000000000)}"
@@ -319,6 +319,10 @@ ensure_awg_obfuscation_params() {
 
 valid_positive_int() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 0 ))
+}
+
+valid_range_int() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= "$2" && "$1" <= "$3" ))
 }
 
 detect_os() {
@@ -407,9 +411,9 @@ prompt_config() {
   valid_ipv4 "$AWG_SERVER_IP" || die "некорректный VPN IPv4 сервера: $AWG_SERVER_IP."
   valid_dns_list "$AWG_DNS" || die "DNS должен быть списком IPv4-адресов через запятую."
   valid_mtu "$AWG_MTU" || die "MTU должен быть числом от 576 до 1420."
-  valid_positive_int "$AWG_JC" && (( AWG_JC <= 128 )) || die "некорректный Jc: $AWG_JC."
-  valid_positive_int "$AWG_JMIN" && valid_positive_int "$AWG_JMAX" && (( AWG_JMIN <= AWG_JMAX && AWG_JMAX <= 1280 )) || die "некорректные Jmin/Jmax."
-  valid_positive_int "$AWG_S1" && valid_positive_int "$AWG_S2" || die "некорректные S1/S2."
+  valid_range_int "$AWG_JC" 0 10 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 0..10."
+  valid_range_int "$AWG_JMIN" 64 1024 && valid_range_int "$AWG_JMAX" 64 1024 && (( AWG_JMIN <= AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 64..1024, Jmin должен быть <= Jmax."
+  valid_range_int "$AWG_S1" 0 64 && valid_range_int "$AWG_S2" 0 64 || die "некорректные S1/S2. Допустимый диапазон: 0..64."
   valid_positive_int "$AWG_H1" && valid_positive_int "$AWG_H2" && valid_positive_int "$AWG_H3" && valid_positive_int "$AWG_H4" || die "некорректные H1-H4."
   valid_name "$CLIENT_NAME" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then

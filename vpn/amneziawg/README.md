@@ -107,6 +107,7 @@ Enable nginx access logs for mask site? yes/no [no]
 
 `S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`.
 MTU по умолчанию — `1280`. При необходимости его можно переопределить переменной окружения `AWG_MTU`.
+Автоматические значения соблюдают диапазоны AmneziaWG: `Jc=0..10`, `Jmin/Jmax=64..1024`, `S1/S2=0..64`.
 Если apt/PPA дает типовую ошибку, установщик сначала пробует исправить ее сам: удаляет старую битую запись AmneziaWG PPA и перебирает поддерживаемые ветки PPA. Если исправить не получилось, причина выводится на русском языке.
 
 ### Что делает установщик
@@ -254,6 +255,7 @@ Enable nginx access logs for mask site? yes/no [no]
 
 `S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`.
 The default MTU is `1280`. Override it with the `AWG_MTU` environment variable if needed.
+Generated values follow AmneziaWG ranges: `Jc=0..10`, `Jmin/Jmax=64..1024`, `S1/S2=0..64`.
 For common apt/PPA failures, the installer first tries to repair the problem: it removes stale broken AmneziaWG PPA entries and tries supported PPA suites. If it cannot recover, it prints the reason in Russian.
 
 ### Installer actions
