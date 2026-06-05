@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ENV_FILE="/etc/amnezia/amneziawg/awgctl.env"
 
 die() {
-  echo "ERROR: $*" >&2
+  echo "ОШИБКА: $*" >&2
   exit 1
 }
 
@@ -13,11 +13,11 @@ have() {
 }
 
 require_root() {
-  [[ $EUID -eq 0 ]] || die "Run this script as root."
+  [[ $EUID -eq 0 ]] || die "запустите awgctl от root."
 }
 
 load_env() {
-  [[ -r "$ENV_FILE" ]] || die "Environment file not found: $ENV_FILE"
+  [[ -r "$ENV_FILE" ]] || die "env-файл не найден: $ENV_FILE"
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   AWG_CONFIG="${AWG_DIR}/${AWG_IFACE}.conf"
@@ -26,8 +26,8 @@ load_env() {
 
 ensure_dirs() {
   install -d -m 0700 "$CLIENT_DIR" "$CLIENT_OUT_DIR"
-  [[ -r "$AWG_CONFIG" ]] || die "AmneziaWG config not found: $AWG_CONFIG"
-  [[ -r "$SERVER_PUBLIC_KEY_FILE" ]] || die "Server public key not found: $SERVER_PUBLIC_KEY_FILE"
+  [[ -r "$AWG_CONFIG" ]] || die "конфиг AmneziaWG не найден: $AWG_CONFIG"
+  [[ -r "$SERVER_PUBLIC_KEY_FILE" ]] || die "публичный ключ сервера не найден: $SERVER_PUBLIC_KEY_FILE"
 }
 
 valid_name() {
@@ -80,7 +80,7 @@ next_client_ip() {
       return 0
     fi
   done
-  die "No free client IPs in $AWG_SUBNET"
+  die "нет свободных IP для клиентов в сети $AWG_SUBNET"
 }
 
 client_exists() {
@@ -138,7 +138,8 @@ write_client_config() {
   server_pub="$(cat "$SERVER_PUBLIC_KEY_FILE")"
 
   umask 077
-  cat > "$CLIENT_OUT_DIR/${name}.conf" <<EOF
+  {
+    cat <<EOF
 [Interface]
 PrivateKey = ${private_key}
 Address = ${ip}/32
@@ -153,6 +154,9 @@ H1 = ${AWG_H1}
 H2 = ${AWG_H2}
 H3 = ${AWG_H3}
 H4 = ${AWG_H4}
+EOF
+    write_optional_awg_params
+    cat <<EOF
 
 [Peer]
 PublicKey = ${server_pub}
@@ -161,6 +165,17 @@ Endpoint = ${PUBLIC_ENDPOINT}:${AWG_PORT}
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 EOF
+  } > "$CLIENT_OUT_DIR/${name}.conf"
+}
+
+write_optional_awg_params() {
+  [[ -n "${AWG_S3:-}" ]] && printf 'S3 = %s\n' "$AWG_S3"
+  [[ -n "${AWG_S4:-}" ]] && printf 'S4 = %s\n' "$AWG_S4"
+  [[ -n "${AWG_I1:-}" ]] && printf 'I1 = %s\n' "$AWG_I1"
+  [[ -n "${AWG_I2:-}" ]] && printf 'I2 = %s\n' "$AWG_I2"
+  [[ -n "${AWG_I3:-}" ]] && printf 'I3 = %s\n' "$AWG_I3"
+  [[ -n "${AWG_I4:-}" ]] && printf 'I4 = %s\n' "$AWG_I4"
+  [[ -n "${AWG_I5:-}" ]] && printf 'I5 = %s\n' "$AWG_I5"
 }
 
 cmd_add() {
@@ -168,10 +183,10 @@ cmd_add() {
   local private_key public_key psk ip created_at
 
   if [[ -z "$name" ]]; then
-    read -r -p "Client name: " name
+    read -r -p "Имя клиента: " name
   fi
-  valid_name "$name" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
-  client_exists "$name" && die "Client already exists: $name"
+  valid_name "$name" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
+  client_exists "$name" && die "клиент уже существует: $name"
 
   private_key="$(awg genkey)"
   public_key="$(printf '%s' "$private_key" | awg pubkey)"
@@ -194,11 +209,9 @@ EOF
     awg set "$AWG_IFACE" peer "$public_key" preshared-key <(printf '%s\n' "$psk") allowed-ips "${ip}/32"
   fi
 
-  echo "Client added: $name"
-  echo "Config: $CLIENT_OUT_DIR/${name}.conf"
-  cmd_show "$name"
-  echo
-  cmd_qr "$name"
+  echo "Клиент добавлен: $name"
+  echo "Конфиг: $CLIENT_OUT_DIR/${name}.conf"
+  cmd_show "$name" --qr
 }
 
 cmd_delete() {
@@ -207,11 +220,11 @@ cmd_delete() {
 
   if [[ -z "$name" ]]; then
     cmd_list
-    read -r -p "Client to delete: " name
+    read -r -p "Клиент для удаления: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
-  [[ -n "$name" ]] || die "No client selected."
-  client_exists "$name" || die "Client not found: $name"
+  [[ -n "$name" ]] || die "клиент не выбран."
+  client_exists "$name" || die "клиент не найден: $name"
 
   # shellcheck disable=SC1090
   . "$CLIENT_DIR/${name}.env"
@@ -221,7 +234,7 @@ cmd_delete() {
   fi
   remove_peer_config "$name"
   rm -f "$CLIENT_DIR/${name}.env" "$CLIENT_OUT_DIR/${name}.conf"
-  echo "Client deleted: $name"
+  echo "Клиент удален: $name"
 }
 
 client_name_by_number() {
@@ -235,7 +248,7 @@ cmd_list() {
   local i=0 env name ip created
   shopt -s nullglob
   if ! compgen -G "$CLIENT_DIR/*.env" >/dev/null; then
-    echo "No clients."
+    echo "Клиентов нет."
     shopt -u nullglob
     return 0
   fi
@@ -254,27 +267,35 @@ cmd_list() {
 
 cmd_show() {
   local name="${1:-}"
+  local qr_flag="${2:-}"
   if [[ -z "$name" ]]; then
     cmd_list
-    read -r -p "Client to show: " name
+    read -r -p "Клиент для показа: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
-  [[ -n "$name" ]] || die "No client selected."
-  [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "Client config not found: $name"
+  [[ -n "$name" ]] || die "клиент не выбран."
+  [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "конфиг клиента не найден: $name"
   cat "$CLIENT_OUT_DIR/${name}.conf"
+  if [[ "$qr_flag" == "--qr" || "$qr_flag" == "qr" ]]; then
+    echo
+    cmd_qr "$name"
+  else
+    echo >&2
+    echo "QR: awgctl qr ${name}" >&2
+  fi
 }
 
 cmd_qr() {
   local name="${1:-}"
   if [[ -z "$name" ]]; then
     cmd_list
-    read -r -p "Client to show QR: " name
+    read -r -p "Клиент для показа QR: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
-  [[ -n "$name" ]] || die "No client selected."
-  [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "Client config not found: $name"
+  [[ -n "$name" ]] || die "клиент не выбран."
+  [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "конфиг клиента не найден: $name"
   if ! have qrencode; then
-    die "qrencode is not installed. Run: apt-get install -y qrencode"
+    die "qrencode не установлен. Выполните: apt-get install -y qrencode"
   fi
   qrencode -t ANSIUTF8 < "$CLIENT_OUT_DIR/${name}.conf"
 }
@@ -328,6 +349,7 @@ Usage:
   awgctl delete [name|number]
   awgctl list
   awgctl show [name|number]
+  awgctl show [name|number] --qr
   awgctl qr [name|number]
   awgctl traffic
 EOF
@@ -349,7 +371,7 @@ main() {
     add) cmd_add "${1:-}" ;;
     delete|del|remove|rm) cmd_delete "${1:-}" ;;
     list|ls) cmd_list ;;
-    show|config) cmd_show "${1:-}" ;;
+    show|config) cmd_show "$@" ;;
     qr|qrcode) cmd_qr "${1:-}" ;;
     traffic|stats) cmd_traffic ;;
     *) cmd_help; exit 1 ;;

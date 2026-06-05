@@ -14,16 +14,24 @@ AWG_SUBNET="${AWG_SUBNET:-10.88.88.0/24}"
 AWG_SERVER_IP="${AWG_SERVER_IP:-10.88.88.1}"
 AWG_DNS="${AWG_DNS:-1.1.1.1,8.8.8.8}"
 AWG_MTU="${AWG_MTU:-1280}"
+AWG_OBFS_PROFILE="${AWG_OBFS_PROFILE:-mobile}"
 CLIENT_NAME="${CLIENT_NAME:-}"
 AWG_JC="${AWG_JC:-}"
 AWG_JMIN="${AWG_JMIN:-}"
 AWG_JMAX="${AWG_JMAX:-}"
 AWG_S1="${AWG_S1:-}"
 AWG_S2="${AWG_S2:-}"
+AWG_S3="${AWG_S3:-}"
+AWG_S4="${AWG_S4:-}"
 AWG_H1="${AWG_H1:-}"
 AWG_H2="${AWG_H2:-}"
 AWG_H3="${AWG_H3:-}"
 AWG_H4="${AWG_H4:-}"
+AWG_I1="${AWG_I1:-}"
+AWG_I2="${AWG_I2:-}"
+AWG_I3="${AWG_I3:-}"
+AWG_I4="${AWG_I4:-}"
+AWG_I5="${AWG_I5:-}"
 ENABLE_HTTPS_MASK="${ENABLE_HTTPS_MASK:-0}"
 MASK_DOMAIN="${MASK_DOMAIN:-}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
@@ -184,16 +192,24 @@ AWG_SUBNET=$(printf '%q' "$AWG_SUBNET")
 AWG_SERVER_IP=$(printf '%q' "$AWG_SERVER_IP")
 AWG_DNS=$(printf '%q' "$AWG_DNS")
 AWG_MTU=$(printf '%q' "$AWG_MTU")
+AWG_OBFS_PROFILE=$(printf '%q' "$AWG_OBFS_PROFILE")
 CLIENT_NAME=$(printf '%q' "$CLIENT_NAME")
 AWG_JC=$(printf '%q' "$AWG_JC")
 AWG_JMIN=$(printf '%q' "$AWG_JMIN")
 AWG_JMAX=$(printf '%q' "$AWG_JMAX")
 AWG_S1=$(printf '%q' "$AWG_S1")
 AWG_S2=$(printf '%q' "$AWG_S2")
+AWG_S3=$(printf '%q' "$AWG_S3")
+AWG_S4=$(printf '%q' "$AWG_S4")
 AWG_H1=$(printf '%q' "$AWG_H1")
 AWG_H2=$(printf '%q' "$AWG_H2")
 AWG_H3=$(printf '%q' "$AWG_H3")
 AWG_H4=$(printf '%q' "$AWG_H4")
+AWG_I1=$(printf '%q' "$AWG_I1")
+AWG_I2=$(printf '%q' "$AWG_I2")
+AWG_I3=$(printf '%q' "$AWG_I3")
+AWG_I4=$(printf '%q' "$AWG_I4")
+AWG_I5=$(printf '%q' "$AWG_I5")
 ENABLE_HTTPS_MASK=$(printf '%q' "$ENABLE_HTTPS_MASK")
 MASK_DOMAIN=$(printf '%q' "$MASK_DOMAIN")
 LETSENCRYPT_EMAIL=$(printf '%q' "$LETSENCRYPT_EMAIL")
@@ -300,21 +316,122 @@ bool_value() {
 rand_range() {
   local min="$1"
   local max="$2"
-  local span
+  local span rnd
   span=$((max - min + 1))
-  echo $((min + (RANDOM % span)))
+  if have od; then
+    rnd="$(od -An -N4 -tu4 /dev/urandom 2>/dev/null | tr -d '[:space:]' || true)"
+  else
+    rnd=""
+  fi
+  if [[ -z "$rnd" ]]; then
+    rnd=$(( (RANDOM << 16) ^ RANDOM ))
+  fi
+  echo $((min + (rnd % span)))
+}
+
+normalize_obfs_profile() {
+  local value
+  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    plain|compat|mobile|awg1|awg2) printf '%s' "$value" ;;
+    *) return 1 ;;
+  esac
+}
+
+set_default() {
+  local var_name="$1"
+  local value="$2"
+  if [[ -z "${!var_name:-}" ]]; then
+    printf -v "$var_name" '%s' "$value"
+  fi
+}
+
+ensure_unique_fixed_headers() {
+  local var_name value seen_values=" "
+
+  for var_name in AWG_H1 AWG_H2 AWG_H3 AWG_H4; do
+    if [[ -z "${!var_name:-}" ]]; then
+      while :; do
+        value="$(rand_range 5 2147483647)"
+        [[ "$seen_values" != *" $value "* ]] && break
+      done
+      printf -v "$var_name" '%s' "$value"
+    fi
+    seen_values="${seen_values}${!var_name} "
+  done
+}
+
+rand_header_range() {
+  local min="$1"
+  local max="$2"
+  local width="$3"
+  local start end
+  start="$(rand_range "$min" "$((max - width))")"
+  end=$((start + width))
+  printf '%s-%s' "$start" "$end"
+}
+
+ensure_range_headers() {
+  set_default AWG_H1 "$(rand_header_range 100000000 199999999 999)"
+  set_default AWG_H2 "$(rand_header_range 500000000 599999999 999)"
+  set_default AWG_H3 "$(rand_header_range 900000000 999999999 999)"
+  set_default AWG_H4 "$(rand_header_range 1300000000 1799999999 999999)"
 }
 
 ensure_awg_obfuscation_params() {
-  AWG_JC="${AWG_JC:-$(rand_range 6 10)}"
-  AWG_JMIN="${AWG_JMIN:-$(rand_range 64 128)}"
-  AWG_JMAX="${AWG_JMAX:-$(rand_range 512 1024)}"
-  AWG_S1="${AWG_S1:-$(rand_range 16 64)}"
-  AWG_S2="${AWG_S2:-$(rand_range 16 64)}"
-  AWG_H1="${AWG_H1:-$(rand_range 10000000 2000000000)}"
-  AWG_H2="${AWG_H2:-$(rand_range 10000000 2000000000)}"
-  AWG_H3="${AWG_H3:-$(rand_range 10000000 2000000000)}"
-  AWG_H4="${AWG_H4:-$(rand_range 10000000 2000000000)}"
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, compat, awg1, awg2, plain."
+
+  case "$AWG_OBFS_PROFILE" in
+    plain)
+      set_default AWG_JC 0
+      set_default AWG_JMIN 0
+      set_default AWG_JMAX 0
+      set_default AWG_S1 0
+      set_default AWG_S2 0
+      set_default AWG_H1 0
+      set_default AWG_H2 0
+      set_default AWG_H3 0
+      set_default AWG_H4 0
+      ;;
+    compat)
+      set_default AWG_JC 3
+      set_default AWG_JMIN 8
+      set_default AWG_JMAX 80
+      set_default AWG_S1 0
+      set_default AWG_S2 0
+      set_default AWG_H1 1
+      set_default AWG_H2 2
+      set_default AWG_H3 3
+      set_default AWG_H4 4
+      ;;
+    mobile)
+      set_default AWG_JC 3
+      set_default AWG_JMIN 8
+      set_default AWG_JMAX 130
+      set_default AWG_S1 "$(rand_range 15 80)"
+      set_default AWG_S2 "$(rand_range 15 80)"
+      ensure_unique_fixed_headers
+      ;;
+    awg1)
+      set_default AWG_JC "$(rand_range 4 12)"
+      set_default AWG_JMIN "$(rand_range 8 80)"
+      set_default AWG_JMAX "$(rand_range 81 512)"
+      set_default AWG_S1 "$(rand_range 15 150)"
+      set_default AWG_S2 "$(rand_range 15 150)"
+      ensure_unique_fixed_headers
+      ;;
+    awg2)
+      set_default AWG_JC 3
+      set_default AWG_JMIN 8
+      set_default AWG_JMAX 130
+      set_default AWG_S1 "$(rand_range 15 80)"
+      set_default AWG_S2 "$(rand_range 15 80)"
+      set_default AWG_S3 "$(rand_range 0 32)"
+      set_default AWG_S4 "$(rand_range 0 16)"
+      ensure_range_headers
+      set_default AWG_I1 '<b 0xc700000001><rc 8><t><r 100>'
+      ;;
+  esac
 }
 
 valid_positive_int() {
@@ -323,6 +440,48 @@ valid_positive_int() {
 
 valid_range_int() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= "$2" && "$1" <= "$3" ))
+}
+
+header_minmax() {
+  local value="$1"
+  local min max
+  if [[ "$value" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+    min="${BASH_REMATCH[1]}"
+    max="${BASH_REMATCH[2]}"
+  elif [[ "$value" =~ ^[0-9]+$ ]]; then
+    min="$value"
+    max="$value"
+  else
+    return 1
+  fi
+
+  (( min <= max && max <= 2147483647 )) || return 1
+  printf '%s %s\n' "$min" "$max"
+}
+
+validate_awg_headers() {
+  local labels values i j min_i max_i min_j max_j
+  labels=(H1 H2 H3 H4)
+  values=("$AWG_H1" "$AWG_H2" "$AWG_H3" "$AWG_H4")
+
+  if [[ "$AWG_OBFS_PROFILE" == "plain" && "$AWG_H1" == "0" && "$AWG_H2" == "0" && "$AWG_H3" == "0" && "$AWG_H4" == "0" ]]; then
+    return 0
+  fi
+
+  for i in "${!values[@]}"; do
+    read -r min_i max_i < <(header_minmax "${values[$i]}") || die "некорректный ${labels[$i]}: ${values[$i]}. Нужно число или диапазон min-max."
+    for (( j=i+1; j<${#values[@]}; j++ )); do
+      read -r min_j max_j < <(header_minmax "${values[$j]}") || die "некорректный ${labels[$j]}: ${values[$j]}. Нужно число или диапазон min-max."
+      if (( min_i <= max_j && min_j <= max_i )); then
+        die "диапазоны ${labels[$i]}=${values[$i]} и ${labels[$j]}=${values[$j]} пересекаются. H1-H4 должны быть уникальными."
+      fi
+    done
+  done
+}
+
+valid_awg_text_param() {
+  local value="$1"
+  [[ "$value" != *$'\n'* && ${#value} -lt 4096 ]]
 }
 
 detect_os() {
@@ -365,9 +524,8 @@ mask_default_email() {
 }
 
 prompt_config() {
-  local mask_answer logs_answer
+  local mask_answer logs_answer s1_max s2_max
   detect_public_ipv4 || true
-  ensure_awg_obfuscation_params
 
   mask_answer="$([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo yes || echo no)"
   prompt mask_answer "Включить HTTPS-маскировку? yes/no" "$mask_answer"
@@ -391,6 +549,10 @@ prompt_config() {
   prompt AWG_SUBNET "VPN IPv4-сеть" "$AWG_SUBNET"
   prompt AWG_SERVER_IP "VPN IPv4 сервера" "$AWG_SERVER_IP"
   prompt AWG_DNS "DNS клиентов, IPv4 через запятую" "$AWG_DNS"
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, compat, awg1, awg2, plain."
+  prompt AWG_OBFS_PROFILE "Профиль обфускации (mobile/compat/awg1/awg2/plain)" "$AWG_OBFS_PROFILE"
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, compat, awg1, awg2, plain."
+  ensure_awg_obfuscation_params
   prompt AWG_JC "AmneziaWG junk packet count Jc" "$AWG_JC"
   prompt AWG_JMIN "AmneziaWG junk min size Jmin" "$AWG_JMIN"
   prompt AWG_JMAX "AmneziaWG junk max size Jmax" "$AWG_JMAX"
@@ -411,10 +573,26 @@ prompt_config() {
   valid_ipv4 "$AWG_SERVER_IP" || die "некорректный VPN IPv4 сервера: $AWG_SERVER_IP."
   valid_dns_list "$AWG_DNS" || die "DNS должен быть списком IPv4-адресов через запятую."
   valid_mtu "$AWG_MTU" || die "MTU должен быть числом от 576 до 1420."
-  valid_range_int "$AWG_JC" 0 10 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 0..10."
-  valid_range_int "$AWG_JMIN" 64 1024 && valid_range_int "$AWG_JMAX" 64 1024 && (( AWG_JMIN <= AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 64..1024, Jmin должен быть <= Jmax."
-  valid_range_int "$AWG_S1" 0 64 && valid_range_int "$AWG_S2" 0 64 || die "некорректные S1/S2. Допустимый диапазон: 0..64."
-  valid_positive_int "$AWG_H1" && valid_positive_int "$AWG_H2" && valid_positive_int "$AWG_H3" && valid_positive_int "$AWG_H4" || die "некорректные H1-H4."
+  if [[ "$AWG_OBFS_PROFILE" == "plain" ]]; then
+    valid_range_int "$AWG_JC" 0 128 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 0..128."
+    valid_range_int "$AWG_JMIN" 0 1280 && valid_range_int "$AWG_JMAX" 0 1280 && (( AWG_JMIN <= AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 0..1280, Jmin должен быть <= Jmax."
+  else
+    valid_range_int "$AWG_JC" 1 128 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 1..128."
+    valid_range_int "$AWG_JMIN" 1 1280 && valid_range_int "$AWG_JMAX" 1 1280 && (( AWG_JMIN < AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 1..1280, Jmin должен быть < Jmax."
+  fi
+  s1_max=$((AWG_MTU - 148))
+  s2_max=$((AWG_MTU - 92))
+  (( s1_max < 0 )) && s1_max=0
+  (( s2_max < 0 )) && s2_max=0
+  valid_range_int "$AWG_S1" 0 "$s1_max" && valid_range_int "$AWG_S2" 0 "$s2_max" || die "некорректные S1/S2 для MTU ${AWG_MTU}. Допустимо: S1=0..${s1_max}, S2=0..${s2_max}."
+  if [[ -n "$AWG_S3" ]]; then
+    valid_range_int "$AWG_S3" 0 64 || die "некорректный S3: $AWG_S3. Допустимый диапазон: 0..64."
+  fi
+  if [[ -n "$AWG_S4" ]]; then
+    valid_range_int "$AWG_S4" 0 64 || die "некорректный S4: $AWG_S4. Допустимый диапазон: 0..64."
+  fi
+  validate_awg_headers
+  valid_awg_text_param "$AWG_I1" && valid_awg_text_param "$AWG_I2" && valid_awg_text_param "$AWG_I3" && valid_awg_text_param "$AWG_I4" && valid_awg_text_param "$AWG_I5" || die "некорректные I1-I5: параметр слишком длинный или содержит перенос строки."
   valid_name "$CLIENT_NAME" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     valid_domain "$MASK_DOMAIN" || die "домен маскировки должен быть корректным доменным именем."
@@ -485,7 +663,9 @@ print_plan() {
   IP сервера:      ${AWG_SERVER_IP}
   DNS клиентов:    ${AWG_DNS}
   MTU:             ${AWG_MTU}
+  профиль:         ${AWG_OBFS_PROFILE}
   обфускация:      Jc=${AWG_JC}, Jmin=${AWG_JMIN}, Jmax=${AWG_JMAX}, S1=${AWG_S1}, S2=${AWG_S2}
+  AWG 2.0:         $([[ -n "${AWG_S3}${AWG_S4}${AWG_I1}${AWG_I2}${AWG_I3}${AWG_I4}${AWG_I5}" ]] && echo "S3=${AWG_S3:-off}, S4=${AWG_S4:-off}, I1=$([[ -n "$AWG_I1" ]] && echo да || echo нет)" || echo нет)
   HTTPS-маскировка: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "да, https://${MASK_DOMAIN}/ на TCP 443" || echo нет)
   nginx logs:      $([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo да || echo нет)
   первый клиент:   ${CLIENT_NAME}
@@ -751,22 +931,40 @@ AWG_SUBNET=$(printf '%q' "$AWG_SUBNET")
 AWG_SERVER_IP=$(printf '%q' "$AWG_SERVER_IP")
 AWG_DNS=$(printf '%q' "$AWG_DNS")
 AWG_MTU=$(printf '%q' "$AWG_MTU")
+AWG_OBFS_PROFILE=$(printf '%q' "$AWG_OBFS_PROFILE")
 PUBLIC_ENDPOINT=$(printf '%q' "$PUBLIC_ENDPOINT")
 AWG_JC=$(printf '%q' "$AWG_JC")
 AWG_JMIN=$(printf '%q' "$AWG_JMIN")
 AWG_JMAX=$(printf '%q' "$AWG_JMAX")
 AWG_S1=$(printf '%q' "$AWG_S1")
 AWG_S2=$(printf '%q' "$AWG_S2")
+AWG_S3=$(printf '%q' "$AWG_S3")
+AWG_S4=$(printf '%q' "$AWG_S4")
 AWG_H1=$(printf '%q' "$AWG_H1")
 AWG_H2=$(printf '%q' "$AWG_H2")
 AWG_H3=$(printf '%q' "$AWG_H3")
 AWG_H4=$(printf '%q' "$AWG_H4")
+AWG_I1=$(printf '%q' "$AWG_I1")
+AWG_I2=$(printf '%q' "$AWG_I2")
+AWG_I3=$(printf '%q' "$AWG_I3")
+AWG_I4=$(printf '%q' "$AWG_I4")
+AWG_I5=$(printf '%q' "$AWG_I5")
 ENABLE_HTTPS_MASK=$(printf '%q' "$ENABLE_HTTPS_MASK")
 MASK_DOMAIN=$(printf '%q' "$MASK_DOMAIN")
 AWG_DIR=$(printf '%q' "$AWG_DIR")
 CLIENT_DIR=$(printf '%q' "$CLIENT_DIR")
 CLIENT_OUT_DIR=$(printf '%q' "$CLIENT_OUT_DIR")
 EOF
+}
+
+write_optional_awg_params() {
+  [[ -n "$AWG_S3" ]] && printf 'S3 = %s\n' "$AWG_S3"
+  [[ -n "$AWG_S4" ]] && printf 'S4 = %s\n' "$AWG_S4"
+  [[ -n "$AWG_I1" ]] && printf 'I1 = %s\n' "$AWG_I1"
+  [[ -n "$AWG_I2" ]] && printf 'I2 = %s\n' "$AWG_I2"
+  [[ -n "$AWG_I3" ]] && printf 'I3 = %s\n' "$AWG_I3"
+  [[ -n "$AWG_I4" ]] && printf 'I4 = %s\n' "$AWG_I4"
+  [[ -n "$AWG_I5" ]] && printf 'I5 = %s\n' "$AWG_I5"
 }
 
 write_awg_config() {
@@ -779,7 +977,8 @@ write_awg_config() {
   [[ -n "$wan_iface" ]] || die "не удалось определить внешний сетевой интерфейс для NAT."
 
   umask 077
-  cat > "$AWG_DIR/${AWG_IFACE}.conf" <<EOF
+  {
+    cat <<EOF
 [Interface]
 Address = ${AWG_SERVER_IP}/${prefix}
 MTU = ${AWG_MTU}
@@ -794,10 +993,14 @@ H1 = ${AWG_H1}
 H2 = ${AWG_H2}
 H3 = ${AWG_H3}
 H4 = ${AWG_H4}
+EOF
+    write_optional_awg_params
+    cat <<EOF
 SaveConfig = false
 PostUp = sysctl -w net.ipv4.ip_forward=1 >/dev/null; iptables -C FORWARD -i ${AWG_IFACE} -o ${wan_iface} -j ACCEPT 2>/dev/null || iptables -A FORWARD -i ${AWG_IFACE} -o ${wan_iface} -j ACCEPT; iptables -C FORWARD -i ${wan_iface} -o ${AWG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -A FORWARD -i ${wan_iface} -o ${AWG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -C POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE
 PostDown = iptables -D FORWARD -i ${AWG_IFACE} -o ${wan_iface} -j ACCEPT 2>/dev/null || true; iptables -D FORWARD -i ${wan_iface} -o ${AWG_IFACE} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true; iptables -t nat -D POSTROUTING -s ${AWG_SUBNET} -o ${wan_iface} -j MASQUERADE 2>/dev/null || true
 EOF
+  } > "$AWG_DIR/${AWG_IFACE}.conf"
   chmod 600 "$AWG_DIR/${AWG_IFACE}.conf"
 }
 
@@ -1032,6 +1235,7 @@ AmneziaWG установлен.
 
 Endpoint: ${PUBLIC_ENDPOINT}:${AWG_PORT}/udp
 Интерфейс: ${AWG_IFACE}
+Профиль обфускации: ${AWG_OBFS_PROFILE}
 HTTPS-маскировка: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "https://${MASK_DOMAIN}/ на TCP 443" || echo нет)
 Первый клиент: ${CLIENT_NAME}
 
@@ -1054,4 +1258,6 @@ HTTPS-маскировка: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "https:/
 EOF
 }
 
-main "$@"
+if [[ "${AWG_INSTALLER_LIBRARY_ONLY:-0}" != "1" ]]; then
+  main "$@"
+fi

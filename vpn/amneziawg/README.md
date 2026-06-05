@@ -47,9 +47,10 @@ AmneziaWG — это WireGuard-подобный VPN с дополнительн�
 
 ```text
 Jc, Jmin, Jmax, S1, S2, H1, H2, H3, H4
+S3, S4, I1-I5 для профилей AmneziaWG 2.0
 ```
 
-Обычный WireGuard app такие конфиги не понимает. Для iPhone нужен клиент **AmneziaVPN**, который умеет AmneziaWG.
+Обычный WireGuard app такие конфиги не понимает. Для iPhone используйте нативный **AmneziaWG** из App Store или **AmneziaVPN** с поддержкой AmneziaWG.
 
 ### Режимы установки
 
@@ -98,6 +99,7 @@ AmneziaWG interface [awg0]
 VPN IPv4 subnet [10.88.88.0/24]
 Server VPN IPv4 [10.88.88.1]
 Client DNS, comma separated IPv4 [1.1.1.1,8.8.8.8]
+Obfuscation profile [mobile]
 AmneziaWG junk packet count Jc [random]
 AmneziaWG junk min size Jmin [random]
 AmneziaWG junk max size Jmax [random]
@@ -105,11 +107,33 @@ First client name
 Enable nginx access logs for mask site? yes/no [no]
 ```
 
-`S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`.
+`S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`. Для профиля `awg2` также могут генерироваться `S3`, `S4`, `I1-I5`.
 MTU по умолчанию — `1280`. При необходимости его можно переопределить переменной окружения `AWG_MTU`.
-Автоматические значения соблюдают диапазоны AmneziaWG: `Jc=0..10`, `Jmin/Jmax=64..1024`, `S1/S2=0..64`.
+Автоматические значения соблюдают диапазоны AmneziaWG: `Jc=1..128`, `Jmin/Jmax=1..1280`, `S1/S2` в пределах MTU, `H1-H4` не пересекаются. Для диагностического профиля `plain` допускаются нулевые значения.
 Если apt/PPA дает типовую ошибку, установщик сначала пробует исправить ее сам: удаляет старую битую запись AmneziaWG PPA и перебирает поддерживаемые ветки PPA. Если исправить не получилось, причина выводится на русском языке.
 При повторной установке первый клиент пересоздается под текущие параметры, поэтому нужно заново импортировать QR.
+
+### Профили обфускации
+
+```text
+mobile  - профиль по умолчанию для LTE/мобильных сетей: Jc=3, короткие junk-пакеты, без I1.
+compat  - совместимый режим из старых инструкций Amnezia: S1/S2=0, H1-H4=1..4. Удобен для диагностики handshake.
+awg1    - классический AmneziaWG 1.x со случайными S/H/J в официальных диапазонах.
+awg2    - AmneziaWG 2.0: добавляет S3/S4, диапазоны H1-H4 и QUIC-подобный I1.
+plain   - диагностический WG-like режим с нулевой обфускацией.
+```
+
+Быстрый тест, если UDP до сервера доходит, но `handshake never`:
+
+```bash
+cd /root/telemt2
+git pull
+cd /root/telemt2/vpn/amneziawg
+RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=compat CLIENT_NAME=compat1 ./install_amneziawg.sh
+awgctl qr compat1
+```
+
+Если `compat` подключается, а `mobile` или `awg2` нет, значит проблема не в firewall/NAT, а в выбранных параметрах обфускации или реакции мобильного оператора на первый UDP-пакет.
 
 ### Что делает установщик
 
@@ -153,6 +177,7 @@ awgctl delete client1
 ```
 
 Этот `.conf` импортируется в AmneziaVPN, не в обычный WireGuard app.
+Нативный клиент AmneziaWG тоже подходит.
 
 ### Логи и приватность
 
@@ -196,9 +221,10 @@ AmneziaWG is a WireGuard-like VPN with additional obfuscation parameters:
 
 ```text
 Jc, Jmin, Jmax, S1, S2, H1, H2, H3, H4
+S3, S4, I1-I5 for AmneziaWG 2.0 profiles
 ```
 
-The standard WireGuard app does not understand these configs. On iPhone, use **AmneziaVPN**, which supports AmneziaWG.
+The standard WireGuard app does not understand these configs. On iPhone, use the native **AmneziaWG** app or **AmneziaVPN** with AmneziaWG support.
 
 ### Install modes
 
@@ -247,6 +273,7 @@ AmneziaWG interface [awg0]
 VPN IPv4 subnet [10.88.88.0/24]
 Server VPN IPv4 [10.88.88.1]
 Client DNS, comma separated IPv4 [1.1.1.1,8.8.8.8]
+Obfuscation profile [mobile]
 AmneziaWG junk packet count Jc [random]
 AmneziaWG junk min size Jmin [random]
 AmneziaWG junk max size Jmax [random]
@@ -254,11 +281,21 @@ First client name
 Enable nginx access logs for mask site? yes/no [no]
 ```
 
-`S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`.
+`S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`. The `awg2` profile may also generate `S3`, `S4`, and `I1-I5`.
 The default MTU is `1280`. Override it with the `AWG_MTU` environment variable if needed.
-Generated values follow AmneziaWG ranges: `Jc=0..10`, `Jmin/Jmax=64..1024`, `S1/S2=0..64`.
+Generated values follow AmneziaWG ranges: `Jc=1..128`, `Jmin/Jmax=1..1280`, `S1/S2` within MTU limits, and non-overlapping `H1-H4`. The diagnostic `plain` profile allows zero values.
 For common apt/PPA failures, the installer first tries to repair the problem: it removes stale broken AmneziaWG PPA entries and tries supported PPA suites. If it cannot recover, it prints the reason in Russian.
 On reinstall, the first client is recreated for the current parameters, so import the new QR again.
+
+### Obfuscation Profiles
+
+```text
+mobile  - default LTE/mobile profile: Jc=3, short junk packets, no I1.
+compat  - compatibility mode from older Amnezia guidance: S1/S2=0, H1-H4=1..4. Useful for handshake diagnostics.
+awg1    - classic AmneziaWG 1.x with random S/H/J values in official ranges.
+awg2    - AmneziaWG 2.0: adds S3/S4, H1-H4 ranges, and a QUIC-like I1.
+plain   - diagnostic WG-like mode with zero obfuscation.
+```
 
 ### Installer actions
 
@@ -302,6 +339,7 @@ Client configs:
 ```
 
 Import this `.conf` into AmneziaVPN, not into the standard WireGuard app.
+The native AmneziaWG client is supported too.
 
 ### Logs and privacy
 
