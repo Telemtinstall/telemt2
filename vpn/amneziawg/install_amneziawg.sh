@@ -675,10 +675,12 @@ install_amneziawg_tools() {
   retry_command "скачивание ключа AmneziaWG PPA" curl -fsSL \
     "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x75c9dd72c799870e310542e24166f2c257290828" \
     -o /tmp/amneziawg-ppa.key
-  if ! gpg --dearmor < /tmp/amneziawg-ppa.key > "$keyring"; then
+  rm -f "$keyring"
+  if ! gpg --dearmor --yes --output "$keyring" /tmp/amneziawg-ppa.key; then
     rm -f /tmp/amneziawg-ppa.key
     die "не удалось сохранить ключ AmneziaWG PPA в $keyring."
   fi
+  chmod 0644 "$keyring"
   rm -f /tmp/amneziawg-ppa.key
 
   installed=0
