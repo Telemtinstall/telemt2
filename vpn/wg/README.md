@@ -105,8 +105,8 @@ Enable nginx access logs for mask site? yes/no [no]
 6. Добавляет forwarding-правила и NAT MASQUERADE для VPN-сети.
 7. Если включена маскировка, создает nginx-сайт, выпускает SSL и включает certbot.timer.
 8. Открывает порты и `ufw route allow` для VPN-маршрута, если ufw активен.
-9. Включает и запускает wg-quick@wg0.
-10. Создает первого клиента, печатает конфиг и QR-код.
+9. Включает и перезапускает wg-quick@wg0.
+10. Создает первого клиента через wgctl и печатает QR-код.
 ```
 
 ### Логи и приватность
@@ -121,6 +121,8 @@ error_log /dev/null crit
 ```
 
 ### Управление клиентами
+
+`wgctl` устанавливается как системная команда в `/usr/local/sbin/wgctl` и доступен через `/usr/local/bin/wgctl`, поэтому его можно запускать из любого каталога.
 
 ```bash
 wgctl add
@@ -140,6 +142,10 @@ wgctl qr client1
 wgctl traffic
 wgctl delete client1
 ```
+
+Если выполнить `wgctl add` без имени и просто нажать Enter, будет создан `pipiska1`. Если такое имя уже занято, будет выбран следующий свободный номер.
+
+После `wgctl add <name>` показывается QR для импорта. Текстовый конфиг можно посмотреть отдельно: `wgctl show <name>`.
 
 Конфиги клиентов сохраняются в:
 
@@ -241,8 +247,8 @@ When masking is enabled, the installer checks that the domain A record points to
 6. Adds forwarding rules and NAT MASQUERADE for the VPN subnet.
 7. If masking is enabled, creates an nginx site, issues SSL, and enables certbot.timer.
 8. Opens ports and `ufw route allow` for the VPN route if ufw is active.
-9. Enables and starts wg-quick@wg0.
-10. Creates the first client and prints config plus QR code.
+9. Enables and restarts wg-quick@wg0.
+10. Creates the first client through wgctl and prints QR code.
 ```
 
 ### Logs and privacy
@@ -257,6 +263,8 @@ error_log /dev/null crit
 ```
 
 ### Client management
+
+`wgctl` is installed as a system command at `/usr/local/sbin/wgctl` and exposed through `/usr/local/bin/wgctl`, so it can be run from any directory.
 
 ```bash
 wgctl add
@@ -276,6 +284,10 @@ wgctl qr client1
 wgctl traffic
 wgctl delete client1
 ```
+
+If you run `wgctl add` without a name and press Enter, it creates `pipiska1`. If that name already exists, the next free number is used.
+
+After `wgctl add <name>`, the command prints the QR for import. To view the text config separately, run `wgctl show <name>`.
 
 Client configs are saved to:
 

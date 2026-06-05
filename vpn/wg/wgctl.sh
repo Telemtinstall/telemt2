@@ -87,6 +87,38 @@ client_exists() {
   [[ -f "$CLIENT_DIR/$1.env" ]]
 }
 
+client_name_exists() {
+  [[ -e "$CLIENT_DIR/$1.env" || -e "$CLIENT_OUT_DIR/$1.conf" ]]
+}
+
+next_client_name() {
+  local requested="${1:-pipiska1}"
+  local prefix number candidate
+
+  if ! client_name_exists "$requested"; then
+    printf '%s' "$requested"
+    return 0
+  fi
+
+  if [[ "$requested" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    number="${BASH_REMATCH[2]}"
+  else
+    prefix="${requested}"
+    number=1
+  fi
+
+  while :; do
+    number=$((10#$number + 1))
+    candidate="${prefix}${number}"
+    valid_name "$candidate" || die "Cannot choose next client name after ${requested}: invalid generated name ${candidate}."
+    if ! client_name_exists "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+}
+
 bytes_human() {
   local bytes="${1:-0}"
   awk -v b="$bytes" 'BEGIN {
@@ -154,15 +186,67 @@ PersistentKeepalive = 25
 EOF
 }
 
+client_config_complete() {
+  local conf="$CLIENT_OUT_DIR/${1}.conf"
+  [[ -r "$conf" ]] || return 1
+  grep -Eq '^\[Interface\]$' "$conf" || return 1
+  grep -Eq '^PrivateKey = .+' "$conf" || return 1
+  grep -Eq '^\[Peer\]$' "$conf" || return 1
+  grep -Eq '^PublicKey = .+' "$conf" || return 1
+  grep -Eq '^PresharedKey = .+' "$conf" || return 1
+  grep -Eq '^Endpoint = .+' "$conf" || return 1
+  grep -Eq '^AllowedIPs = .+' "$conf" || return 1
+  return 0
+}
+
+client_private_key_from_config() {
+  local conf="$CLIENT_OUT_DIR/${1}.conf"
+  awk -F ' = ' '$1 == "PrivateKey" {print $2; exit}' "$conf"
+}
+
+peer_psk_from_server_config() {
+  local name="$1"
+  awk -F ' = ' -v start="# BEGIN_WG_CLIENT ${name}" -v end="# END_WG_CLIENT ${name}" '
+    $0 == start {inside=1; next}
+    $0 == end {exit}
+    inside && $1 == "PresharedKey" {print $2; exit}
+  ' "$WG_CONFIG"
+}
+
+repair_client_config() {
+  local name="$1"
+  local private_key psk ip
+
+  if client_config_complete "$name"; then
+    return 0
+  fi
+  [[ -r "$CLIENT_DIR/${name}.env" ]] || die "Client env not found: ${CLIENT_DIR}/${name}.env"
+  # shellcheck disable=SC1090
+  . "$CLIENT_DIR/${name}.env"
+  ip="${CLIENT_IP:-}"
+  [[ -n "$ip" ]] || die "Cannot repair ${name}: CLIENT_IP is missing in env."
+  private_key="$(client_private_key_from_config "$name")"
+  [[ -n "$private_key" ]] || die "Cannot repair ${name}: PrivateKey is missing. Recreate client: wgctl delete ${name} && wgctl add ${name}"
+  psk="$(peer_psk_from_server_config "$name")"
+  [[ -n "$psk" ]] || die "Cannot repair ${name}: PresharedKey not found in ${WG_CONFIG}."
+  write_client_config "$name" "$private_key" "$psk" "$ip"
+  client_config_complete "$name" || die "Cannot repair ${name}: config is still incomplete after rebuild."
+  echo "Client config ${name} was incomplete, rebuilt it: ${CLIENT_OUT_DIR}/${name}.conf" >&2
+}
+
 cmd_add() {
   local name="${1:-}"
   local private_key public_key psk ip created_at
 
   if [[ -z "$name" ]]; then
-    read -r -p "Client name: " name
+    read -r -p "Client name [pipiska1]: " name
+    name="${name:-pipiska1}"
   fi
   valid_name "$name" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
-  client_exists "$name" && die "Client already exists: $name"
+  if client_name_exists "$name"; then
+    name="$(next_client_name "$name")"
+    echo "Client already exists, creating next: $name"
+  fi
 
   private_key="$(wg genkey)"
   public_key="$(printf '%s' "$private_key" | wg pubkey)"
@@ -180,6 +264,7 @@ EOF
 
   append_peer_config "$name" "$public_key" "$psk" "$ip"
   write_client_config "$name" "$private_key" "$psk" "$ip"
+  client_config_complete "$name" || die "Client config was created incomplete: ${CLIENT_OUT_DIR}/${name}.conf"
 
   if wg show "$WG_IFACE" >/dev/null 2>&1; then
     wg set "$WG_IFACE" peer "$public_key" preshared-key <(printf '%s\n' "$psk") allowed-ips "${ip}/32"
@@ -187,9 +272,10 @@ EOF
 
   echo "Client added: $name"
   echo "Config: $CLIENT_OUT_DIR/${name}.conf"
-  cmd_show "$name"
-  echo
+  echo "QR for import:"
   cmd_qr "$name"
+  echo >&2
+  echo "Text config: wgctl show ${name}" >&2
 }
 
 cmd_delete() {
@@ -252,6 +338,7 @@ cmd_show() {
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
   [[ -n "$name" ]] || die "No client selected."
   [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "Client config not found: $name"
+  repair_client_config "$name"
   cat "$CLIENT_OUT_DIR/${name}.conf"
 }
 
@@ -264,6 +351,7 @@ cmd_qr() {
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
   [[ -n "$name" ]] || die "No client selected."
   [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "Client config not found: $name"
+  repair_client_config "$name"
   if ! have qrencode; then
     die "qrencode is not installed. Run: apt-get install -y qrencode"
   fi

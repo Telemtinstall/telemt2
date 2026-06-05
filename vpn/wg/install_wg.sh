@@ -14,6 +14,7 @@ WG_SUBNET="${WG_SUBNET:-10.66.66.0/24}"
 WG_SERVER_IP="${WG_SERVER_IP:-10.66.66.1}"
 WG_DNS="${WG_DNS:-1.1.1.1,8.8.8.8}"
 WG_MTU="${WG_MTU:-1280}"
+CLIENT_NAME_WAS_SET="${CLIENT_NAME+x}"
 CLIENT_NAME="${CLIENT_NAME:-}"
 ENABLE_HTTPS_MASK="${ENABLE_HTTPS_MASK:-0}"
 MASK_DOMAIN="${MASK_DOMAIN:-}"
@@ -29,6 +30,7 @@ CLIENT_OUT_DIR="/root/wg-clients"
 MASK_ROOT_BASE="/var/www"
 ENV_FILE="$WG_DIR/wgctl.env"
 CTL_PATH="/usr/local/sbin/wgctl"
+CTL_BIN_PATH="/usr/local/bin/wgctl"
 STATE_FILE="/root/.install_wg.state"
 RESUME_CONFIG="/root/.install_wg.config"
 CONFIG_HASH_FILE="/root/.install_wg.config.sha256"
@@ -126,6 +128,16 @@ mark_done() {
   grep -Fxq "$id" "$STATE_FILE" 2>/dev/null || echo "$id" >> "$STATE_FILE"
 }
 
+unmark_done() {
+  local id="$1"
+  local tmp
+  [[ -f "$STATE_FILE" ]] || return 0
+  tmp="$(mktemp)"
+  grep -Fxv "$id" "$STATE_FILE" > "$tmp" || true
+  install -m 0600 "$tmp" "$STATE_FILE"
+  rm -f "$tmp"
+}
+
 run_step() {
   local id="$1"
   local title="$2"
@@ -194,6 +206,38 @@ reset_step_state_if_config_changed() {
 
 valid_name() {
   [[ "$1" =~ ^[A-Za-z0-9._@-]{1,64}$ ]]
+}
+
+client_name_exists() {
+  [[ -e "$CLIENT_DIR/$1.env" || -e "$CLIENT_OUT_DIR/$1.conf" ]]
+}
+
+next_client_name() {
+  local requested="${1:-pipiska1}"
+  local prefix number candidate
+
+  if ! client_name_exists "$requested"; then
+    printf '%s' "$requested"
+    return 0
+  fi
+
+  if [[ "$requested" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    number="${BASH_REMATCH[2]}"
+  else
+    prefix="${requested}"
+    number=1
+  fi
+
+  while :; do
+    number=$((10#$number + 1))
+    candidate="${prefix}${number}"
+    valid_name "$candidate" || die "Cannot choose next client name after ${requested}: invalid generated name ${candidate}."
+    if ! client_name_exists "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
 }
 
 valid_port() {
@@ -293,7 +337,7 @@ mask_default_email() {
 }
 
 prompt_config() {
-  local mask_answer logs_answer
+  local mask_answer logs_answer requested_client_name suggested_client_name
   detect_public_ipv4 || true
 
   mask_answer="$([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo yes || echo no)"
@@ -318,7 +362,20 @@ prompt_config() {
   prompt WG_SUBNET "VPN IPv4 subnet" "$WG_SUBNET"
   prompt WG_SERVER_IP "Server VPN IPv4" "$WG_SERVER_IP"
   prompt WG_DNS "Client DNS, comma separated IPv4" "$WG_DNS"
-  prompt CLIENT_NAME "First client name" "$CLIENT_NAME"
+  if [[ -n "$CLIENT_NAME_WAS_SET" ]]; then
+    requested_client_name="${CLIENT_NAME:-pipiska1}"
+  else
+    requested_client_name="pipiska1"
+  fi
+  suggested_client_name="$(next_client_name "$requested_client_name")"
+  CLIENT_NAME="$suggested_client_name"
+  prompt CLIENT_NAME "First client name" "$suggested_client_name"
+  valid_name "$CLIENT_NAME" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
+  if client_name_exists "$CLIENT_NAME"; then
+    suggested_client_name="$(next_client_name "$CLIENT_NAME")"
+    echo "WARN: client ${CLIENT_NAME} already exists, creating ${suggested_client_name} instead." >&2
+    CLIENT_NAME="$suggested_client_name"
+  fi
 
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     logs_answer="$([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)"
@@ -335,7 +392,6 @@ prompt_config() {
   valid_ipv4 "$WG_SERVER_IP" || die "Invalid server VPN IPv4: $WG_SERVER_IP"
   valid_dns_list "$WG_DNS" || die "DNS list must contain IPv4 addresses separated by commas."
   valid_mtu "$WG_MTU" || die "WireGuard MTU must be a number from 576 to 1420."
-  valid_name "$CLIENT_NAME" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     valid_domain "$MASK_DOMAIN" || die "Mask domain must be a valid domain name."
     valid_email "$LETSENCRYPT_EMAIL" || die "Let's Encrypt email is invalid."
@@ -416,7 +472,7 @@ EOF
 backup_state() {
   BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
   mkdir -p "$BACKUP_DIR"
-  for path in "$WG_DIR" "$CTL_PATH" "$ENV_FILE"; do
+  for path in "$WG_DIR" "$CTL_PATH" "$CTL_BIN_PATH" "$ENV_FILE"; do
     [[ -e "$path" || -L "$path" ]] && cp -a "$path" "$BACKUP_DIR"/
   done
   echo "backup_dir=$BACKUP_DIR"
@@ -434,7 +490,11 @@ port_listening_udp() {
 
 port_preflight() {
   if port_listening_udp "$WG_PORT"; then
-    die "UDP port $WG_PORT is already in use. Use a clean server or choose another port."
+    if wg show "$WG_IFACE" >/dev/null 2>&1 && [[ "$(wg show "$WG_IFACE" listen-port 2>/dev/null || true)" == "$WG_PORT" ]]; then
+      echo "WARN: UDP port $WG_PORT is already used by current $WG_IFACE; this is OK for reinstall, service will be restarted." >&2
+    else
+      die "UDP port $WG_PORT is already in use. Use a clean server or choose another port."
+    fi
   fi
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     if port_listening_tcp 80; then
@@ -522,7 +582,9 @@ EOF
 
 install_wgctl() {
   [[ -f "$SCRIPT_DIR/wgctl.sh" ]] || die "wgctl.sh must be next to install_wg.sh."
+  install -d -m 0755 "$(dirname "$CTL_PATH")" "$(dirname "$CTL_BIN_PATH")"
   install -m 0755 "$SCRIPT_DIR/wgctl.sh" "$CTL_PATH"
+  ln -sfn "$CTL_PATH" "$CTL_BIN_PATH"
 }
 
 configure_firewall() {
@@ -692,20 +754,24 @@ setup_https_mask() {
 }
 
 start_service() {
-  systemctl enable --now "wg-quick@${WG_IFACE}"
+  systemctl enable "wg-quick@${WG_IFACE}" >/dev/null
+  systemctl restart "wg-quick@${WG_IFACE}"
 }
 
 ensure_first_client() {
   if [[ -f "$CLIENT_DIR/${CLIENT_NAME}.env" ]]; then
-    echo "Client already exists: $CLIENT_NAME"
-  else
-    "$CTL_PATH" add "$CLIENT_NAME"
+    CLIENT_NAME="$(next_client_name "$CLIENT_NAME")"
+    echo "Client already exists, creating next: $CLIENT_NAME"
+    save_resume_config
   fi
+  "$CTL_PATH" add "$CLIENT_NAME"
+  unmark_done "verify"
 }
 
 verify_install() {
   systemctl is-active --quiet "wg-quick@${WG_IFACE}" || die "wg-quick@${WG_IFACE} is not active."
   wg show "$WG_IFACE" >/dev/null || die "WireGuard interface is not available."
+  wg show "$WG_IFACE" dump | tail -n +2 | grep -q . || die "Active interface ${WG_IFACE} has no clients. Run: systemctl restart wg-quick@${WG_IFACE}"
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     systemctl is-active --quiet nginx || die "nginx is not active."
   fi
@@ -733,11 +799,13 @@ main() {
   run_step "server_keys" "Generate server keys" generate_server_keys
   run_step "env" "Write control environment" write_env
   run_step "config" "Write WireGuard config" write_wg_config
+  unmark_done "ctl"
   run_step "ctl" "Install wgctl" install_wgctl
   run_step "firewall" "Open firewall ports if ufw is active" configure_firewall
   run_step "mask" "Configure HTTPS mask if enabled" setup_https_mask
+  unmark_done "service"
   run_step "service" "Start WireGuard" start_service
-  run_step "first_client" "Create first client" ensure_first_client
+  run_step "first_client" "Create first client through wgctl" ensure_first_client
   run_step "verify" "Verify" verify_install
   mark_done "done"
   save_resume_config
