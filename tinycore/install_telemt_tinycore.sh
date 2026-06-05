@@ -9,15 +9,12 @@ TELEMT_HOME="${TELEMT_HOME:-/opt/telemt}"
 ACME_HOME="${ACME_HOME:-/opt/acme.sh}"
 STATE_FILE="${STATE_FILE:-$TELEMT_HOME/.install_tinycore.state}"
 RESUME_CONFIG="${RESUME_CONFIG:-$TELEMT_HOME/install.conf}"
-TELEMT_RELEASE_FROM_ENV="${TELEMT_RELEASE:+1}"
-TELEMT_RELEASE="${TELEMT_RELEASE:-latest}"
-TELEMT_SHA256_X86_64="${TELEMT_SHA256_X86_64:-}"
-TELEMT_SHA256_AARCH64="${TELEMT_SHA256_AARCH64:-}"
+TELEMT_RELEASE="${TELEMT_RELEASE:-3.4.13}"
+TELEMT_SHA256_X86_64="${TELEMT_SHA256_X86_64:-6285d2cf95c2e143e7e95cfc8447a39077150bfcea2c31f1de0713d570f81630}"
+TELEMT_SHA256_AARCH64="${TELEMT_SHA256_AARCH64:-5403419f8369d180f1e9e1ac271b91dcf111b1b80607e47ac8f60eac48d25f02}"
 ACME_SH_VERSION="${ACME_SH_VERSION:-3.1.2}"
 ACME_SH_SHA256="${ACME_SH_SHA256:-c46b41a61c96f67d424e4b4e476907c964b81d53cf94358a9c1d363a4f99c3a4}"
 ASSUME_YES="${ASSUME_YES:-0}"
-SCRIPT_LANG="${SCRIPT_LANG:-en}"
-UPDATE_MODE="${UPDATE_MODE:-0}"
 
 PUBLIC_HOST="${PUBLIC_HOST:-}"
 PUBLIC_IP="${PUBLIC_IP:-}"
@@ -69,158 +66,6 @@ prompt_value_assume() {
     REPLY="$default_value"
   else
     prompt_value "$label" "$default_value"
-  fi
-}
-
-lower() {
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
-}
-
-normalize_script_lang() {
-  case "$(lower "$1")" in
-    ru|rus|russian|рус|русский) printf 'ru' ;;
-    en|eng|english|'') printf 'en' ;;
-    *) return 1 ;;
-  esac
-}
-
-is_ru() {
-  [ "${SCRIPT_LANG:-en}" = "ru" ]
-}
-
-parse_args() {
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      -update|--update|update)
-        UPDATE_MODE=1
-        ;;
-      -lang|--lang)
-        shift
-        [ "$#" -gt 0 ] || die "Missing value for -lang. Use ru or en."
-        SCRIPT_LANG="$(normalize_script_lang "$1")" || die "Bad language: $1. Use ru or en."
-        ;;
-      -lang=*|--lang=*)
-        value="${1#*=}"
-        SCRIPT_LANG="$(normalize_script_lang "$value")" || die "Bad language: $value. Use ru or en."
-        ;;
-      -h|--help)
-        cat <<'EOF'
-Usage:
-  install_telemt_tinycore.sh [--update] [-lang ru|en]
-
-Options:
-  -update, --update  Update the native Telemt binary and restart services while
-                     preserving telemt.toml, secrets, nginx and ACME settings.
-  -lang, --lang      Accept ru/en language selector.
-EOF
-        exit 0
-        ;;
-      *) die "Unknown argument: $1" ;;
-    esac
-    shift
-  done
-}
-
-needs_idn_normalization() {
-  value="$1"
-  case "$value" in
-    *[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-]*|*xn--*|*XN--*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-ensure_python3_for_idn() {
-  if have python3; then
-    return 0
-  fi
-  if have tce-load; then
-    tce-load -wi python3.11 || tce-load -wi python3.10 || tce-load -wi python3 || true
-  fi
-  have python3 || die "python3 is required for IDN/punycode domain normalization on Tiny Core. Install python3 or enter the domain in punycode."
-}
-
-domain_to_ascii() {
-  value="$1"
-  ensure_python3_for_idn
-  python3 - "$value" <<'PYIDN'
-import sys
-
-domain = sys.argv[1].strip().rstrip('.').lower()
-if not domain:
-    print('empty domain', file=sys.stderr)
-    sys.exit(1)
-if any(ch.isspace() or ch in '/\\' for ch in domain):
-    print('domain contains whitespace, slash, or backslash', file=sys.stderr)
-    sys.exit(1)
-try:
-    ascii_domain = domain.encode('idna').decode('ascii').lower()
-    decoded = ascii_domain.encode('ascii').decode('idna')
-    roundtrip = decoded.encode('idna').decode('ascii').lower()
-except Exception as exc:
-    print(f'IDNA/punycode conversion failed: {exc}', file=sys.stderr)
-    sys.exit(1)
-if ascii_domain != roundtrip:
-    print('IDNA/punycode round-trip check failed', file=sys.stderr)
-    sys.exit(1)
-labels = ascii_domain.split('.')
-if len(labels) < 2 or any(not label for label in labels):
-    print('domain must contain at least two non-empty labels', file=sys.stderr)
-    sys.exit(1)
-if any(len(label) > 63 for label in labels) or len(ascii_domain) > 253:
-    print('domain is too long after IDNA conversion', file=sys.stderr)
-    sys.exit(1)
-for label in labels:
-    if label.startswith('-') or label.endswith('-'):
-        print("domain label starts or ends with '-'", file=sys.stderr)
-        sys.exit(1)
-    if not all(ch.isalnum() or ch == '-' for ch in label):
-        print('domain contains invalid ASCII characters after IDNA conversion', file=sys.stderr)
-        sys.exit(1)
-print(ascii_domain)
-PYIDN
-}
-
-normalize_public_host() {
-  original="$PUBLIC_HOST"
-  PUBLIC_HOST="$(printf '%s' "$PUBLIC_HOST" | tr '[:upper:]' '[:lower:]')"
-  PUBLIC_HOST="${PUBLIC_HOST%.}"
-  if needs_idn_normalization "$PUBLIC_HOST"; then
-    PUBLIC_HOST="$(domain_to_ascii "$PUBLIC_HOST")" || die "Bad domain: $original"
-  fi
-  if [ "$PUBLIC_HOST" != "$original" ]; then
-    echo "Domain normalized to punycode/ASCII: $original -> $PUBLIC_HOST"
-  fi
-}
-
-normalize_letsencrypt_email() {
-  original="$LETSENCRYPT_EMAIL"
-  local_part="${LETSENCRYPT_EMAIL%@*}"
-  domain_part="${LETSENCRYPT_EMAIL#*@}"
-  [ "$local_part" != "$LETSENCRYPT_EMAIL" ] && [ -n "$local_part" ] || die "Email must be a plain email address."
-  printf '%s' "$local_part" | grep -Eq '^[A-Za-z0-9._%+-]+$' || die "Email local part has unsupported characters."
-  domain_part="$(printf '%s' "$domain_part" | tr '[:upper:]' '[:lower:]')"
-  domain_part="${domain_part%.}"
-  if needs_idn_normalization "$domain_part"; then
-    ascii_domain="$(domain_to_ascii "$domain_part")" || die "Bad email domain: $original"
-  else
-    ascii_domain="$domain_part"
-  fi
-  LETSENCRYPT_EMAIL="${local_part}@${ascii_domain}"
-  if [ "$LETSENCRYPT_EMAIL" != "$original" ]; then
-    echo "Email normalized to punycode/ASCII: $original -> $LETSENCRYPT_EMAIL"
-  fi
-}
-
-telemt_release_supports_exclusive_mask() {
-  case "$TELEMT_RELEASE" in
-    latest|v3.4.1[2-9]|3.4.1[2-9]|v3.[5-9].*|3.[5-9].*|v[4-9].*|[4-9].*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-exclusive_mask_block() {
-  if telemt_release_supports_exclusive_mask; then
-    printf '\n[censorship.exclusive_mask]\n"%s" = "127.0.0.1:8443"\n' "$PUBLIC_HOST"
   fi
 }
 
@@ -381,20 +226,13 @@ download_telemt() {
     telemt-aarch64-linux-musl.tar.gz) expected_sha="$TELEMT_SHA256_AARCH64" ;;
   esac
 
-  if [ "$TELEMT_RELEASE" = "latest" ]; then
-    base_url="https://github.com/telemt/telemt/releases/latest/download"
-  else
-    base_url="https://github.com/telemt/telemt/releases/download/$TELEMT_RELEASE"
-  fi
-  url="$base_url/$asset"
+  [ -n "$expected_sha" ] || die "Missing pinned sha256 for $asset."
+
+  url="https://github.com/telemt/telemt/releases/download/$TELEMT_RELEASE/$asset"
 
   echo "download=$url"
   curl -fsSL "$url" -o "$tmp_dir/$asset"
-  if [ -n "$expected_sha" ]; then
-    printf '%s  %s\n' "$expected_sha" "$asset" > "$tmp_dir/$asset.sha256"
-  else
-    curl -fsSL "$base_url/$asset.sha256" -o "$tmp_dir/$asset.sha256"
-  fi
+  printf '%s  %s\n' "$expected_sha" "$asset" > "$tmp_dir/$asset.sha256"
   (cd "$tmp_dir" && sha256sum -c "$asset.sha256") || die "Telemt sha256 check failed."
 
   tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"
@@ -512,164 +350,29 @@ configure_acme_renewal_hooks() {
 
 write_mask_page() {
   mkdir -p "$TELEMT_HOME/www"
-  mask_site_started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   cat > "$TELEMT_HOME/www/index.html" <<EOF
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${PUBLIC_HOST}</title>
   <style>
-    :root {
-      color-scheme: dark;
-      --bg: #202020;
-      --panel: #f4f4f1;
-      --text: #f7f7f5;
-      --muted: #b9b9b4;
-      --ink: #2a2a2a;
-      --accent: #8fd3ff;
-    }
-    * { box-sizing: border-box; }
-    html, body { min-height: 100%; margin: 0; }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background:
-        radial-gradient(circle at 78% 32%, rgba(143,211,255,.08), transparent 28%),
-        linear-gradient(135deg, #242424 0%, var(--bg) 100%);
-      color: var(--text);
-      display: grid;
-      place-items: center;
-      padding: 40px 22px;
-    }
-    main {
-      width: min(980px, 100%);
-      display: grid;
-      gap: 56px;
-    }
-    .domain {
-      color: var(--muted);
-      font-size: 15px;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-    .hero {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 260px;
-      gap: 56px;
-      align-items: center;
-    }
-    h1 {
-      font-size: clamp(44px, 8vw, 86px);
-      line-height: .92;
-      margin: 0 0 20px;
-      letter-spacing: 0;
-      text-transform: uppercase;
-    }
-    .timer-label {
-      margin: 34px 0 14px;
-      color: var(--muted);
-      font-size: 16px;
-    }
-    .timer {
-      background: var(--panel);
-      color: var(--ink);
-      border-radius: 8px;
-      padding: 28px 30px;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(80px, 1fr));
-      gap: 18px;
-      width: min(650px, 100%);
-      box-shadow: 0 24px 60px rgba(0,0,0,.26);
-    }
-    .num {
-      display: block;
-      font-size: clamp(34px, 6vw, 58px);
-      font-weight: 300;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-    .unit {
-      display: block;
-      margin-top: 10px;
-      color: #676761;
-      font-size: 11px;
-      letter-spacing: .22em;
-      text-transform: uppercase;
-    }
-    .machine {
-      position: relative;
-      width: 240px;
-      height: 240px;
-      border: 13px solid rgba(255,255,255,.22);
-      border-radius: 50%;
-    }
-    .machine:before {
-      content: "";
-      position: absolute;
-      inset: 42px;
-      border: 13px solid rgba(255,255,255,.19);
-      border-left-color: transparent;
-      border-radius: 50%;
-      animation: spin 14s linear infinite;
-    }
-    .machine:after {
-      content: "";
-      position: absolute;
-      width: 170px;
-      height: 92px;
-      right: -54px;
-      bottom: 8px;
-      border: 13px solid rgba(255,255,255,.22);
-      border-radius: 18px;
-      background:
-        linear-gradient(rgba(255,255,255,.22), rgba(255,255,255,.22)) 24px 24px / 118px 10px no-repeat,
-        linear-gradient(rgba(255,255,255,.22), rgba(255,255,255,.22)) 24px 52px / 118px 10px no-repeat;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @media (max-width: 760px) {
-      main { gap: 34px; }
-      .hero { grid-template-columns: 1fr; gap: 28px; }
-      .machine { display: none; }
-      .timer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #1d2733; }
+    main { min-height: 100vh; display: grid; place-items: center; padding: 32px; box-sizing: border-box; }
+    section { width: min(720px, 100%); }
+    h1 { margin: 0 0 14px; font-size: 44px; font-weight: 650; letter-spacing: 0; }
+    p { margin: 0 0 18px; font-size: 18px; line-height: 1.55; color: #52606d; }
   </style>
 </head>
 <body>
   <main>
-    <div class="domain">${PUBLIC_HOST}</div>
-    <section class="hero" aria-label="Статус сайта">
-      <div>
-        <h1>Сайт уже работает</h1>
-        <div class="timer-label">Работает с момента установки:</div>
-        <div class="timer" aria-live="polite">
-          <div><span class="num" id="days">0</span><span class="unit">дней</span></div>
-          <div><span class="num" id="hours">00</span><span class="unit">часов</span></div>
-          <div><span class="num" id="minutes">00</span><span class="unit">минут</span></div>
-          <div><span class="num" id="seconds">00</span><span class="unit">секунд</span></div>
-        </div>
-      </div>
-      <div class="machine" aria-hidden="true"></div>
+    <section>
+      <h1>${PUBLIC_HOST}</h1>
+      <p>Digital infrastructure, network diagnostics, and private systems maintenance.</p>
+      <p>For service requests, scheduled access, or operational questions, contact your project administrator.</p>
     </section>
   </main>
-  <script>
-    const startedAt = new Date("${mask_site_started_at}");
-    const pad = function(value) { return String(value).padStart(2, "0"); };
-    function updateTimer() {
-      const diff = Math.max(0, Date.now() - startedAt.getTime());
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor(totalSeconds % 86400 / 3600);
-      const minutes = Math.floor(totalSeconds % 3600 / 60);
-      const seconds = totalSeconds % 60;
-      document.getElementById("days").textContent = String(days);
-      document.getElementById("hours").textContent = pad(hours);
-      document.getElementById("minutes").textContent = pad(minutes);
-      document.getElementById("seconds").textContent = pad(seconds);
-    }
-    updateTimer();
-    setInterval(updateTimer, 1000);
-  </script>
 </body>
 </html>
 EOF
@@ -766,6 +469,7 @@ show_link = []
 fast_mode = true
 use_middle_proxy = false
 config_strict = true
+log_level = "silent"
 
 [general.links]
 show = []
@@ -793,6 +497,8 @@ enabled = true
 listen = "127.0.0.1:9091"
 read_only = true
 request_body_limit_bytes = 65536
+minimal_runtime_enabled = true
+minimal_runtime_cache_ttl_ms = 1000
 
 [[server.listeners]]
 ip = "127.0.0.1"
@@ -804,10 +510,10 @@ mask = true
 mask_host = "127.0.0.1"
 mask_port = 8443
 tls_emulation = true
-tls_front_dir = "tlsfront"
+tls_front_dir = "/tmp/telemt-tlsfront"
 tls_full_cert_ttl_secs = 0
 alpn_enforce = true
-$(exclusive_mask_block)
+
 [access]
 replay_check_len = 65536
 ignore_time_skew = false
@@ -925,109 +631,6 @@ write_proxy_link() {
   chmod 600 /root/telemt-proxy-link.txt 2>/dev/null || true
 }
 
-
-toml_value_from_section() {
-  file="$1"
-  section="$2"
-  key="$3"
-  [ -f "$file" ] || return 1
-  awk -v section="$section" -v wanted="$key" '
-    $0 ~ "^\\[" section "\\]" {in_section=1; next}
-    /^\[/ && in_section {in_section=0}
-    in_section {
-      line=$0
-      sub(/#.*/, "", line)
-      eq=index(line, "=")
-      if (!eq) next
-      key=substr(line, 1, eq - 1)
-      val=substr(line, eq + 1)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
-      gsub(/^"|"$/, "", key)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
-      gsub(/^"|"$/, "", val)
-      if (key == wanted) {
-        print val
-        exit
-      }
-    }
-  ' "$file"
-}
-
-infer_update_config_from_existing_files() {
-  if [ -f "$TELEMT_HOME/telemt.toml" ]; then
-    existing_domain="$(toml_value_from_section "$TELEMT_HOME/telemt.toml" "general\\.links" "public_host" || true)"
-    if [ -z "$existing_domain" ]; then
-      existing_domain="$(toml_value_from_section "$TELEMT_HOME/telemt.toml" "censorship" "tls_domain" || true)"
-    fi
-    [ -n "$existing_domain" ] && PUBLIC_HOST="${PUBLIC_HOST:-$existing_domain}"
-  fi
-  if [ -n "$PUBLIC_HOST" ]; then
-    normalize_public_host
-  fi
-}
-
-backup_update_state() {
-  backup_dir="$TELEMT_HOME/update-backups/$(date +%Y%m%d-%H%M%S)"
-  mkdir -p "$backup_dir"
-  for path in "$TELEMT_HOME/telemt.toml" "$TELEMT_HOME/telemt-secret.env" "$TELEMT_HOME/nginx/nginx.conf" "$RESUME_CONFIG" /root/telemt-proxy-link.txt; do
-    if [ -e "$path" ]; then
-      cp -a "$path" "$backup_dir"/
-    fi
-  done
-  chmod -R go-rwx "$backup_dir" 2>/dev/null || true
-  echo "Update backup: $backup_dir"
-}
-
-run_update_mode() {
-  [ -d "$TELEMT_HOME" ] || die "Telemt home not found: $TELEMT_HOME"
-  [ -f "$TELEMT_HOME/telemt.toml" ] || die "Telemt config not found: $TELEMT_HOME/telemt.toml"
-  infer_update_config_from_existing_files
-  [ -n "$PUBLIC_HOST" ] || die "Cannot detect domain from existing Telemt config."
-  detect_public_ip
-
-  cat <<EOF
-
-Update plan:
-  domain:        ${PUBLIC_HOST}
-  public IPv4:   ${PUBLIC_IP}
-  release:       ${TELEMT_RELEASE}
-  Telemt config: preserved without rewrite
-  secrets/users: preserved
-  nginx/ACME:    preserved
-
-Type y or yes to update:
-EOF
-  if [ "$ASSUME_YES" = "1" ]; then
-    echo "ASSUME_YES=1, continuing."
-  else
-    read -r confirm
-    case "$confirm" in
-      y|Y|yes|YES|Yes) ;;
-      *) die "Cancelled." ;;
-    esac
-  fi
-
-  backup_update_state
-  stop_services
-  download_telemt
-  write_restart_script
-  configure_acme_renewal_hooks
-  "$TELEMT_HOME/bin/restart.sh"
-  sleep 8
-  write_proxy_link || true
-  persist_tinycore_files
-  telemt-report 2m || true
-  echo
-  echo "Update done. Existing config and secrets were preserved."
-  if [ -s /root/telemt-proxy-link.txt ]; then
-    echo "Proxy link:"
-    cat /root/telemt-proxy-link.txt
-  fi
-}
-
-parse_args "$@"
-REQUESTED_TELEMT_RELEASE="$TELEMT_RELEASE"
-
 require_tinycore
 
 if [ "${RESET_INSTALL_STATE:-0}" = "1" ]; then
@@ -1038,14 +641,6 @@ if [ -f "$RESUME_CONFIG" ]; then
   # shellcheck disable=SC1090
   . "$RESUME_CONFIG"
   echo "Resume config found: $RESUME_CONFIG"
-fi
-if [ "$TELEMT_RELEASE_FROM_ENV" = "1" ]; then
-  TELEMT_RELEASE="$REQUESTED_TELEMT_RELEASE"
-fi
-
-if [ "$UPDATE_MODE" = "1" ]; then
-  run_update_mode
-  exit 0
 fi
 
 cat <<'EOF'
@@ -1060,36 +655,18 @@ Before running:
 
 EOF
 
-if is_ru; then
-  prompt_value_assume "Домен прокси" "$PUBLIC_HOST"
-else
-  prompt_value_assume "Proxy domain" "$PUBLIC_HOST"
-fi
+prompt_value_assume "Proxy domain" "$PUBLIC_HOST"
 PUBLIC_HOST="$REPLY"
-normalize_public_host
 valid_domain "$PUBLIC_HOST" || die "Domain must be a valid DNS name, for example proxy.example.com."
 
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@$PUBLIC_HOST}"
-if is_ru; then
-  prompt_value_assume "Email для Let's Encrypt" "$LETSENCRYPT_EMAIL"
-else
-  prompt_value_assume "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
-fi
+prompt_value_assume "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
 LETSENCRYPT_EMAIL="$REPLY"
-normalize_letsencrypt_email
 
-if is_ru; then
-  prompt_value_assume "SSH-порт, Enter оставляет текущий/по умолчанию. Tiny Core установщик не меняет SSH config" "$SSH_PORT"
-else
-  prompt_value_assume "SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config" "$SSH_PORT"
-fi
+prompt_value_assume "SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config" "$SSH_PORT"
 SSH_PORT="$REPLY"
 
-if is_ru; then
-  prompt_value_assume "Максимум подключений Telemt" "$TELEMT_MAX_TCP_CONNS"
-else
-  prompt_value_assume "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
-fi
+prompt_value_assume "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
 TELEMT_MAX_TCP_CONNS="$REPLY"
 
 printf '%s\n' "$LETSENCRYPT_EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' || die "Email must be a plain email address."
@@ -1120,7 +697,7 @@ if [ "$ASSUME_YES" = "1" ]; then
 else
   read -r confirm
   case "$confirm" in
-    y|Y|yes|YES|Yes|д|Д|да|ДА|Да) ;;
+    y|Y|yes|YES|Yes) ;;
     *) die "Cancelled." ;;
   esac
 fi

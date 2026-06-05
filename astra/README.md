@@ -1,8 +1,5 @@
 # install_telemt_astra.sh
 
-> RU: Это не официальный установщик Telemt или Astra Linux-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
-> EN: This is not an official Telemt or Astra Linux package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
-
 ## Русское описание
 
 `install_telemt_astra.sh` автоматически поднимает Telemt MTProto proxy на новом сервере Astra Linux.
@@ -54,14 +51,14 @@ scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 Если файл нужно скачать прямо с GitHub на сервере:
 
 ```bash
-wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
 То же самое через `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
@@ -72,8 +69,8 @@ apt-get update
 apt-get install -y git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set telemt/astra
-cp telemt/astra/install_telemt_astra.sh /root/
+git sparse-checkout set astra
+cp astra/install_telemt_astra.sh /root/
 chmod +x /root/install_telemt_astra.sh
 ```
 
@@ -102,25 +99,6 @@ tmux attach -t telemt-install
 ```
 
 Если `tmux` не установлен, можно просто запустить скрипт повторно. Скрипт сохраняет прогресс и пропускает уже завершённые шаги.
-
-
-### Как обновлять уже установленный Telemt
-
-Скачайте свежий установщик и запустите update-режим. Он сохранит существующие настройки, пользователей, секреты, nginx/SSH-конфиги и сертификаты.
-
-```bash
-wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
-chmod +x /root/install_telemt_astra.sh
-/root/install_telemt_astra.sh --update -lang ru
-```
-
-Если текущий Docker compose закреплён на `image@sha256:...`, update пересоздаст контейнер на том же digest. Чтобы явно перейти на другой image/tag, передайте:
-
-```bash
-TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt_astra.sh --update -lang ru
-```
-
-IDN-домены поддерживаются: если ввести кириллицу, скрипт переведёт домен в punycode; если ввести `xn--...`, скрипт проверит, что это корректный punycode.
 
 ### Что спросит скрипт
 
@@ -297,15 +275,18 @@ PubkeyAuthentication yes
 Telemt запускается в Docker:
 
 ```text
+image: ghcr.io/telemt/telemt:latest
 container_name: telemt
 network_mode: host
 user: 65532:65532
 read_only: true
 cap_drop: ALL
 no-new-privileges: true
+config mount: /opt/telemt-config -> /etc/telemt
+runtime tmpfs: /tmp, /run/telemt
 ```
 
-CPU/RAM/PID лимиты в `docker-compose.yml` не задаются, чтобы Telemt не упирался в искусственные ограничения при большом числе клиентов и загрузке медиа.
+CPU/RAM/PID лимиты не задаются: контейнер не режется искусственно при загрузке медиа или большом числе клиентов.
 
 Основные параметры Telemt:
 
@@ -316,6 +297,8 @@ tls = true
 use_middle_proxy = false
 upstream = direct
 max_tcp_conns = <LIMIT>
+config_strict = true
+server.api.read_only = true
 ```
 
 ### Результат установки
@@ -569,14 +552,14 @@ scp install_telemt_astra.sh root@<SERVER_PUBLIC_IP>:/root/
 If you want to download it directly from GitHub on the server:
 
 ```bash
-wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
 The same with `curl`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
+curl -fsSL -o /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/astra/install_telemt_astra.sh
 chmod +x /root/install_telemt_astra.sh
 ```
 
@@ -587,8 +570,8 @@ apt-get update
 apt-get install -y git
 git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
 cd /tmp/telemt
-git sparse-checkout set telemt/astra
-cp telemt/astra/install_telemt_astra.sh /root/
+git sparse-checkout set astra
+cp astra/install_telemt_astra.sh /root/
 chmod +x /root/install_telemt_astra.sh
 ```
 
@@ -793,15 +776,18 @@ PubkeyAuthentication yes
 Telemt runs in Docker:
 
 ```text
+image: ghcr.io/telemt/telemt:latest
 container_name: telemt
 network_mode: host
 user: 65532:65532
 read_only: true
 cap_drop: ALL
 no-new-privileges: true
+config mount: /opt/telemt-config -> /etc/telemt
+runtime tmpfs: /tmp, /run/telemt
 ```
 
-CPU/RAM/PID limits are not set in `docker-compose.yml`, so Telemt does not hit artificial limits when many clients load media.
+No CPU/RAM/PID limits are set, so the container is not artificially throttled during media loading or high client counts.
 
 Main Telemt parameters:
 
@@ -812,6 +798,8 @@ tls = true
 use_middle_proxy = false
 upstream = direct
 max_tcp_conns = <LIMIT>
+config_strict = true
+server.api.read_only = true
 ```
 
 ### Installation Result
@@ -933,25 +921,6 @@ ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt_astra.sh
 /root/install_telemt_astra.sh
 ```
-
-
-### Updating an Existing Telemt Install
-
-Download the fresh installer and run update mode. It preserves existing settings, users, secrets, nginx/SSH configs, and certificates.
-
-```bash
-wget -O /root/install_telemt_astra.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/astra/install_telemt_astra.sh
-chmod +x /root/install_telemt_astra.sh
-/root/install_telemt_astra.sh --update -lang en
-```
-
-If the current Docker compose file is pinned to `image@sha256:...`, update recreates the container with the same digest. To explicitly move to another image/tag, pass:
-
-```bash
-TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt_astra.sh --update -lang en
-```
-
-IDN domains are supported: Cyrillic input is converted to punycode; existing `xn--...` input is validated as real punycode.
 
 ### Batch Installation install_telemt_batch_astra.sh
 
