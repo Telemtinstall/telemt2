@@ -143,6 +143,7 @@ write_client_config() {
 PrivateKey = ${private_key}
 Address = ${ip}/32
 DNS = ${WG_DNS}
+MTU = ${WG_MTU:-1280}
 
 [Peer]
 PublicKey = ${server_pub}
