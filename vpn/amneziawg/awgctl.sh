@@ -297,7 +297,10 @@ EOF
 
   echo "Клиент добавлен: $name"
   echo "Конфиг: $CLIENT_OUT_DIR/${name}.conf"
-  cmd_show "$name" --qr
+  echo "QR для импорта:"
+  cmd_qr "$name"
+  echo >&2
+  echo "Текстовый конфиг: awgctl show ${name}" >&2
 }
 
 cmd_delete() {
