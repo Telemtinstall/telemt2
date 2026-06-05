@@ -1265,7 +1265,6 @@ ensure_first_client() {
     save_resume_config
   fi
   "$CTL_PATH" add "$CLIENT_NAME"
-  unmark_done "service"
   unmark_done "verify"
 }
 
@@ -1306,8 +1305,9 @@ main() {
   run_step "ctl" "Установка awgctl" install_awgctl
   run_step "firewall" "Открытие портов в ufw, если он активен" configure_firewall
   run_step "mask" "Настройка HTTPS-маскировки при необходимости" setup_https_mask
-  run_step "first_client" "Создание первого клиента" ensure_first_client
+  unmark_done "service"
   run_step "service" "Запуск AmneziaWG" start_service
+  run_step "first_client" "Создание первого клиента через awgctl" ensure_first_client
   run_step "verify" "Проверка установки" verify_install
   mark_done "done"
   save_resume_config
