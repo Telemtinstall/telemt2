@@ -106,13 +106,14 @@ Enable nginx access logs for mask site? yes/no [no]
 ```
 
 `S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`.
+MTU по умолчанию — `1280`. При необходимости его можно переопределить переменной окружения `AWG_MTU`.
 
 ### Что делает установщик
 
 ```text
 1. Проверяет DNS A-запись домена, если включена HTTPS-маскировка.
 2. Ставит базовые пакеты.
-3. Добавляет AmneziaWG PPA и ставит пакет amneziawg.
+3. Добавляет AmneziaWG PPA и ставит пакет amneziawg. Для Ubuntu-релизов без своей ветки PPA, например 26.04/resolute, используется поддерживаемая ветка `noble`.
 4. Создает /etc/amnezia/amneziawg/awg0.conf.
 5. Включает IPv4 forwarding и NAT MASQUERADE.
 6. Если включена маскировка, ставит nginx/certbot, создает сайт, выпускает SSL и включает certbot.timer.
@@ -251,13 +252,14 @@ Enable nginx access logs for mask site? yes/no [no]
 ```
 
 `S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`.
+The default MTU is `1280`. Override it with the `AWG_MTU` environment variable if needed.
 
 ### Installer actions
 
 ```text
 1. Checks DNS A record if HTTPS masking is enabled.
 2. Installs base packages.
-3. Adds the AmneziaWG PPA and installs the amneziawg package.
+3. Adds the AmneziaWG PPA and installs the amneziawg package. Ubuntu releases without their own PPA suite, for example 26.04/resolute, use the supported `noble` suite.
 4. Creates /etc/amnezia/amneziawg/awg0.conf.
 5. Enables IPv4 forwarding and NAT MASQUERADE.
 6. If masking is enabled, installs nginx/certbot, creates a site, issues SSL, and enables certbot.timer.

@@ -13,6 +13,7 @@ AWG_PORT="${AWG_PORT:-51820}"
 AWG_SUBNET="${AWG_SUBNET:-10.88.88.0/24}"
 AWG_SERVER_IP="${AWG_SERVER_IP:-10.88.88.1}"
 AWG_DNS="${AWG_DNS:-1.1.1.1,8.8.8.8}"
+AWG_MTU="${AWG_MTU:-1280}"
 CLIENT_NAME="${CLIENT_NAME:-}"
 AWG_JC="${AWG_JC:-}"
 AWG_JMIN="${AWG_JMIN:-}"
@@ -30,6 +31,7 @@ ENABLE_NGINX_LOGS="${ENABLE_NGINX_LOGS:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
 INSTALL_RETRIES="${INSTALL_RETRIES:-3}"
 RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-5}"
+AWG_PPA_CODENAME="${AWG_PPA_CODENAME:-}"
 
 AWG_DIR="/etc/amnezia/amneziawg"
 CLIENT_DIR="$AWG_DIR/clients"
@@ -156,6 +158,7 @@ AWG_PORT=$(printf '%q' "$AWG_PORT")
 AWG_SUBNET=$(printf '%q' "$AWG_SUBNET")
 AWG_SERVER_IP=$(printf '%q' "$AWG_SERVER_IP")
 AWG_DNS=$(printf '%q' "$AWG_DNS")
+AWG_MTU=$(printf '%q' "$AWG_MTU")
 CLIENT_NAME=$(printf '%q' "$CLIENT_NAME")
 AWG_JC=$(printf '%q' "$AWG_JC")
 AWG_JMIN=$(printf '%q' "$AWG_JMIN")
@@ -253,6 +256,10 @@ valid_dns_list() {
     item="$(trim_value "$item")"
     valid_ipv4 "$item" || return 1
   done
+}
+
+valid_mtu() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 576 && "$1" <= 1420 ))
 }
 
 bool_value() {
@@ -374,6 +381,7 @@ prompt_config() {
   valid_cidr "$AWG_SUBNET" || die "VPN subnet must be IPv4 CIDR with prefix 8..30."
   valid_ipv4 "$AWG_SERVER_IP" || die "Invalid server VPN IPv4: $AWG_SERVER_IP"
   valid_dns_list "$AWG_DNS" || die "DNS list must contain IPv4 addresses separated by commas."
+  valid_mtu "$AWG_MTU" || die "MTU must be an integer between 576 and 1420."
   valid_positive_int "$AWG_JC" && (( AWG_JC <= 128 )) || die "Invalid Jc: $AWG_JC"
   valid_positive_int "$AWG_JMIN" && valid_positive_int "$AWG_JMAX" && (( AWG_JMIN <= AWG_JMAX && AWG_JMAX <= 1280 )) || die "Invalid Jmin/Jmax."
   valid_positive_int "$AWG_S1" && valid_positive_int "$AWG_S2" || die "Invalid S1/S2."
@@ -447,6 +455,7 @@ Install plan:
   subnet:          ${AWG_SUBNET}
   server IP:       ${AWG_SERVER_IP}
   client DNS:      ${AWG_DNS}
+  MTU:             ${AWG_MTU}
   obfuscation:     Jc=${AWG_JC}, Jmin=${AWG_JMIN}, Jmax=${AWG_JMAX}, S1=${AWG_S1}, S2=${AWG_S2}
   HTTPS mask site: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "yes, https://${MASK_DOMAIN}/ on TCP 443" || echo no)
   nginx logs:      $([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo yes || echo no)
@@ -493,6 +502,7 @@ install_packages() {
   local packages
   export DEBIAN_FRONTEND=noninteractive
   packages=(ca-certificates curl gnupg dirmngr lsb-release iproute2 iptables qrencode)
+  remove_amnezia_ppa_entries
   retry_command "apt-get update" apt-get update
   retry_command "apt-get install base tools" apt-get install -y "${packages[@]}"
 }
@@ -501,6 +511,40 @@ install_mask_packages() {
   [[ "$ENABLE_HTTPS_MASK" == "1" ]] || return 0
   export DEBIAN_FRONTEND=noninteractive
   retry_command "install nginx and certbot" apt-get install -y nginx certbot
+}
+
+select_awg_ppa_codename() {
+  local os_id="$1"
+  local os_codename="$2"
+
+  if [[ -n "$AWG_PPA_CODENAME" ]]; then
+    echo "$AWG_PPA_CODENAME"
+    return 0
+  fi
+
+  case "${os_id}:${os_codename}" in
+    ubuntu:trusty|ubuntu:xenial|ubuntu:bionic|ubuntu:focal|ubuntu:jammy|ubuntu:noble|ubuntu:oracular|ubuntu:plucky)
+      echo "$os_codename"
+      ;;
+    ubuntu:*)
+      echo "noble"
+      ;;
+    *)
+      echo "focal"
+      ;;
+  esac
+}
+
+remove_amnezia_ppa_entries() {
+  local entry
+  shopt -s nullglob
+  for entry in \
+    /etc/apt/sources.list.d/amnezia-ubuntu-ppa*.list \
+    /etc/apt/sources.list.d/amnezia-ubuntu-ppa*.sources \
+    /etc/apt/sources.list.d/amneziawg.list; do
+    rm -f "$entry"
+  done
+  shopt -u nullglob
 }
 
 install_amneziawg_tools() {
@@ -514,23 +558,20 @@ install_amneziawg_tools() {
   . /etc/os-release
   os_id="${ID:-}"
   os_codename="${VERSION_CODENAME:-}"
+  repo_codename="$(select_awg_ppa_codename "$os_id" "$os_codename")"
   keyring="/etc/apt/keyrings/amneziawg.gpg"
   install -d -m 0755 /etc/apt/keyrings
 
-  if [[ "$os_id" == "ubuntu" ]]; then
-    retry_command "install software-properties-common" apt-get install -y software-properties-common python3-launchpadlib
-    retry_command "add AmneziaWG PPA" add-apt-repository -y ppa:amnezia/ppa
-  else
-    repo_codename="focal"
-    retry_command "download AmneziaWG PPA key" curl -fsSL \
-      "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x75c9dd72c799870e310542e24166f2c257290828" \
-      -o /tmp/amneziawg-ppa.key
-    gpg --dearmor < /tmp/amneziawg-ppa.key > "$keyring"
-    rm -f /tmp/amneziawg-ppa.key
-    cat > /etc/apt/sources.list.d/amneziawg.list <<EOF
+  echo "Using AmneziaWG PPA suite: ${repo_codename} (detected OS: ${os_id} ${os_codename:-unknown})"
+  remove_amnezia_ppa_entries
+  retry_command "download AmneziaWG PPA key" curl -fsSL \
+    "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x75c9dd72c799870e310542e24166f2c257290828" \
+    -o /tmp/amneziawg-ppa.key
+  gpg --dearmor < /tmp/amneziawg-ppa.key > "$keyring"
+  rm -f /tmp/amneziawg-ppa.key
+  cat > /etc/apt/sources.list.d/amneziawg.list <<EOF
 deb [signed-by=${keyring}] https://ppa.launchpadcontent.net/amnezia/ppa/ubuntu ${repo_codename} main
 EOF
-  fi
 
   retry_command "apt-get update with AmneziaWG repo" apt-get update
   apt-get install -y "linux-headers-$(uname -r)" || true
@@ -570,6 +611,7 @@ AWG_PORT=$(printf '%q' "$AWG_PORT")
 AWG_SUBNET=$(printf '%q' "$AWG_SUBNET")
 AWG_SERVER_IP=$(printf '%q' "$AWG_SERVER_IP")
 AWG_DNS=$(printf '%q' "$AWG_DNS")
+AWG_MTU=$(printf '%q' "$AWG_MTU")
 PUBLIC_ENDPOINT=$(printf '%q' "$PUBLIC_ENDPOINT")
 AWG_JC=$(printf '%q' "$AWG_JC")
 AWG_JMIN=$(printf '%q' "$AWG_JMIN")
@@ -601,6 +643,7 @@ write_awg_config() {
   cat > "$AWG_DIR/${AWG_IFACE}.conf" <<EOF
 [Interface]
 Address = ${AWG_SERVER_IP}/${prefix}
+MTU = ${AWG_MTU}
 ListenPort = ${AWG_PORT}
 PrivateKey = ${private_key}
 Jc = ${AWG_JC}

@@ -143,6 +143,7 @@ write_client_config() {
 PrivateKey = ${private_key}
 Address = ${ip}/32
 DNS = ${AWG_DNS}
+MTU = ${AWG_MTU:-1280}
 Jc = ${AWG_JC}
 Jmin = ${AWG_JMIN}
 Jmax = ${AWG_JMAX}
