@@ -81,7 +81,7 @@ Enable HTTPS mask site? yes/no [no]
 
 ```text
 Public endpoint IP/host for clients [<detected_ip>]
-AmneziaWG UDP port [51820]
+AmneziaWG UDP port [1234]
 ```
 
 Если `yes`:
@@ -109,17 +109,19 @@ Enable nginx access logs for mask site? yes/no [no]
 
 `S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`. Для профиля `awg2` также могут генерироваться `S3`, `S4`, `I1-I5`.
 MTU по умолчанию — `1280`. При необходимости его можно переопределить переменной окружения `AWG_MTU`.
-Автоматические значения соблюдают диапазоны AmneziaWG: `Jc=1..128`, `Jmin/Jmax=1..1280`, `S1/S2` в пределах MTU, `H1-H4` не пересекаются. Для диагностического профиля `plain` допускаются нулевые значения.
+Автоматические значения соблюдают диапазоны из документации AmneziaWG 2.0: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, `H1-H4` не пересекаются. Для диагностического профиля `plain` допускаются нулевые значения.
+По умолчанию используется UDP-порт `1234`, потому что в официальном troubleshooting отмечено: некоторые провайдеры в РФ могут блокировать UDP-порты выше `9999`. Если порт `1234` не подходит, пробуйте `AWG_PORT=443`.
 Если apt/PPA дает типовую ошибку, установщик сначала пробует исправить ее сам: удаляет старую битую запись AmneziaWG PPA и перебирает поддерживаемые ветки PPA. Если исправить не получилось, причина выводится на русском языке.
 При повторной установке первый клиент пересоздается под текущие параметры, поэтому нужно заново импортировать QR.
 
 ### Профили обфускации
 
 ```text
-mobile  - профиль по умолчанию для LTE/мобильных сетей: Jc=3, короткие junk-пакеты, без I1.
-compat  - совместимый режим из старых инструкций Amnezia: S1/S2=0, H1-H4=1..4. Удобен для диагностики handshake.
+mobile  - профиль по умолчанию: Jc=6, официальные диапазоны junk-пакетов, без I1.
+dns     - mobile + DNS-like I1 из официального troubleshooting AmneziaWG.
+compat  - совместимый режим: S1/S2=0, H1-H4=1..4. Удобен для диагностики handshake.
 awg1    - классический AmneziaWG 1.x со случайными S/H/J в официальных диапазонах.
-awg2    - AmneziaWG 2.0: добавляет S3/S4, диапазоны H1-H4 и QUIC-подобный I1.
+awg2    - AmneziaWG 2.0: добавляет S3/S4, диапазоны H1-H4 и DNS-like I1.
 plain   - диагностический WG-like режим с нулевой обфускацией.
 ```
 
@@ -129,11 +131,11 @@ plain   - диагностический WG-like режим с нулевой о
 cd /root/telemt2
 git pull
 cd /root/telemt2/vpn/amneziawg
-RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=compat CLIENT_NAME=compat1 ./install_amneziawg.sh
-awgctl qr compat1
+RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=dns AWG_PORT=1234 CLIENT_NAME=dns1 ./install_amneziawg.sh
+awgctl qr dns1
 ```
 
-Если `compat` подключается, а `mobile` или `awg2` нет, значит проблема не в firewall/NAT, а в выбранных параметрах обфускации или реакции мобильного оператора на первый UDP-пакет.
+Если `dns` не подключается, но UDP до сервера доходит, попробуйте `AWG_PORT=443`. Если нужно отделить проблему параметров от проблемы порта, проверьте `AWG_OBFS_PROFILE=compat`.
 
 ### Что делает установщик
 
@@ -255,7 +257,7 @@ If `no`:
 
 ```text
 Public endpoint IP/host for clients [<detected_ip>]
-AmneziaWG UDP port [51820]
+AmneziaWG UDP port [1234]
 ```
 
 If `yes`:
@@ -283,17 +285,19 @@ Enable nginx access logs for mask site? yes/no [no]
 
 `S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`. The `awg2` profile may also generate `S3`, `S4`, and `I1-I5`.
 The default MTU is `1280`. Override it with the `AWG_MTU` environment variable if needed.
-Generated values follow AmneziaWG ranges: `Jc=1..128`, `Jmin/Jmax=1..1280`, `S1/S2` within MTU limits, and non-overlapping `H1-H4`. The diagnostic `plain` profile allows zero values.
+Generated values follow AmneziaWG 2.0 documentation ranges: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, and non-overlapping `H1-H4`. The diagnostic `plain` profile allows zero values.
+The default UDP port is `1234` because the official troubleshooting notes that some providers in Russia may block UDP ports above `9999`. If `1234` does not work, try `AWG_PORT=443`.
 For common apt/PPA failures, the installer first tries to repair the problem: it removes stale broken AmneziaWG PPA entries and tries supported PPA suites. If it cannot recover, it prints the reason in Russian.
 On reinstall, the first client is recreated for the current parameters, so import the new QR again.
 
 ### Obfuscation Profiles
 
 ```text
-mobile  - default LTE/mobile profile: Jc=3, short junk packets, no I1.
-compat  - compatibility mode from older Amnezia guidance: S1/S2=0, H1-H4=1..4. Useful for handshake diagnostics.
+mobile  - default profile: Jc=6, documented junk packet ranges, no I1.
+dns     - mobile + DNS-like I1 from official AmneziaWG troubleshooting.
+compat  - compatibility mode: S1/S2=0, H1-H4=1..4. Useful for handshake diagnostics.
 awg1    - classic AmneziaWG 1.x with random S/H/J values in official ranges.
-awg2    - AmneziaWG 2.0: adds S3/S4, H1-H4 ranges, and a QUIC-like I1.
+awg2    - AmneziaWG 2.0: adds S3/S4, H1-H4 ranges, and a DNS-like I1.
 plain   - diagnostic WG-like mode with zero obfuscation.
 ```
 

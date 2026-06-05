@@ -9,7 +9,7 @@ set -Eeuo pipefail
 
 PUBLIC_ENDPOINT="${PUBLIC_ENDPOINT:-}"
 AWG_IFACE="${AWG_IFACE:-awg0}"
-AWG_PORT="${AWG_PORT:-51820}"
+AWG_PORT="${AWG_PORT:-1234}"
 AWG_SUBNET="${AWG_SUBNET:-10.88.88.0/24}"
 AWG_SERVER_IP="${AWG_SERVER_IP:-10.88.88.1}"
 AWG_DNS="${AWG_DNS:-1.1.1.1,8.8.8.8}"
@@ -333,7 +333,7 @@ normalize_obfs_profile() {
   local value
   value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   case "$value" in
-    plain|compat|mobile|awg1|awg2) printf '%s' "$value" ;;
+    plain|compat|mobile|dns|awg1|awg2) printf '%s' "$value" ;;
     *) return 1 ;;
   esac
 }
@@ -378,8 +378,12 @@ ensure_range_headers() {
   set_default AWG_H4 "$(rand_header_range 1300000000 1799999999 999999)"
 }
 
+recommended_dns_i1() {
+  printf '%s' '<r 2><b 0x8580000100010000000004796162730679616e6465780272750000010001c00c000100010000026d000457fa27d1>'
+}
+
 ensure_awg_obfuscation_params() {
-  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, compat, awg1, awg2, plain."
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, plain."
 
   case "$AWG_OBFS_PROFILE" in
     plain)
@@ -394,9 +398,9 @@ ensure_awg_obfuscation_params() {
       set_default AWG_H4 0
       ;;
     compat)
-      set_default AWG_JC 3
-      set_default AWG_JMIN 8
-      set_default AWG_JMAX 80
+      set_default AWG_JC 6
+      set_default AWG_JMIN 64
+      set_default AWG_JMAX 128
       set_default AWG_S1 0
       set_default AWG_S2 0
       set_default AWG_H1 1
@@ -405,31 +409,40 @@ ensure_awg_obfuscation_params() {
       set_default AWG_H4 4
       ;;
     mobile)
-      set_default AWG_JC 3
-      set_default AWG_JMIN 8
-      set_default AWG_JMAX 130
-      set_default AWG_S1 "$(rand_range 15 80)"
-      set_default AWG_S2 "$(rand_range 15 80)"
+      set_default AWG_JC 6
+      set_default AWG_JMIN 64
+      set_default AWG_JMAX 192
+      set_default AWG_S1 "$(rand_range 15 64)"
+      set_default AWG_S2 "$(rand_range 15 64)"
       ensure_unique_fixed_headers
       ;;
+    dns)
+      set_default AWG_JC 6
+      set_default AWG_JMIN 64
+      set_default AWG_JMAX 192
+      set_default AWG_S1 "$(rand_range 15 64)"
+      set_default AWG_S2 "$(rand_range 15 64)"
+      ensure_unique_fixed_headers
+      set_default AWG_I1 "$(recommended_dns_i1)"
+      ;;
     awg1)
-      set_default AWG_JC "$(rand_range 4 12)"
-      set_default AWG_JMIN "$(rand_range 8 80)"
-      set_default AWG_JMAX "$(rand_range 81 512)"
-      set_default AWG_S1 "$(rand_range 15 150)"
-      set_default AWG_S2 "$(rand_range 15 150)"
+      set_default AWG_JC "$(rand_range 6 10)"
+      set_default AWG_JMIN "$(rand_range 64 128)"
+      set_default AWG_JMAX "$(rand_range 129 512)"
+      set_default AWG_S1 "$(rand_range 15 64)"
+      set_default AWG_S2 "$(rand_range 15 64)"
       ensure_unique_fixed_headers
       ;;
     awg2)
-      set_default AWG_JC 3
-      set_default AWG_JMIN 8
-      set_default AWG_JMAX 130
-      set_default AWG_S1 "$(rand_range 15 80)"
-      set_default AWG_S2 "$(rand_range 15 80)"
-      set_default AWG_S3 "$(rand_range 0 32)"
-      set_default AWG_S4 "$(rand_range 0 16)"
+      set_default AWG_JC 6
+      set_default AWG_JMIN 64
+      set_default AWG_JMAX 192
+      set_default AWG_S1 "$(rand_range 15 64)"
+      set_default AWG_S2 "$(rand_range 15 64)"
+      set_default AWG_S3 "$(rand_range 0 64)"
+      set_default AWG_S4 "$(rand_range 0 32)"
       ensure_range_headers
-      set_default AWG_I1 '<b 0xc700000001><rc 8><t><r 100>'
+      set_default AWG_I1 "$(recommended_dns_i1)"
       ;;
   esac
 }
@@ -455,7 +468,7 @@ header_minmax() {
     return 1
   fi
 
-  (( min <= max && max <= 2147483647 )) || return 1
+  (( min <= max && max <= 4294967295 )) || return 1
   printf '%s %s\n' "$min" "$max"
 }
 
@@ -536,7 +549,7 @@ prompt_config() {
     PUBLIC_ENDPOINT="$MASK_DOMAIN"
     LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-$(mask_default_email)}"
     prompt LETSENCRYPT_EMAIL "Email для Let's Encrypt" "$LETSENCRYPT_EMAIL"
-    if [[ "$AWG_PORT" == "51820" ]]; then
+    if [[ "$AWG_PORT" == "1234" || "$AWG_PORT" == "51820" ]]; then
       AWG_PORT="443"
     fi
     prompt AWG_PORT "UDP-порт AmneziaWG" "$AWG_PORT"
@@ -549,9 +562,9 @@ prompt_config() {
   prompt AWG_SUBNET "VPN IPv4-сеть" "$AWG_SUBNET"
   prompt AWG_SERVER_IP "VPN IPv4 сервера" "$AWG_SERVER_IP"
   prompt AWG_DNS "DNS клиентов, IPv4 через запятую" "$AWG_DNS"
-  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, compat, awg1, awg2, plain."
-  prompt AWG_OBFS_PROFILE "Профиль обфускации (mobile/compat/awg1/awg2/plain)" "$AWG_OBFS_PROFILE"
-  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, compat, awg1, awg2, plain."
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, plain."
+  prompt AWG_OBFS_PROFILE "Профиль обфускации (mobile/dns/compat/awg1/awg2/plain)" "$AWG_OBFS_PROFILE"
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, plain."
   ensure_awg_obfuscation_params
   prompt AWG_JC "AmneziaWG junk packet count Jc" "$AWG_JC"
   prompt AWG_JMIN "AmneziaWG junk min size Jmin" "$AWG_JMIN"
@@ -573,23 +586,24 @@ prompt_config() {
   valid_ipv4 "$AWG_SERVER_IP" || die "некорректный VPN IPv4 сервера: $AWG_SERVER_IP."
   valid_dns_list "$AWG_DNS" || die "DNS должен быть списком IPv4-адресов через запятую."
   valid_mtu "$AWG_MTU" || die "MTU должен быть числом от 576 до 1420."
-  if [[ "$AWG_OBFS_PROFILE" == "plain" ]]; then
-    valid_range_int "$AWG_JC" 0 128 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 0..128."
-    valid_range_int "$AWG_JMIN" 0 1280 && valid_range_int "$AWG_JMAX" 0 1280 && (( AWG_JMIN <= AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 0..1280, Jmin должен быть <= Jmax."
-  else
-    valid_range_int "$AWG_JC" 1 128 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 1..128."
-    valid_range_int "$AWG_JMIN" 1 1280 && valid_range_int "$AWG_JMAX" 1 1280 && (( AWG_JMIN < AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 1..1280, Jmin должен быть < Jmax."
+  if (( AWG_PORT > 9999 )); then
+    warn "UDP-порт ${AWG_PORT} выше 9999. Некоторые провайдеры в РФ уже блокируют такие UDP-порты; для теста лучше AWG_PORT=1234 или AWG_PORT=443."
   fi
-  s1_max=$((AWG_MTU - 148))
-  s2_max=$((AWG_MTU - 92))
-  (( s1_max < 0 )) && s1_max=0
-  (( s2_max < 0 )) && s2_max=0
-  valid_range_int "$AWG_S1" 0 "$s1_max" && valid_range_int "$AWG_S2" 0 "$s2_max" || die "некорректные S1/S2 для MTU ${AWG_MTU}. Допустимо: S1=0..${s1_max}, S2=0..${s2_max}."
+  if [[ "$AWG_OBFS_PROFILE" == "plain" ]]; then
+    valid_range_int "$AWG_JC" 0 10 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 0..10."
+    valid_range_int "$AWG_JMIN" 0 1024 && valid_range_int "$AWG_JMAX" 0 1024 && (( AWG_JMIN <= AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 0..1024, Jmin должен быть <= Jmax."
+  else
+    valid_range_int "$AWG_JC" 1 10 || die "некорректный Jc: $AWG_JC. Допустимый диапазон: 1..10."
+    valid_range_int "$AWG_JMIN" 64 1024 && valid_range_int "$AWG_JMAX" 64 1024 && (( AWG_JMIN < AWG_JMAX )) || die "некорректные Jmin/Jmax. Допустимый диапазон: 64..1024, Jmin должен быть < Jmax."
+  fi
+  s1_max=64
+  s2_max=64
+  valid_range_int "$AWG_S1" 0 "$s1_max" && valid_range_int "$AWG_S2" 0 "$s2_max" || die "некорректные S1/S2. Допустимо по документации AmneziaWG 2.0: S1=0..64, S2=0..64."
   if [[ -n "$AWG_S3" ]]; then
     valid_range_int "$AWG_S3" 0 64 || die "некорректный S3: $AWG_S3. Допустимый диапазон: 0..64."
   fi
   if [[ -n "$AWG_S4" ]]; then
-    valid_range_int "$AWG_S4" 0 64 || die "некорректный S4: $AWG_S4. Допустимый диапазон: 0..64."
+    valid_range_int "$AWG_S4" 0 32 || die "некорректный S4: $AWG_S4. Допустимый диапазон: 0..32."
   fi
   validate_awg_headers
   valid_awg_text_param "$AWG_I1" && valid_awg_text_param "$AWG_I2" && valid_awg_text_param "$AWG_I3" && valid_awg_text_param "$AWG_I4" && valid_awg_text_param "$AWG_I5" || die "некорректные I1-I5: параметр слишком длинный или содержит перенос строки."
