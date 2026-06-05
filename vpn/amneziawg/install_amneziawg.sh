@@ -693,9 +693,17 @@ port_listening_udp() {
   ss -H -lun "sport = :$1" 2>/dev/null | grep -q .
 }
 
+awg_iface_active() {
+  ip link show "$AWG_IFACE" >/dev/null 2>&1 || systemctl is-active --quiet "awg-quick@${AWG_IFACE}" 2>/dev/null
+}
+
 port_preflight() {
   if port_listening_udp "$AWG_PORT"; then
-    die "UDP-порт $AWG_PORT уже занят. Выберите другой порт или остановите сервис, который его использует."
+    if awg_iface_active; then
+      warn "UDP-порт $AWG_PORT уже слушает текущий ${AWG_IFACE}; это нормально для повторной установки, сервис будет перезапущен."
+    else
+      die "UDP-порт $AWG_PORT уже занят. Выберите другой порт или остановите сервис, который его использует."
+    fi
   fi
   if [[ "$ENABLE_HTTPS_MASK" == "1" ]]; then
     if port_listening_tcp 80; then
