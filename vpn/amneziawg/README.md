@@ -116,14 +116,34 @@ MTU по умолчанию — `1280`. При необходимости его
 
 ### Профили обфускации
 
-```text
-mobile  - профиль по умолчанию: Jc=6, официальные диапазоны junk-пакетов, без I1.
-dns     - mobile + DNS-like I1 из официального troubleshooting AmneziaWG.
-compat  - совместимый режим: S1/S2=0, H1-H4=1..4. Удобен для диагностики handshake.
-awg1    - классический AmneziaWG 1.x со случайными S/H/J в официальных диапазонах.
-awg2    - AmneziaWG 2.0: добавляет S3/S4, диапазоны H1-H4 и DNS-like I1.
-plain   - диагностический WG-like режим с нулевой обфускацией.
+Проверенный на iPhone профиль в текущей сборке — `dns`. Если не знаете, что выбирать для реального использования, начинайте с него:
+
+```bash
+RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=dns AWG_PORT=1234 ./install_amneziawg.sh
 ```
+
+| Профиль | Когда использовать | Чем отличается |
+| --- | --- | --- |
+| `dns` | Рекомендуемый рабочий вариант для телефона и обычного использования | `mobile` + `I1`, первый пакет похож на DNS-запрос |
+| `mobile` | Базовый нормальный вариант без DNS-like первого пакета | Junk-пакеты + случайные `S1/S2/H1-H4`, без `I1` |
+| `compat` | Диагностика, когда UDP доходит, но handshake не появляется | Простые фиксированные параметры: `S1/S2=0`, `H1-H4=1..4`; меньше маскировки, проще проверить совместимость |
+| `awg1` | Проверка поведения старого стиля AmneziaWG 1.x | Случайные `J/S/H` в допустимых диапазонах |
+| `awg2` | Эксперименты с более новым/агрессивным профилем AmneziaWG 2.0 | Добавляет `S3/S4`, диапазоны `H1-H4` и DNS-like `I1` |
+| `plain` | Только диагностика | Почти без обфускации, WG-like режим с нулевыми параметрами |
+
+Что означают основные параметры:
+
+| Параметр | Смысл |
+| --- | --- |
+| `Jc` | Сколько junk-пакетов добавлять |
+| `Jmin` | Минимальный размер junk-пакета |
+| `Jmax` | Максимальный размер junk-пакета |
+| `S1/S2` | Размеры/сдвиги обфускации |
+| `S3/S4` | Дополнительные параметры AmneziaWG 2.0 |
+| `H1-H4` | Заголовки AmneziaWG; должны совпадать на сервере и клиенте |
+| `I1-I5` | Имитация начальных пакетов; в `dns` используется `I1`, похожий на DNS |
+
+Важно: профиль обфускации нельзя поменять только на сервере. Параметры должны совпадать в серверном `awg0.conf` и клиентском QR. Если меняете `AWG_OBFS_PROFILE`, заново покажите QR через `awgctl qr <name>` и переимпортируйте профиль в AmneziaWG.
 
 Быстрый тест, если UDP до сервера доходит, но `handshake never`:
 
@@ -298,14 +318,34 @@ If the first client name already exists, the installer creates the next numbered
 
 ### Obfuscation Profiles
 
-```text
-mobile  - default profile: Jc=6, documented junk packet ranges, no I1.
-dns     - mobile + DNS-like I1 from official AmneziaWG troubleshooting.
-compat  - compatibility mode: S1/S2=0, H1-H4=1..4. Useful for handshake diagnostics.
-awg1    - classic AmneziaWG 1.x with random S/H/J values in official ranges.
-awg2    - AmneziaWG 2.0: adds S3/S4, H1-H4 ranges, and a DNS-like I1.
-plain   - diagnostic WG-like mode with zero obfuscation.
+The profile verified on iPhone in the current build is `dns`. If you are not sure what to choose for real use, start with it:
+
+```bash
+RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=dns AWG_PORT=1234 ./install_amneziawg.sh
 ```
+
+| Profile | When to use it | Difference |
+| --- | --- | --- |
+| `dns` | Recommended working option for phones and normal use | `mobile` + `I1`; the first packet looks DNS-like |
+| `mobile` | Basic normal option without a DNS-like first packet | Junk packets + random `S1/S2/H1-H4`, no `I1` |
+| `compat` | Diagnostics when UDP reaches the server but no handshake appears | Simple fixed parameters: `S1/S2=0`, `H1-H4=1..4`; less masking, easier compatibility check |
+| `awg1` | Testing classic AmneziaWG 1.x behavior | Random `J/S/H` values in valid ranges |
+| `awg2` | Experiments with a newer/more aggressive AmneziaWG 2.0 profile | Adds `S3/S4`, `H1-H4` ranges, and DNS-like `I1` |
+| `plain` | Diagnostics only | Almost no obfuscation, WG-like mode with zero parameters |
+
+Main parameter meanings:
+
+| Parameter | Meaning |
+| --- | --- |
+| `Jc` | Number of junk packets |
+| `Jmin` | Minimum junk packet size |
+| `Jmax` | Maximum junk packet size |
+| `S1/S2` | Obfuscation sizes/shifts |
+| `S3/S4` | Additional AmneziaWG 2.0 parameters |
+| `H1-H4` | AmneziaWG headers; must match on server and client |
+| `I1-I5` | Initial packet imitation; `dns` uses an `I1` that looks DNS-like |
+
+Important: the obfuscation profile cannot be changed only on the server. Parameters must match in the server `awg0.conf` and in the client QR. If you change `AWG_OBFS_PROFILE`, show the QR again with `awgctl qr <name>` and re-import the profile into AmneziaWG.
 
 ### Installer actions
 
