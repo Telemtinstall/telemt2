@@ -73,6 +73,29 @@ json_number_or_null() {
   [[ "$value" =~ ^[0-9]+$ ]] && printf '%s' "$value" || printf 'null'
 }
 
+base64_one_line() {
+  local file="$1"
+
+  if base64 --help 2>&1 | grep -q -- '-w'; then
+    base64 -w 0 "$file"
+  else
+    base64 "$file" | tr -d '\n'
+  fi
+}
+
+qr_png_base64_from_config() {
+  local conf="$1"
+  local tmp
+
+  tmp="$(mktemp)"
+  if ! qrencode -t PNG -o "$tmp" < "$conf"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  base64_one_line "$tmp"
+  rm -f "$tmp"
+}
+
 install_apt_package() {
   local package="$1"
 
@@ -346,7 +369,7 @@ repair_client_config() {
 cmd_add() {
   local name="${1:-}"
   local requested_name auto_incremented=0
-  local private_key public_key psk ip created_at config_text
+  local private_key public_key psk ip created_at config_text qr_png_base64
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
@@ -362,6 +385,11 @@ cmd_add() {
     name="$(next_client_name "$name")"
     auto_incremented=1
     [[ "$JSON_OUTPUT" == "1" ]] || echo "Клиент уже существует, создаю следующего: $name"
+  fi
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    ensure_command qrencode qrencode
+    ensure_command base64 coreutils
   fi
 
   private_key="$(awg genkey)"
@@ -388,7 +416,8 @@ EOF
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     config_text="$(cat "$CLIENT_OUT_DIR/${name}.conf")"
-    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s}\n' \
+    qr_png_base64="$(qr_png_base64_from_config "$CLIENT_OUT_DIR/${name}.conf")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}\n' \
       "$(json_escape "$requested_name")" \
       "$(json_escape "$name")" \
       "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
@@ -398,7 +427,9 @@ EOF
       "$(json_escape "${PUBLIC_ENDPOINT}:${AWG_PORT}")" \
       "$(json_escape "$CLIENT_OUT_DIR/${name}.conf")" \
       "$(json_escape "$CLIENT_DIR/${name}.env")" \
-      "$(json_escape "$config_text")"
+      "$(json_escape "$config_text")" \
+      "$(json_escape "$qr_png_base64")" \
+      "$(json_escape "data:image/png;base64,${qr_png_base64}")"
     return 0
   fi
 
@@ -556,7 +587,7 @@ cmd_show() {
 
 cmd_qr() {
   local name="${1:-}"
-  local conf config_text qr_text
+  local conf config_text qr_text qr_png_base64
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
       die_with_status 400 bad_request "укажите клиента для QR: awgctl -j qr <name|number>"
@@ -571,13 +602,17 @@ cmd_qr() {
   repair_client_config "$name"
   ensure_command qrencode qrencode
   if [[ "$JSON_OUTPUT" == "1" ]]; then
+    ensure_command base64 coreutils
     config_text="$(cat "$conf")"
     qr_text="$(qrencode -t ANSIUTF8 < "$conf")"
-    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s}\n' \
+    qr_png_base64="$(qr_png_base64_from_config "$conf")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$config_text")" \
-      "$(json_escape "$qr_text")"
+      "$(json_escape "$qr_text")" \
+      "$(json_escape "$qr_png_base64")" \
+      "$(json_escape "data:image/png;base64,${qr_png_base64}")"
     return 0
   fi
   qrencode -t ANSIUTF8 < "$conf"

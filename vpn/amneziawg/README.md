@@ -198,7 +198,7 @@ awgctl -j add client1
 awgctl -j show client1
 ```
 
-В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
+В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
 
 #### JSON-ответы
 
@@ -252,19 +252,31 @@ awgctl -j show <name|number>
 
 awgctl -j qr <name|number>
   status_code: 200
-  name, config_path, config, qr_ansi_utf8
+  name, config_path, config, qr_ansi_utf8,
+  qr_png_mime, qr_png_base64, qr_png_data_uri
 
 awgctl -j add [name]
   status_code: 201
   action=add, requested_name, name, auto_incremented, ip, public_key,
-  interface, endpoint, config_path, env_path, config
+  interface, endpoint, config_path, env_path, config,
+  qr_png_mime, qr_png_base64, qr_png_data_uri
 
 awgctl -j delete <name|number>
   status_code: 200
   action=delete, name, ip, public_key, created_at, config_path, env_path
 ```
 
-Важно: `add`, `show` и `qr` возвращают `config`, а внутри клиентского конфига есть приватный ключ клиента и preshared key. Не пишите эти ответы в публичные логи.
+Важно: `add`, `show` и `qr` возвращают `config`, а внутри клиентского конфига есть приватный ключ клиента и preshared key. `qr_png_base64` и `qr_png_data_uri` кодируют тот же секретный конфиг в картинку. Не пишите эти ответы в публичные логи.
+
+Как использовать PNG QR:
+
+```text
+Telegram bot: декодируйте qr_png_base64 и отправьте bytes как photo/document.
+Website backend: декодируйте qr_png_base64 и отдайте image/png из своего API.
+Frontend: можно показать <img src="<qr_png_data_uri>">, если этот JSON не попадает в публичные логи.
+```
+
+Отдельный HTTP-сервер на VPN-сервере для скачивания QR не нужен и не создается.
 
 Пример успешного `traffic`:
 
@@ -482,7 +494,7 @@ awgctl -j add client1
 awgctl -j show client1
 ```
 
-In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
+In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
 
 #### JSON Responses
 
@@ -536,19 +548,31 @@ awgctl -j show <name|number>
 
 awgctl -j qr <name|number>
   status_code: 200
-  name, config_path, config, qr_ansi_utf8
+  name, config_path, config, qr_ansi_utf8,
+  qr_png_mime, qr_png_base64, qr_png_data_uri
 
 awgctl -j add [name]
   status_code: 201
   action=add, requested_name, name, auto_incremented, ip, public_key,
-  interface, endpoint, config_path, env_path, config
+  interface, endpoint, config_path, env_path, config,
+  qr_png_mime, qr_png_base64, qr_png_data_uri
 
 awgctl -j delete <name|number>
   status_code: 200
   action=delete, name, ip, public_key, created_at, config_path, env_path
 ```
 
-Important: `add`, `show`, and `qr` return `config`, which contains the client private key and preshared key. Do not write these responses to public logs.
+Important: `add`, `show`, and `qr` return `config`, which contains the client private key and preshared key. `qr_png_base64` and `qr_png_data_uri` encode the same secret config as an image. Do not write these responses to public logs.
+
+How to use PNG QR:
+
+```text
+Telegram bot: decode qr_png_base64 and send the bytes as photo/document.
+Website backend: decode qr_png_base64 and serve image/png from your own API.
+Frontend: <img src="<qr_png_data_uri>"> works if the JSON is not written to public logs.
+```
+
+No separate HTTP server is created on the VPN server for QR downloads.
 
 Successful `traffic` example:
 
