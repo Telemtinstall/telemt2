@@ -129,6 +129,13 @@ prompt() {
   local default="$3"
   local value
 
+  if [[ "$ASSUME_YES" == "1" ]]; then
+    value="${!var_name:-$default}"
+    value="$(trim_value "$value")"
+    printf -v "$var_name" '%s' "$value"
+    return 0
+  fi
+
   if [[ -n "${!var_name:-}" ]]; then
     printf '%s [%s]: ' "$label" "${!var_name}"
   elif [[ -n "$default" ]]; then

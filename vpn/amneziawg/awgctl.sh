@@ -12,6 +12,24 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+install_apt_package() {
+  local package="$1"
+
+  have apt-get || die "${package} не установлен, а apt-get не найден. Автоустановка доступна только на Debian/Ubuntu."
+  echo "Пакет ${package} не найден. Устанавливаю автоматически..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update || die "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
+  apt-get install -y "$package" || die "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
+}
+
+ensure_command() {
+  local command_name="$1"
+  local package="$2"
+
+  have "$command_name" || install_apt_package "$package"
+  have "$command_name" || die "команда ${command_name} не появилась после установки пакета ${package}."
+}
+
 require_root() {
   [[ $EUID -eq 0 ]] || die "запустите awgctl от root."
 }
@@ -385,9 +403,7 @@ cmd_qr() {
   [[ -n "$name" ]] || die "клиент не выбран."
   [[ -r "$CLIENT_OUT_DIR/${name}.conf" ]] || die "конфиг клиента не найден: $name"
   repair_client_config "$name"
-  if ! have qrencode; then
-    die "qrencode не установлен. Выполните: apt-get install -y qrencode"
-  fi
+  ensure_command qrencode qrencode
   qrencode -t ANSIUTF8 < "$CLIENT_OUT_DIR/${name}.conf"
 }
 
