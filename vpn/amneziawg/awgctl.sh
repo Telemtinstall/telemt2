@@ -12,6 +12,24 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+normalize_command() {
+  local value="$1"
+
+  value="${value//а/a}"
+  value="${value//А/A}"
+  value="${value//е/e}"
+  value="${value//Е/E}"
+  value="${value//о/o}"
+  value="${value//О/O}"
+  value="${value//р/p}"
+  value="${value//Р/P}"
+  value="${value//с/c}"
+  value="${value//С/C}"
+  value="${value//х/x}"
+  value="${value//Х/X}"
+  printf '%s' "$value"
+}
+
 install_apt_package() {
   local package="$1"
 
@@ -458,12 +476,13 @@ Usage:
   awgctl show [name|number]
   awgctl show [name|number] --qr
   awgctl qr [name|number]
-  awgctl traffic
+  awgctl traffic|stats
 EOF
 }
 
 main() {
   local cmd="${1:-help}"
+  cmd="$(normalize_command "$cmd")"
   shift || true
 
   case "$cmd" in
@@ -480,7 +499,7 @@ main() {
     list|ls) cmd_list ;;
     show|config) cmd_show "$@" ;;
     qr|qrcode) cmd_qr "${1:-}" ;;
-    traffic|stats) cmd_traffic ;;
+    traffic|stats|stat|trafic) cmd_traffic ;;
     *) cmd_help; exit 1 ;;
   esac
 }
