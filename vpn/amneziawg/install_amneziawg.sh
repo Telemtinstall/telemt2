@@ -863,6 +863,37 @@ kernel_headers_ready() {
   [[ -e "/lib/modules/$(uname -r)/build/Makefile" || -d "/lib/modules/$(uname -r)/build/include" ]]
 }
 
+newest_other_kernel_with_headers() {
+  local current dir kernel
+  local kernels=()
+  current="$(uname -r)"
+
+  shopt -s nullglob
+  for dir in /lib/modules/*; do
+    kernel="${dir##*/}"
+    [[ "$kernel" == "$current" ]] && continue
+    if [[ -e "$dir/build/Makefile" || -d "$dir/build/include" ]]; then
+      kernels+=("$kernel")
+    fi
+  done
+  shopt -u nullglob
+
+  ((${#kernels[@]} > 0)) || return 0
+  printf '%s\n' "${kernels[@]}" | sort -V | tail -n 1
+}
+
+die_missing_current_kernel_headers() {
+  local kernel other_kernel
+  kernel="$(uname -r)"
+  other_kernel="$(newest_other_kernel_with_headers)"
+
+  if [[ -n "$other_kernel" ]]; then
+    die "не найдены linux-headers для текущего загруженного ядра ${kernel}. Apt уже поставил headers для ядра ${other_kernel}, но сервер еще не перезагружен в него. Перезагрузите сервер и запустите установщик снова: после reboot текущее ядро должно стать ${other_kernel}, и DKMS-модуль amneziawg загрузится."
+  fi
+
+  die "не найдены linux-headers для текущего ядра ${kernel}. DKMS не сможет собрать модуль amneziawg. Проверьте, что в apt есть пакет linux-headers-${kernel}, либо обновите kernel/linux-headers и перезагрузите сервер."
+}
+
 install_kernel_headers() {
   local kernel headers_pkg fallback_pkg
   export DEBIAN_FRONTEND=noninteractive
@@ -886,7 +917,7 @@ install_kernel_headers() {
     done
   fi
 
-  kernel_headers_ready || die "не найдены linux-headers для текущего ядра ${kernel}. DKMS не сможет собрать модуль amneziawg. Установите linux-headers-${kernel} или linux-headers-amd64 и запустите установщик снова."
+  kernel_headers_ready || die_missing_current_kernel_headers
 }
 
 amneziawg_module_ready() {
