@@ -189,6 +189,17 @@ awgctl qr
 awgctl traffic
 ```
 
+Для скриптов есть JSON-режим. Флаг можно ставить до или после команды:
+
+```bash
+awgctl -j list
+awgctl traffic --json
+awgctl -j add client1
+awgctl -j show client1
+```
+
+В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
+
 Примеры:
 
 ```bash
@@ -383,6 +394,17 @@ awgctl show
 awgctl qr
 awgctl traffic
 ```
+
+For scripts, use JSON mode. The flag can be placed before or after the command:
+
+```bash
+awgctl -j list
+awgctl traffic --json
+awgctl -j add client1
+awgctl -j show client1
+```
+
+In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
 
 Examples:
 
