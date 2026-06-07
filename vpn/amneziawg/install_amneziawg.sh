@@ -852,6 +852,70 @@ apt_package_has_candidate() {
   [[ -n "$candidate" && "$candidate" != "(none)" ]]
 }
 
+kernel_headers_ready() {
+  [[ -e "/lib/modules/$(uname -r)/build/Makefile" || -d "/lib/modules/$(uname -r)/build/include" ]]
+}
+
+install_kernel_headers() {
+  local kernel headers_pkg fallback_pkg
+  export DEBIAN_FRONTEND=noninteractive
+  kernel="$(uname -r)"
+  headers_pkg="linux-headers-${kernel}"
+
+  if kernel_headers_ready; then
+    return 0
+  fi
+
+  if apt_package_has_candidate "$headers_pkg"; then
+    retry_command "установка заголовков ядра ${headers_pkg}" apt-get install -y "$headers_pkg"
+  fi
+
+  if ! kernel_headers_ready; then
+    for fallback_pkg in linux-headers-amd64 linux-headers-generic; do
+      if apt_package_has_candidate "$fallback_pkg"; then
+        retry_command "установка заголовков ядра ${fallback_pkg}" apt-get install -y "$fallback_pkg"
+        break
+      fi
+    done
+  fi
+
+  kernel_headers_ready || die "не найдены linux-headers для текущего ядра ${kernel}. DKMS не сможет собрать модуль amneziawg. Установите linux-headers-${kernel} или linux-headers-amd64 и запустите установщик снова."
+}
+
+amneziawg_module_ready() {
+  modinfo amneziawg >/dev/null 2>&1
+}
+
+dkms_amneziawg_version() {
+  dkms status amneziawg 2>/dev/null |
+    sed -n 's#^amneziawg/\([^,:]*\).*#\1#p' |
+    head -n 1
+}
+
+ensure_amneziawg_kernel_module() {
+  local kernel version
+  kernel="$(uname -r)"
+
+  if amneziawg_module_ready; then
+    modprobe amneziawg 2>/dev/null || true
+    return 0
+  fi
+
+  install_kernel_headers
+  have dkms || retry_command "установка DKMS" apt-get install -y dkms
+
+  version="$(dkms_amneziawg_version)"
+  if [[ -n "$version" ]]; then
+    dkms build -m amneziawg -v "$version" -k "$kernel" || true
+    dkms install -m amneziawg -v "$version" -k "$kernel" || true
+  fi
+  dkms autoinstall -k "$kernel" || true
+  depmod -a "$kernel" 2>/dev/null || depmod -a || true
+
+  amneziawg_module_ready || die "модуль ядра amneziawg не собран для ${kernel}. Проверьте: dkms status; journalctl -xe; ls /var/lib/dkms/amneziawg/*/build/make.log"
+  modprobe amneziawg || die "модуль amneziawg собран, но не загрузился. Проверьте: modprobe amneziawg; dmesg | tail -n 50"
+}
+
 install_packages() {
   local packages
   export DEBIAN_FRONTEND=noninteractive
@@ -924,6 +988,7 @@ install_amneziawg_tools() {
   local os_id os_codename repo_codename keyring installed
   if have awg && have awg-quick; then
     awg --version || true
+    ensure_amneziawg_kernel_module
     return 0
   fi
 
@@ -963,7 +1028,7 @@ EOF
       continue
     fi
 
-    apt-get install -y "linux-headers-$(uname -r)" || warn "не удалось установить linux-headers для текущего ядра. Продолжаю: пакет amneziawg иногда ставится без них."
+    install_kernel_headers
     if retry_command "установка пакета amneziawg из PPA ${repo_codename}" apt-get install -y amneziawg; then
       installed=1
       break
@@ -975,6 +1040,7 @@ EOF
   (( installed == 1 )) || die "не удалось установить amneziawg ни из одной ветки PPA. Проверьте сеть/apt или задайте вручную: AWG_PPA_CODENAME=noble ./install_amneziawg.sh"
   have awg || die "команда awg не появилась после установки пакета amneziawg."
   have awg-quick || die "команда awg-quick не появилась после установки пакета amneziawg."
+  ensure_amneziawg_kernel_module
   awg --version || true
 }
 
@@ -1257,6 +1323,7 @@ setup_https_mask() {
 }
 
 start_service() {
+  ensure_amneziawg_kernel_module
   systemctl enable "awg-quick@${AWG_IFACE}" >/dev/null || die "не удалось включить автозапуск awg-quick@${AWG_IFACE}."
   systemctl restart "awg-quick@${AWG_IFACE}" || die "не удалось перезапустить awg-quick@${AWG_IFACE}. Проверьте конфиг ${AWG_DIR}/${AWG_IFACE}.conf и вывод: journalctl -u awg-quick@${AWG_IFACE} --no-pager -n 50"
 }
