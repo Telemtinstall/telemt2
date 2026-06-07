@@ -18,13 +18,24 @@ json_escape() {
   printf '"%s"' "$value"
 }
 
-die() {
+die_with_status() {
+  local status_code="$1"
+  local status="$2"
+  shift 2
+
   if [[ "${JSON_OUTPUT:-0}" == "1" ]]; then
-    printf '{"ok":false,"error":%s}\n' "$(json_escape "$*")" >&2
+    printf '{"ok":false,"status_code":%s,"status":%s,"error":%s}\n' \
+      "$status_code" \
+      "$(json_escape "$status")" \
+      "$(json_escape "$*")" >&2
   else
     echo "ОШИБКА: $*" >&2
   fi
   exit 1
+}
+
+die() {
+  die_with_status 500 internal_error "$*"
 }
 
 have() {
@@ -65,15 +76,15 @@ json_number_or_null() {
 install_apt_package() {
   local package="$1"
 
-  have apt-get || die "${package} не установлен, а apt-get не найден. Автоустановка доступна только на Debian/Ubuntu."
+  have apt-get || die_with_status 500 dependency_error "${package} не установлен, а apt-get не найден. Автоустановка доступна только на Debian/Ubuntu."
   echo "Пакет ${package} не найден. Устанавливаю автоматически..." >&2
   export DEBIAN_FRONTEND=noninteractive
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    apt-get update >&2 || die "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
-    apt-get install -y "$package" >&2 || die "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
+    apt-get update >&2 || die_with_status 500 dependency_error "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
+    apt-get install -y "$package" >&2 || die_with_status 500 dependency_error "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
   else
-    apt-get update || die "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
-    apt-get install -y "$package" || die "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
+    apt-get update || die_with_status 500 dependency_error "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
+    apt-get install -y "$package" || die_with_status 500 dependency_error "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
   fi
 }
 
@@ -82,15 +93,15 @@ ensure_command() {
   local package="$2"
 
   have "$command_name" || install_apt_package "$package"
-  have "$command_name" || die "команда ${command_name} не появилась после установки пакета ${package}."
+  have "$command_name" || die_with_status 500 dependency_error "команда ${command_name} не появилась после установки пакета ${package}."
 }
 
 require_root() {
-  [[ $EUID -eq 0 ]] || die "запустите awgctl от root."
+  [[ $EUID -eq 0 ]] || die_with_status 403 forbidden "запустите awgctl от root."
 }
 
 load_env() {
-  [[ -r "$ENV_FILE" ]] || die "env-файл не найден: $ENV_FILE"
+  [[ -r "$ENV_FILE" ]] || die_with_status 404 not_found "env-файл не найден: $ENV_FILE"
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   AWG_CONFIG="${AWG_DIR}/${AWG_IFACE}.conf"
@@ -99,8 +110,8 @@ load_env() {
 
 ensure_dirs() {
   install -d -m 0700 "$CLIENT_DIR" "$CLIENT_OUT_DIR"
-  [[ -r "$AWG_CONFIG" ]] || die "конфиг AmneziaWG не найден: $AWG_CONFIG"
-  [[ -r "$SERVER_PUBLIC_KEY_FILE" ]] || die "публичный ключ сервера не найден: $SERVER_PUBLIC_KEY_FILE"
+  [[ -r "$AWG_CONFIG" ]] || die_with_status 404 not_found "конфиг AmneziaWG не найден: $AWG_CONFIG"
+  [[ -r "$SERVER_PUBLIC_KEY_FILE" ]] || die_with_status 404 not_found "публичный ключ сервера не найден: $SERVER_PUBLIC_KEY_FILE"
 }
 
 valid_name() {
@@ -153,7 +164,7 @@ next_client_ip() {
       return 0
     fi
   done
-  die "нет свободных IP для клиентов в сети $AWG_SUBNET"
+  die_with_status 409 conflict "нет свободных IP для клиентов в сети $AWG_SUBNET"
 }
 
 client_exists() {
@@ -184,7 +195,7 @@ next_client_name() {
   while :; do
     number=$((10#$number + 1))
     candidate="${prefix}${number}"
-    valid_name "$candidate" || die "не удалось подобрать имя клиента после ${requested}: получилось некорректное имя ${candidate}."
+    valid_name "$candidate" || die_with_status 409 conflict "не удалось подобрать имя клиента после ${requested}: получилось некорректное имя ${candidate}."
     if ! client_name_exists "$candidate"; then
       printf '%s' "$candidate"
       return 0
@@ -318,17 +329,17 @@ repair_client_config() {
   if client_config_complete "$name"; then
     return 0
   fi
-  [[ -r "$CLIENT_DIR/${name}.env" ]] || die "клиентский env не найден: ${CLIENT_DIR}/${name}.env"
+  [[ -r "$CLIENT_DIR/${name}.env" ]] || die_with_status 404 not_found "клиентский env не найден: ${CLIENT_DIR}/${name}.env"
   # shellcheck disable=SC1090
   . "$CLIENT_DIR/${name}.env"
   ip="${CLIENT_IP:-}"
-  [[ -n "$ip" ]] || die "не удалось исправить конфиг ${name}: в env нет CLIENT_IP."
+  [[ -n "$ip" ]] || die_with_status 409 conflict "не удалось исправить конфиг ${name}: в env нет CLIENT_IP."
   private_key="$(client_private_key_from_config "$name")"
-  [[ -n "$private_key" ]] || die "не удалось исправить конфиг ${name}: нет PrivateKey. Создайте клиента заново: awgctl delete ${name} && awgctl add ${name}"
+  [[ -n "$private_key" ]] || die_with_status 409 conflict "не удалось исправить конфиг ${name}: нет PrivateKey. Создайте клиента заново: awgctl delete ${name} && awgctl add ${name}"
   psk="$(peer_psk_from_server_config "$name")"
-  [[ -n "$psk" ]] || die "не удалось исправить конфиг ${name}: не найден PresharedKey в ${AWG_CONFIG}."
+  [[ -n "$psk" ]] || die_with_status 409 conflict "не удалось исправить конфиг ${name}: не найден PresharedKey в ${AWG_CONFIG}."
   write_client_config "$name" "$private_key" "$psk" "$ip"
-  client_config_complete "$name" || die "не удалось исправить конфиг ${name}: после пересборки он все еще неполный."
+  client_config_complete "$name" || die_with_status 409 conflict "не удалось исправить конфиг ${name}: после пересборки он все еще неполный."
   echo "Конфиг клиента ${name} был неполным, я пересобрал его: ${CLIENT_OUT_DIR}/${name}.conf" >&2
 }
 
@@ -346,7 +357,7 @@ cmd_add() {
     fi
   fi
   requested_name="$name"
-  valid_name "$name" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
+  valid_name "$name" || die_with_status 400 bad_request "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
   if client_name_exists "$name"; then
     name="$(next_client_name "$name")"
     auto_incremented=1
@@ -369,7 +380,7 @@ EOF
 
   append_peer_config "$name" "$public_key" "$psk" "$ip"
   write_client_config "$name" "$private_key" "$psk" "$ip"
-  client_config_complete "$name" || die "клиентский конфиг создан неполным: ${CLIENT_OUT_DIR}/${name}.conf"
+  client_config_complete "$name" || die_with_status 409 conflict "клиентский конфиг создан неполным: ${CLIENT_OUT_DIR}/${name}.conf"
 
   if awg show "$AWG_IFACE" >/dev/null 2>&1; then
     awg set "$AWG_IFACE" peer "$public_key" preshared-key <(printf '%s\n' "$psk") allowed-ips "${ip}/32"
@@ -377,7 +388,7 @@ EOF
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     config_text="$(cat "$CLIENT_OUT_DIR/${name}.conf")"
-    printf '{"ok":true,"action":"add","status":"created","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s}\n' \
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s}\n' \
       "$(json_escape "$requested_name")" \
       "$(json_escape "$name")" \
       "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
@@ -405,14 +416,14 @@ cmd_delete() {
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
-      die "укажите клиента для удаления: awgctl -j delete <name|number>"
+      die_with_status 400 bad_request "укажите клиента для удаления: awgctl -j delete <name|number>"
     fi
     cmd_list
     read -r -p "Клиент для удаления: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
-  [[ -n "$name" ]] || die "клиент не выбран."
-  client_exists "$name" || die "клиент не найден: $name"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  client_exists "$name" || die_with_status 404 not_found "клиент не найден: $name"
 
   # shellcheck disable=SC1090
   . "$CLIENT_DIR/${name}.env"
@@ -427,7 +438,7 @@ cmd_delete() {
   remove_peer_config "$name"
   rm -f "$env_path" "$config_path"
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '{"ok":true,"action":"delete","status":"deleted","name":%s,"ip":%s,"public_key":%s,"created_at":%s,"config_path":%s,"env_path":%s}\n' \
+    printf '{"ok":true,"status_code":200,"status":"deleted","action":"delete","name":%s,"ip":%s,"public_key":%s,"created_at":%s,"config_path":%s,"env_path":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$ip")" \
       "$(json_escape "$public_key")" \
@@ -450,7 +461,7 @@ cmd_list() {
   local i=0 env name ip created pub first=1
   shopt -s nullglob
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '{"ok":true,"clients":['
+    printf '{"ok":true,"status_code":200,"status":"ok","clients":['
     for env in "$CLIENT_DIR"/*.env; do
       # shellcheck disable=SC1090
       . "$env"
@@ -499,15 +510,15 @@ cmd_show() {
   local conf config_text ip created pub env_path
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
-      die "укажите клиента для показа: awgctl -j show <name|number>"
+      die_with_status 400 bad_request "укажите клиента для показа: awgctl -j show <name|number>"
     fi
     cmd_list
     read -r -p "Клиент для показа: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
-  [[ -n "$name" ]] || die "клиент не выбран."
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
   conf="$CLIENT_OUT_DIR/${name}.conf"
-  [[ -r "$conf" ]] || die "конфиг клиента не найден: $name"
+  [[ -r "$conf" ]] || die_with_status 404 not_found "конфиг клиента не найден: $name"
   repair_client_config "$name"
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     env_path="$CLIENT_DIR/${name}.env"
@@ -522,7 +533,7 @@ cmd_show() {
       pub="${CLIENT_PUBLIC_KEY:-}"
     fi
     config_text="$(cat "$conf")"
-    printf '{"ok":true,"name":%s,"ip":%s,"public_key":%s,"created_at":%s,"config_path":%s,"env_path":%s,"config":%s}\n' \
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"ip":%s,"public_key":%s,"created_at":%s,"config_path":%s,"env_path":%s,"config":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_string_or_null "$ip")" \
       "$(json_string_or_null "$pub")" \
@@ -548,21 +559,21 @@ cmd_qr() {
   local conf config_text qr_text
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
-      die "укажите клиента для QR: awgctl -j qr <name|number>"
+      die_with_status 400 bad_request "укажите клиента для QR: awgctl -j qr <name|number>"
     fi
     cmd_list
     read -r -p "Клиент для показа QR: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
-  [[ -n "$name" ]] || die "клиент не выбран."
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
   conf="$CLIENT_OUT_DIR/${name}.conf"
-  [[ -r "$conf" ]] || die "конфиг клиента не найден: $name"
+  [[ -r "$conf" ]] || die_with_status 404 not_found "конфиг клиента не найден: $name"
   repair_client_config "$name"
   ensure_command qrencode qrencode
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     config_text="$(cat "$conf")"
     qr_text="$(qrencode -t ANSIUTF8 < "$conf")"
-    printf '{"ok":true,"name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s}\n' \
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$config_text")" \
@@ -606,7 +617,7 @@ cmd_traffic() {
   shopt -u nullglob
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '{"ok":true,"interface":%s,"peers":[' "$(json_escape "$AWG_IFACE")"
+    printf '{"ok":true,"status_code":200,"status":"ok","interface":%s,"peers":[' "$(json_escape "$AWG_IFACE")"
     first=1
     while IFS=$'\t' read -r peer psk endpoint allowed latest rx tx keepalive; do
       [[ -n "${peer:-}" ]] || continue
@@ -689,7 +700,7 @@ main() {
     traffic|stats|stat|trafic) cmd_traffic ;;
     *)
       if [[ "$JSON_OUTPUT" == "1" ]]; then
-        die "неизвестная команда: $cmd"
+        die_with_status 400 bad_request "неизвестная команда: $cmd"
       fi
       cmd_help
       exit 1

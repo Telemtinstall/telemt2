@@ -200,6 +200,84 @@ awgctl -j show client1
 
 В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
 
+#### JSON-ответы
+
+`awgctl` остается CLI-утилитой, поэтому главный признак успеха для shell-скриптов — код выхода. Поле `status_code` сделано в стиле HTTP, чтобы ответы было проще обрабатывать одинаково в API-обвязках.
+
+```text
+exit 0 + ok=true   = команда выполнена
+exit 1 + ok=false  = ошибка, причина в поле error
+```
+
+Общие поля:
+
+```text
+ok           boolean, true/false
+status_code  number, API-like код результата
+status       string, короткий статус
+error        string, только при ok=false
+```
+
+Статусы:
+
+```text
+200 ok                 команда выполнена
+201 created            клиент создан
+400 bad_request        неверная команда, имя или не хватает аргумента
+403 forbidden          awgctl запущен не от root
+404 not_found          не найден клиент, конфиг, env-файл или ключ
+409 conflict           нет свободного IP или клиентский конфиг поврежден
+500 dependency_error   не удалось поставить/найти системную зависимость
+500 internal_error     системная ошибка, которую awgctl не смог исправить сам
+```
+
+Ответы команд:
+
+```text
+awgctl -j list
+  status_code: 200
+  clients[]:
+    num, name, ip, public_key, created_at, config_path, env_path
+
+awgctl -j traffic
+  status_code: 200
+  interface
+  peers[]:
+    name, vpn_ip, peer_public_key, endpoint, allowed_ips,
+    latest_handshake_epoch, handshake, rx_bytes, tx_bytes, keepalive
+
+awgctl -j show <name|number>
+  status_code: 200
+  name, ip, public_key, created_at, config_path, env_path, config
+
+awgctl -j qr <name|number>
+  status_code: 200
+  name, config_path, config, qr_ansi_utf8
+
+awgctl -j add [name]
+  status_code: 201
+  action=add, requested_name, name, auto_incremented, ip, public_key,
+  interface, endpoint, config_path, env_path, config
+
+awgctl -j delete <name|number>
+  status_code: 200
+  action=delete, name, ip, public_key, created_at, config_path, env_path
+```
+
+Важно: `add`, `show` и `qr` возвращают `config`, а внутри клиентского конфига есть приватный ключ клиента и preshared key. Не пишите эти ответы в публичные логи.
+
+Пример успешного `traffic`:
+
+```json
+{"ok":true,"status_code":200,"status":"ok","interface":"awg0","peers":[{"name":"pipiska1","vpn_ip":"10.88.88.2","peer_public_key":"...","endpoint":"178.218.117.39:56896","allowed_ips":"10.88.88.2/32","latest_handshake_epoch":1780863737,"handshake":"41s ago","rx_bytes":1369956,"tx_bytes":12947276,"keepalive":null}]}
+```
+
+Пример ошибки:
+
+```json
+{"ok":false,"status_code":404,"status":"not_found","error":"клиент не найден: test"}
+```
+
 Примеры:
 
 ```bash
@@ -405,6 +483,84 @@ awgctl -j show client1
 ```
 
 In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
+
+#### JSON Responses
+
+`awgctl` is still a CLI tool, so shell scripts should primarily use the process exit code. `status_code` is API-like and mirrors HTTP-style meanings for easier wrappers.
+
+```text
+exit 0 + ok=true   = command succeeded
+exit 1 + ok=false  = command failed, reason is in error
+```
+
+Common fields:
+
+```text
+ok           boolean, true/false
+status_code  number, API-like result code
+status       string, short status
+error        string, only when ok=false
+```
+
+Statuses:
+
+```text
+200 ok                 command succeeded
+201 created            client was created
+400 bad_request        bad command, bad name, or missing argument
+403 forbidden          awgctl was not run as root
+404 not_found          client, config, env file, or key was not found
+409 conflict           no free client IP or damaged client config
+500 dependency_error   system dependency could not be installed/found
+500 internal_error     system error awgctl could not repair automatically
+```
+
+Command responses:
+
+```text
+awgctl -j list
+  status_code: 200
+  clients[]:
+    num, name, ip, public_key, created_at, config_path, env_path
+
+awgctl -j traffic
+  status_code: 200
+  interface
+  peers[]:
+    name, vpn_ip, peer_public_key, endpoint, allowed_ips,
+    latest_handshake_epoch, handshake, rx_bytes, tx_bytes, keepalive
+
+awgctl -j show <name|number>
+  status_code: 200
+  name, ip, public_key, created_at, config_path, env_path, config
+
+awgctl -j qr <name|number>
+  status_code: 200
+  name, config_path, config, qr_ansi_utf8
+
+awgctl -j add [name]
+  status_code: 201
+  action=add, requested_name, name, auto_incremented, ip, public_key,
+  interface, endpoint, config_path, env_path, config
+
+awgctl -j delete <name|number>
+  status_code: 200
+  action=delete, name, ip, public_key, created_at, config_path, env_path
+```
+
+Important: `add`, `show`, and `qr` return `config`, which contains the client private key and preshared key. Do not write these responses to public logs.
+
+Successful `traffic` example:
+
+```json
+{"ok":true,"status_code":200,"status":"ok","interface":"awg0","peers":[{"name":"pipiska1","vpn_ip":"10.88.88.2","peer_public_key":"...","endpoint":"178.218.117.39:56896","allowed_ips":"10.88.88.2/32","latest_handshake_epoch":1780863737,"handshake":"41s ago","rx_bytes":1369956,"tx_bytes":12947276,"keepalive":null}]}
+```
+
+Error example:
+
+```json
+{"ok":false,"status_code":404,"status":"not_found","error":"client not found: test"}
+```
 
 Examples:
 
