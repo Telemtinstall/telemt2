@@ -5,7 +5,9 @@
 
 ## RU
 
-Каталог содержит два самостоятельных скрипта для Debian/Ubuntu:
+Каталог содержит два самостоятельных скрипта для Debian 13+ / Ubuntu 24.04+:
+
+Поддерживаемые ОС: Debian 13 или новее, Ubuntu 24.04 или новее. На более старых релизах установщик остановится сразу, чтобы не получить полусломанную установку из-за старого ядра, headers или репозиториев.
 
 ### Быстрый старт
 
@@ -161,15 +163,18 @@ awgctl qr dns1
 
 ```text
 1. Проверяет DNS A-запись домена, если включена HTTPS-маскировка.
-2. Ставит базовые пакеты.
-3. Добавляет AmneziaWG PPA и ставит пакет amneziawg. Для Ubuntu-релизов без своей ветки PPA, например 26.04/resolute, используется поддерживаемая ветка `noble`.
-4. Создает /etc/amnezia/amneziawg/awg0.conf.
-5. Включает IPv4 forwarding и NAT MASQUERADE.
-6. Если включена маскировка, ставит nginx/certbot, создает сайт, выпускает SSL и включает certbot.timer.
-7. Открывает порты через ufw, если ufw активен.
-8. Запускает awg-quick@awg0.
-9. Создает первого клиента через awgctl и печатает QR.
+2. Проверяет, что сервер работает на Debian 13+ или Ubuntu 24.04+.
+3. Ставит базовые пакеты.
+4. Добавляет AmneziaWG PPA, ставит пакет amneziawg, проверяет linux-headers и собирает DKMS-модуль ядра. Для Ubuntu-релизов без своей ветки PPA, например 26.04/resolute, используется поддерживаемая ветка `noble`.
+5. Создает /etc/amnezia/amneziawg/awg0.conf.
+6. Включает IPv4 forwarding и NAT MASQUERADE.
+7. Если включена маскировка, ставит nginx/certbot, создает сайт, выпускает SSL и включает certbot.timer.
+8. Открывает порты через ufw, если ufw активен.
+9. Запускает awg-quick@awg0.
+10. Создает первого клиента через awgctl и печатает QR.
 ```
+
+Если apt поставил headers только для нового ядра, установщик напишет об этом по-русски. В таком случае нужно перезагрузить сервер и запустить установщик повторно: после reboot DKMS-модуль соберется и загрузится для текущего ядра.
 
 ### Управление клиентами
 
@@ -234,7 +239,9 @@ RESET_INSTALL_STATE=1 ./install_amneziawg.sh
 
 ## EN
 
-This directory contains two standalone scripts for Debian/Ubuntu:
+This directory contains two standalone scripts for Debian 13+ / Ubuntu 24.04+:
+
+Supported OS versions: Debian 13 or newer, Ubuntu 24.04 or newer. Older releases stop early to avoid half-installed systems caused by old kernels, missing headers, or incompatible repositories.
 
 ```bash
 chmod +x ./install_amneziawg.sh ./awgctl.sh
@@ -351,15 +358,18 @@ Important: the obfuscation profile cannot be changed only on the server. Paramet
 
 ```text
 1. Checks DNS A record if HTTPS masking is enabled.
-2. Installs base packages.
-3. Adds the AmneziaWG PPA and installs the amneziawg package. Ubuntu releases without their own PPA suite, for example 26.04/resolute, use the supported `noble` suite.
-4. Creates /etc/amnezia/amneziawg/awg0.conf.
-5. Enables IPv4 forwarding and NAT MASQUERADE.
-6. If masking is enabled, installs nginx/certbot, creates a site, issues SSL, and enables certbot.timer.
-7. Opens ports through ufw if ufw is active.
-8. Starts awg-quick@awg0.
-9. Creates the first client through awgctl and prints QR.
+2. Checks that the server runs Debian 13+ or Ubuntu 24.04+.
+3. Installs base packages.
+4. Adds the AmneziaWG PPA, installs the amneziawg package, checks linux-headers, and builds the DKMS kernel module. Ubuntu releases without their own PPA suite, for example 26.04/resolute, use the supported `noble` suite.
+5. Creates /etc/amnezia/amneziawg/awg0.conf.
+6. Enables IPv4 forwarding and NAT MASQUERADE.
+7. If masking is enabled, installs nginx/certbot, creates a site, issues SSL, and enables certbot.timer.
+8. Opens ports through ufw if ufw is active.
+9. Starts awg-quick@awg0.
+10. Creates the first client through awgctl and prints QR.
 ```
+
+If apt installs headers only for a newer kernel, the installer explains that explicitly. Reboot the server and run the installer again so the DKMS module can build and load for the currently booted kernel.
 
 ### Client management
 

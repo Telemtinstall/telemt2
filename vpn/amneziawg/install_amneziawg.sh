@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# AmneziaWG installer for a fresh Debian/Ubuntu server.
+# AmneziaWG installer for a fresh Debian 13+ / Ubuntu 24.04+ server.
 # Modes:
 #   1. Plain AmneziaWG: UDP 1234 by default.
 #   2. HTTPS mask site: nginx serves a real HTTPS site on TCP 443,
@@ -548,13 +548,28 @@ valid_awg_text_param() {
   [[ "$value" != *$'\n'* && ${#value} -lt 4096 ]]
 }
 
+os_major_version() {
+  local value="${VERSION_ID:-}"
+  [[ "$value" =~ ^([0-9]+) ]] || return 1
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+
 detect_os() {
+  local major
+
   [[ $EUID -eq 0 ]] || die "запустите скрипт от root."
   [[ -r /etc/os-release ]] || die "не удалось определить ОС: нет /etc/os-release."
   # shellcheck disable=SC1091
   . /etc/os-release
   case "${ID:-}" in
-    debian|ubuntu) ;;
+    debian)
+      major="$(os_major_version)" || die "не удалось определить версию Debian из /etc/os-release. Нужен Debian 13 или новее."
+      (( major >= 13 )) || die "нужен Debian 13 или новее. Обнаружено: Debian ${VERSION_ID:-unknown}."
+      ;;
+    ubuntu)
+      major="$(os_major_version)" || die "не удалось определить версию Ubuntu из /etc/os-release. Нужна Ubuntu 24.04 или новее."
+      (( major >= 24 )) || die "нужна Ubuntu 24.04 или новее. Обнаружено: Ubuntu ${VERSION_ID:-unknown}."
+      ;;
     *) die "поддерживаются только Debian/Ubuntu. Обнаружено: ID=${ID:-unknown}." ;;
   esac
   have systemctl || die "нужен systemd, но команда systemctl не найдена."
@@ -1388,7 +1403,7 @@ verify_install() {
 main() {
   detect_os
   load_resume_config
-  echo "Установщик AmneziaWG для Debian/Ubuntu."
+  echo "Установщик AmneziaWG для Debian 13+ / Ubuntu 24.04+."
   echo
   echo "Перед запуском:"
   echo "  1. Лучше использовать чистый сервер, особенно если HTTPS-маскировка занимает TCP 80/443."
