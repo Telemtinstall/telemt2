@@ -101,7 +101,7 @@ AmneziaWG interface [awg0]
 VPN IPv4 subnet [10.88.88.0/24]
 Server VPN IPv4 [10.88.88.1]
 Client DNS, comma separated IPv4 [1.1.1.1,8.8.8.8]
-Obfuscation profile [mobile]
+Obfuscation profile [dns]
 AmneziaWG junk packet count Jc [random]
 AmneziaWG junk min size Jmin [random]
 AmneziaWG junk max size Jmax [random]
@@ -118,7 +118,7 @@ MTU по умолчанию — `1280`. При необходимости его
 
 ### Профили обфускации
 
-Проверенный на iPhone профиль в текущей сборке — `dns`. Если не знаете, что выбирать для реального использования, начинайте с него:
+Профиль по умолчанию и проверенный на iPhone вариант в текущей сборке — `dns`. Если не знаете, что выбирать для реального использования, оставляйте его:
 
 ```bash
 RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=dns AWG_PORT=1234 ./install_amneziawg.sh
@@ -409,7 +409,7 @@ AmneziaWG interface [awg0]
 VPN IPv4 subnet [10.88.88.0/24]
 Server VPN IPv4 [10.88.88.1]
 Client DNS, comma separated IPv4 [1.1.1.1,8.8.8.8]
-Obfuscation profile [mobile]
+Obfuscation profile [dns]
 AmneziaWG junk packet count Jc [random]
 AmneziaWG junk min size Jmin [random]
 AmneziaWG junk max size Jmax [random]
@@ -426,7 +426,7 @@ If the first client name already exists, the installer creates the next numbered
 
 ### Obfuscation Profiles
 
-The profile verified on iPhone in the current build is `dns`. If you are not sure what to choose for real use, start with it:
+The default profile, and the one verified on iPhone in the current build, is `dns`. If you are not sure what to choose for real use, keep it:
 
 ```bash
 RESET_INSTALL_STATE=1 AWG_OBFS_PROFILE=dns AWG_PORT=1234 ./install_amneziawg.sh
