@@ -9,6 +9,7 @@
 - Added `vlessctl -j` JSON output for client management, links, QR PNG data, traffic, and online checks.
 - Added VLESS online-state fields without removing existing JSON fields: `online_users`, `clients[].online`, and `clients[].last_seen_*`.
 - Documented VLESS JSON response fields, status codes, QR handling, and default client-name auto-numbering.
+- Documented VLESS `online` JSON compatibility notes for Telegram bots and other integrations.
 
 ### Changed
 

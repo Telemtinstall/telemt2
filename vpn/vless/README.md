@@ -447,6 +447,26 @@ vlessctl -j delete <name|number>
   fields: name, uuid, created_at
 ```
 
+#### Совместимость JSON Для Ботов
+
+`vlessctl -j online` расширяется без удаления старых полей. Если бот читает JSON по именам ключей, обновлять его не обязательно: старые поля `active_users`, `clients[].active`, `clients[].uplink_bytes`, `clients[].downlink_bytes`, `clients[].total_bytes`, `clients[].uplink`, `clients[].downlink` и `clients[].total` остаются.
+
+Обновление бота нужно только если у него строгая схема, где запрещены лишние поля, или если он сравнивает JSON как строку. В таком случае разрешите дополнительные поля и не привязывайтесь к порядку ключей.
+
+Для нового отображения онлайна используйте:
+
+```text
+online_users                 сколько клиентов онлайн сейчас
+clients[].online             true/false по каждому клиенту
+clients[].online_source      xray_stats_online или traffic_delta
+clients[].last_seen_epoch    Unix time последнего наблюдения, может быть null
+clients[].last_seen_at       UTC-время последнего наблюдения, может быть null
+```
+
+`active_users` и `clients[].active` оставлены для старой логики и означают "был трафик за выбранный интервал". Для "кто онлайн сейчас" лучше использовать `online_users` и `clients[].online`.
+
+Если боту нужен свежий `last_seen`, запускайте `vlessctl -j online <seconds>` периодически. Команда не хранит историю сама по себе и обновляет `last_seen_*` только в момент проверки.
+
 Важно: `link`, `qr_png_base64` и `qr_png_data_uri` содержат секрет клиента. Не пишите эти ответы в публичные логи.
 
 Для Telegram-бота декодируйте `qr_png_base64` и отправляйте bytes как photo/document. Для сайта отдавайте `image/png` из своего backend API или показывайте `qr_png_data_uri`, если JSON не попадает в публичные логи.
@@ -1028,6 +1048,26 @@ vlessctl -j delete <name|number>
   status_code: 200
   fields: name, uuid, created_at
 ```
+
+#### JSON Compatibility For Bots
+
+`vlessctl -j online` is extended without removing existing fields. If your bot reads JSON by key names, you do not have to update it: the old fields `active_users`, `clients[].active`, `clients[].uplink_bytes`, `clients[].downlink_bytes`, `clients[].total_bytes`, `clients[].uplink`, `clients[].downlink`, and `clients[].total` remain.
+
+Update the bot only if it uses a strict schema that rejects extra fields, or if it compares the whole JSON response as a string. In that case, allow additional fields and do not depend on object key order.
+
+For the new online display, use:
+
+```text
+online_users                 number of clients online now
+clients[].online             true/false per client
+clients[].online_source      xray_stats_online or traffic_delta
+clients[].last_seen_epoch    Unix time of last observation, can be null
+clients[].last_seen_at       UTC last observation time, can be null
+```
+
+`active_users` and `clients[].active` are kept for old logic and mean "had traffic during the selected interval". For "who is online now", prefer `online_users` and `clients[].online`.
+
+If your bot needs fresh `last_seen`, run `vlessctl -j online <seconds>` periodically. The command is not a history logger by itself and updates `last_seen_*` only when a check runs.
 
 Important: `link`, `qr_png_base64`, and `qr_png_data_uri` contain the client secret. Do not write these responses to public logs.
 
