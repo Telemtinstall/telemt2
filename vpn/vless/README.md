@@ -116,6 +116,20 @@ chmod +x /root/install_vless.sh /root/vlessctl.sh
 /root/install_vless.sh
 ```
 
+Автоматический режим без вопросов:
+
+```bash
+PUBLIC_HOST=<PROXY_DOMAIN> /root/install_vless.sh --auto
+```
+
+Для прямого режима без домена:
+
+```bash
+/root/install_vless.sh --direct --auto
+```
+
+В `mask`-режиме автоустановка не угадывает домен: задайте `PUBLIC_HOST`. Если первый клиент не задан, используется `pipiska1`.
+
 ### Что Спросит Установщик
 
 Полный пример диалога:
@@ -124,7 +138,7 @@ chmod +x /root/install_vless.sh /root/vlessctl.sh
 Use domain + HTTPS mask site? yes/no [yes]: <Enter>
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
-First client name: ivan
+First client name [pipiska1]: <Enter>
 HTTPS/VLESS external port [443]: <Enter>
 Local Xray port [12710]: <Enter>
 VLESS WebSocket path [/vless-<RANDOM>]: <Enter>
@@ -143,7 +157,7 @@ Install plan:
   stats API:    127.0.0.1:10085
   VLESS path:   /vless-<RANDOM>
   access logs:  no
-  first client: ivan
+  first client: pipiska1
 
 Type y or yes to continue:
 y
@@ -154,7 +168,7 @@ y
 ```text
 Use domain + HTTPS mask site? yes/no [yes]: no
 Server IP/host for VLESS link [<SERVER_PUBLIC_IP>]: <Enter>
-First client name: ivan
+First client name [pipiska1]: <Enter>
 HTTPS/VLESS external port [443]: <Enter>
 VLESS WebSocket path [/vless-<RANDOM>]: <Enter>
 Enable Xray access logs? yes/no [no]: <Enter>
@@ -169,7 +183,7 @@ Install plan:
   stats API:    127.0.0.1:10085
   VLESS path:   /vless-<RANDOM>
   access logs:  no
-  first client: ivan
+  first client: pipiska1
 
 Type y or yes to continue:
 y
@@ -181,7 +195,7 @@ y
 2. В режиме `mask`, `Proxy domain` — домен, который A-записью указывает на сервер.
 3. В режиме `direct`, `Server IP/host for VLESS link` — публичный IP сервера или домен, который уже указывает на сервер.
 4. `Let's Encrypt email` спрашивается только в режиме `mask`; можно нажать Enter, тогда будет `admin@<PROXY_DOMAIN>`.
-5. `First client name` — имя первого клиента, например `ivan`.
+5. `First client name` — имя первого клиента. Если нажать Enter, будет `pipiska1`.
 6. `HTTPS/VLESS external port` — внешний порт. По умолчанию `443`.
 7. `Local Xray port` спрашивается только в режиме `mask`; обычно оставляйте `12710`.
 8. `VLESS WebSocket path` — секретный path. Обычно оставляйте auto-generated значение.
@@ -264,6 +278,8 @@ ca-certificates
 
 После установки используйте `vlessctl`.
 
+`vlessctl` устанавливается как системная команда `/usr/local/sbin/vlessctl`, поэтому под root его можно запускать из любого каталога.
+
 Добавить пользователя:
 
 ```bash
@@ -273,12 +289,14 @@ vlessctl add
 Диалог:
 
 ```text
-Client name: petr
-Client added: petr
+Имя клиента [pipiska1]: petr
+Клиент добавлен: petr
 vless://<UUID>@<PROXY_DOMAIN>:443?...
-QR code:
+QR для импорта:
 <terminal QR code>
 ```
+
+Если выполнить `vlessctl add` без имени и просто нажать Enter, будет создан `pipiska1`. Если такое имя уже занято, будет выбран следующий свободный номер: `pipiska2`, `pipiska3` и так далее.
 
 Удалить пользователя:
 
@@ -289,11 +307,11 @@ vlessctl delete
 Диалог:
 
 ```text
-Current clients:
+Текущие клиенты:
 1) ivan
 2) petr
-Client to delete: 2
-Client deleted: petr
+Клиент для удаления: 2
+Клиент удален: petr
 ```
 
 Посмотреть текущих пользователей:
@@ -311,9 +329,9 @@ vlessctl show
 Диалог:
 
 ```text
-Current clients:
+Текущие клиенты:
 1) ivan
-Client to show, or all: 1
+Клиент для показа, или all: 1
 vless://<UUID>@<PROXY_DOMAIN>:443?...
 ```
 
@@ -332,13 +350,97 @@ vlessctl qr
 Диалог:
 
 ```text
-Current clients:
+Текущие клиенты:
 1) ivan
-Client to show QR, or all: 1
+Клиент для показа QR, или all: 1
 vless://<UUID>@<PROXY_DOMAIN>:443?...
-QR code:
+QR для импорта:
 <terminal QR code>
 ```
+
+Для скриптов есть JSON-режим. Флаг можно ставить до или после команды:
+
+```bash
+vlessctl -j list
+vlessctl traffic --json
+vlessctl -j add client1
+vlessctl -j show client1
+vlessctl -j qr client1
+```
+
+В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `traffic` и `online` возвращают числовые счетчики байтов.
+
+#### JSON-ответы
+
+`vlessctl` остается CLI-утилитой, поэтому главный признак успеха для shell-скриптов — код выхода. Поле `status_code` сделано в стиле HTTP, чтобы ответы было проще обрабатывать одинаково в API-обвязках.
+
+```text
+exit 0 + ok=true   = команда выполнена
+exit 1 + ok=false  = команда не выполнена, причина в error
+```
+
+Общие поля:
+
+```text
+ok           boolean, true/false
+status_code  number, API-like код результата
+status       string, короткий статус
+error        string, только при ok=false
+```
+
+Статусы:
+
+```text
+200 ok / deleted          команда выполнена
+201 created               клиент создан
+400 bad_request           неверная команда, имя или аргумент
+403 forbidden             команда запущена не от root
+404 not_found             env-файл или клиент не найден
+409 conflict              конфликт состояния или конфига
+500 internal_error        внутренняя ошибка/зависимость
+502 bad_gateway           Xray API вернул неожиданный ответ
+503 service_unavailable   Xray Stats API недоступен
+```
+
+Ответы команд:
+
+```text
+vlessctl -j list
+  status_code: 200
+  fields: clients[]
+
+vlessctl -j add [name]
+  status_code: 201
+  fields: requested_name, name, auto_incremented, uuid, created_at, link,
+          qr_ansi_utf8, qr_png_mime, qr_png_base64, qr_png_data_uri
+
+vlessctl -j show <name|number|all>
+  status_code: 200
+  fields: name, uuid, created_at, link
+  for all: links[]
+
+vlessctl -j qr <name|number|all>
+  status_code: 200
+  fields: name, link, qr_ansi_utf8, qr_png_mime, qr_png_base64, qr_png_data_uri
+  for all: items[]
+
+vlessctl -j traffic
+  status_code: 200
+  fields: clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes, total
+
+vlessctl -j online [seconds]
+  status_code: 200
+  fields: interval_seconds, tcp_connections, active_users, clients[].active,
+          clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes
+
+vlessctl -j delete <name|number>
+  status_code: 200
+  fields: name, uuid, created_at
+```
+
+Важно: `link`, `qr_png_base64` и `qr_png_data_uri` содержат секрет клиента. Не пишите эти ответы в публичные логи.
+
+Для Telegram-бота декодируйте `qr_png_base64` и отправляйте bytes как photo/document. Для сайта отдавайте `image/png` из своего backend API или показывайте `qr_png_data_uri`, если JSON не попадает в публичные логи.
 
 Пересобрать конфиг и перезапустить Xray:
 
@@ -581,6 +683,20 @@ chmod +x /root/install_vless.sh /root/vlessctl.sh
 /root/install_vless.sh
 ```
 
+Non-interactive mode:
+
+```bash
+PUBLIC_HOST=<PROXY_DOMAIN> /root/install_vless.sh --auto
+```
+
+Direct mode without a domain:
+
+```bash
+/root/install_vless.sh --direct --auto
+```
+
+In `mask` mode, auto install does not guess the domain: set `PUBLIC_HOST`. If the first client is not set, `pipiska1` is used.
+
 ### Installer Prompts
 
 Full dialogue example:
@@ -589,7 +705,7 @@ Full dialogue example:
 Use domain + HTTPS mask site? yes/no [yes]: <Enter>
 Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
-First client name: ivan
+First client name [pipiska1]: <Enter>
 HTTPS/VLESS external port [443]: <Enter>
 Local Xray port [12710]: <Enter>
 VLESS WebSocket path [/vless-<RANDOM>]: <Enter>
@@ -608,7 +724,7 @@ Install plan:
   stats API:    127.0.0.1:10085
   VLESS path:   /vless-<RANDOM>
   access logs:  no
-  first client: ivan
+  first client: pipiska1
 
 Type y or yes to continue:
 y
@@ -619,7 +735,7 @@ Direct mode example:
 ```text
 Use domain + HTTPS mask site? yes/no [yes]: no
 Server IP/host for VLESS link [<SERVER_PUBLIC_IP>]: <Enter>
-First client name: ivan
+First client name [pipiska1]: <Enter>
 HTTPS/VLESS external port [443]: <Enter>
 VLESS WebSocket path [/vless-<RANDOM>]: <Enter>
 Enable Xray access logs? yes/no [no]: <Enter>
@@ -634,7 +750,7 @@ Install plan:
   stats API:    127.0.0.1:10085
   VLESS path:   /vless-<RANDOM>
   access logs:  no
-  first client: ivan
+  first client: pipiska1
 
 Type y or yes to continue:
 y
@@ -646,7 +762,7 @@ How to answer:
 2. In `mask` mode, `Proxy domain` is your domain with an A record pointing to the server.
 3. In `direct` mode, `Server IP/host for VLESS link` is the server public IP or a domain that already points to the server.
 4. `Let's Encrypt email` is asked only in `mask` mode; press Enter to use `admin@<PROXY_DOMAIN>`.
-5. `First client name` is the first client, for example `ivan`.
+5. `First client name` is the first client. Press Enter to use `pipiska1`.
 6. `HTTPS/VLESS external port` is the public port. Default is `443`.
 7. `Local Xray port` is asked only in `mask` mode. Usually keep `12710`.
 8. `VLESS WebSocket path` is the secret path. Usually keep the auto-generated value.
@@ -728,6 +844,8 @@ If access logs are enabled during installation, these files are also used:
 
 After installation, use `vlessctl`.
 
+`vlessctl` is installed as `/usr/local/sbin/vlessctl`, so root can run it from any directory.
+
 Add a user:
 
 ```bash
@@ -737,12 +855,14 @@ vlessctl add
 Dialogue:
 
 ```text
-Client name: petr
-Client added: petr
+Имя клиента [pipiska1]: petr
+Клиент добавлен: petr
 vless://<UUID>@<PROXY_DOMAIN>:443?...
-QR code:
+QR для импорта:
 <terminal QR code>
 ```
+
+If you run `vlessctl add` without a name and press Enter, `pipiska1` is created. If that name already exists, the next free numbered name is used: `pipiska2`, `pipiska3`, and so on.
 
 Delete a user:
 
@@ -753,11 +873,11 @@ vlessctl delete
 Dialogue:
 
 ```text
-Current clients:
+Текущие клиенты:
 1) ivan
 2) petr
-Client to delete: 2
-Client deleted: petr
+Клиент для удаления: 2
+Клиент удален: petr
 ```
 
 List current users:
@@ -775,9 +895,9 @@ vlessctl show
 Dialogue:
 
 ```text
-Current clients:
+Текущие клиенты:
 1) ivan
-Client to show, or all: 1
+Клиент для показа, или all: 1
 vless://<UUID>@<PROXY_DOMAIN>:443?...
 ```
 
@@ -796,13 +916,97 @@ vlessctl qr
 Dialogue:
 
 ```text
-Current clients:
+Текущие клиенты:
 1) ivan
-Client to show QR, or all: 1
+Клиент для показа QR, или all: 1
 vless://<UUID>@<PROXY_DOMAIN>:443?...
-QR code:
+QR для импорта:
 <terminal QR code>
 ```
+
+For scripts, use JSON mode. The flag can be placed before or after the command:
+
+```bash
+vlessctl -j list
+vlessctl traffic --json
+vlessctl -j add client1
+vlessctl -j show client1
+vlessctl -j qr client1
+```
+
+In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `traffic` and `online` return numeric byte counters.
+
+#### JSON Responses
+
+`vlessctl` is still a CLI tool, so shell scripts should primarily use the process exit code. `status_code` is API-like and mirrors HTTP-style meanings for easier wrappers.
+
+```text
+exit 0 + ok=true   = command succeeded
+exit 1 + ok=false  = command failed, reason is in error
+```
+
+Common fields:
+
+```text
+ok           boolean, true/false
+status_code  number, API-like result code
+status       string, short status
+error        string, only when ok=false
+```
+
+Statuses:
+
+```text
+200 ok / deleted          command succeeded
+201 created               client created
+400 bad_request           invalid command, name, or argument
+403 forbidden             command was not run as root
+404 not_found             env file or client was not found
+409 conflict              state/config conflict
+500 internal_error        internal error/dependency problem
+502 bad_gateway           Xray API returned unexpected output
+503 service_unavailable   Xray Stats API is unavailable
+```
+
+Command responses:
+
+```text
+vlessctl -j list
+  status_code: 200
+  fields: clients[]
+
+vlessctl -j add [name]
+  status_code: 201
+  fields: requested_name, name, auto_incremented, uuid, created_at, link,
+          qr_ansi_utf8, qr_png_mime, qr_png_base64, qr_png_data_uri
+
+vlessctl -j show <name|number|all>
+  status_code: 200
+  fields: name, uuid, created_at, link
+  for all: links[]
+
+vlessctl -j qr <name|number|all>
+  status_code: 200
+  fields: name, link, qr_ansi_utf8, qr_png_mime, qr_png_base64, qr_png_data_uri
+  for all: items[]
+
+vlessctl -j traffic
+  status_code: 200
+  fields: clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes, total
+
+vlessctl -j online [seconds]
+  status_code: 200
+  fields: interval_seconds, tcp_connections, active_users, clients[].active,
+          clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes
+
+vlessctl -j delete <name|number>
+  status_code: 200
+  fields: name, uuid, created_at
+```
+
+Important: `link`, `qr_png_base64`, and `qr_png_data_uri` contain the client secret. Do not write these responses to public logs.
+
+Telegram bot: decode `qr_png_base64` and send the bytes as photo/document. Website backend: serve decoded bytes as `image/png`, or use `qr_png_data_uri` if the JSON is not written to public logs.
 
 Rebuild config and restart Xray:
 

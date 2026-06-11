@@ -3,30 +3,137 @@ set -Eeuo pipefail
 
 CONFIG_DIR="${CONFIG_DIR:-/usr/local/etc/xray}"
 ENV_FILE="${ENV_FILE:-$CONFIG_DIR/vless.env}"
+JSON_OUTPUT="${JSON_OUTPUT:-0}"
+
+json_escape() {
+  local value="${1:-}"
+
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\b'/\\b}"
+  value="${value//$'\f'/\\f}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  value="${value//$'\e'/\\u001b}"
+  printf '"%s"' "$value"
+}
+
+json_string_or_null() {
+  local value="${1:-}"
+  case "$value" in
+    ""|none|"(none)"|null|"(null)") printf 'null' ;;
+    *) json_escape "$value" ;;
+  esac
+}
+
+json_number_or_null() {
+  local value="${1:-}"
+  [[ "$value" =~ ^[0-9]+$ ]] && printf '%s' "$value" || printf 'null'
+}
+
+die_with_status() {
+  local status_code="$1"
+  local status="$2"
+  shift 2
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":false,"status_code":%s,"status":%s,"error":%s}\n' \
+      "$status_code" \
+      "$(json_escape "$status")" \
+      "$(json_escape "$*")" >&2
+  else
+    echo "ОШИБКА: $*" >&2
+  fi
+  exit 1
+}
 
 die() {
-  echo "ERROR: $*" >&2
-  exit 1
+  die_with_status 500 internal_error "$*"
 }
 
 have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+normalize_command() {
+  local value="$1"
+
+  value="${value//а/a}"
+  value="${value//А/A}"
+  value="${value//е/e}"
+  value="${value//Е/E}"
+  value="${value//о/o}"
+  value="${value//О/O}"
+  value="${value//р/p}"
+  value="${value//Р/P}"
+  value="${value//с/c}"
+  value="${value//С/C}"
+  value="${value//х/x}"
+  value="${value//Х/X}"
+  printf '%s' "$value"
+}
+
+base64_one_line() {
+  local file="$1"
+
+  if base64 --help 2>&1 | grep -q -- '-w'; then
+    base64 -w 0 "$file"
+  else
+    base64 "$file" | tr -d '\n'
+  fi
+}
+
+install_apt_package() {
+  local package="$1"
+
+  have apt-get || die_with_status 500 dependency_error "${package} не установлен, а apt-get не найден. Автоустановка доступна только на Debian/Ubuntu."
+  echo "Пакет ${package} не найден. Устанавливаю автоматически..." >&2
+  export DEBIAN_FRONTEND=noninteractive
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    apt-get update >&2 || die_with_status 500 dependency_error "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
+    apt-get install -y "$package" >&2 || die_with_status 500 dependency_error "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
+  else
+    apt-get update || die_with_status 500 dependency_error "не удалось обновить apt перед установкой ${package}. Проверьте DNS/доступ к репозиториям."
+    apt-get install -y "$package" || die_with_status 500 dependency_error "не удалось установить ${package}. Проверьте apt и запустите команду еще раз."
+  fi
+}
+
+ensure_command() {
+  local command_name="$1"
+  local package="$2"
+
+  have "$command_name" || install_apt_package "$package"
+  have "$command_name" || die_with_status 500 dependency_error "команда ${command_name} не появилась после установки пакета ${package}."
+}
+
+qr_png_base64_from_text() {
+  local text="$1"
+  local tmp
+
+  tmp="$(mktemp)"
+  if ! printf '%s' "$text" | qrencode -t PNG -o "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  base64_one_line "$tmp"
+  rm -f "$tmp"
+}
+
 load_env() {
-  [[ -r "$ENV_FILE" ]] || die "VLESS env file not found: $ENV_FILE"
+  [[ -r "$ENV_FILE" ]] || die_with_status 404 not_found "env-файл VLESS не найден: $ENV_FILE"
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   CONFIG_FILE="${CONFIG_FILE:-$CONFIG_DIR/config.json}"
   USERS_FILE="${USERS_FILE:-$CONFIG_DIR/users.json}"
-  : "${PUBLIC_HOST:?missing PUBLIC_HOST in $ENV_FILE}"
-  : "${HTTPS_PORT:?missing HTTPS_PORT in $ENV_FILE}"
-  : "${LOCAL_PORT:?missing LOCAL_PORT in $ENV_FILE}"
-  : "${VLESS_PATH:?missing VLESS_PATH in $ENV_FILE}"
+  [[ -n "${PUBLIC_HOST:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет PUBLIC_HOST."
+  [[ -n "${HTTPS_PORT:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет HTTPS_PORT."
+  [[ -n "${LOCAL_PORT:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет LOCAL_PORT."
+  [[ -n "${VLESS_PATH:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет VLESS_PATH."
   FRONTEND_MODE="${FRONTEND_MODE:-mask}"
   case "$FRONTEND_MODE" in
     mask|direct) ;;
-    *) die "Unsupported FRONTEND_MODE in $ENV_FILE: $FRONTEND_MODE" ;;
+    *) die_with_status 409 conflict "неподдерживаемый FRONTEND_MODE в $ENV_FILE: $FRONTEND_MODE" ;;
   esac
   XRAY_API_LISTEN="${XRAY_API_LISTEN:-127.0.0.1:10085}"
   ENABLE_ACCESS_LOGS="${ENABLE_ACCESS_LOGS:-0}"
@@ -38,7 +145,7 @@ load_env() {
 }
 
 require_root() {
-  [[ $EUID -eq 0 ]] || die "Run as root."
+  [[ $EUID -eq 0 ]] || die_with_status 403 forbidden "запустите vlessctl от root."
 }
 
 valid_client_name() {
@@ -53,6 +160,7 @@ logs_enabled() {
 }
 
 ensure_files() {
+  id -u xray >/dev/null 2>&1 || die_with_status 409 conflict "пользователь xray не найден. Запустите install_vless.sh заново."
   install -d -m 0750 -o xray -g xray "$CONFIG_DIR"
   if [[ ! -f "$USERS_FILE" ]]; then
     echo '[]' > "$USERS_FILE"
@@ -92,6 +200,44 @@ urlencode() {
 client_exists() {
   local name="$1"
   jq -e --arg name "$name" '.[] | select(.name == $name)' "$USERS_FILE" >/dev/null
+}
+
+client_name_exists() {
+  client_exists "$1"
+}
+
+client_name_by_number() {
+  local number="$1"
+  number=$((10#$number))
+  jq -r --argjson n "$number" '.[$n - 1].name // empty' "$USERS_FILE"
+}
+
+next_client_name() {
+  local requested="${1:-pipiska1}"
+  local prefix number candidate
+
+  if ! client_name_exists "$requested"; then
+    printf '%s' "$requested"
+    return 0
+  fi
+
+  if [[ "$requested" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    number="${BASH_REMATCH[2]}"
+  else
+    prefix="${requested}"
+    number=1
+  fi
+
+  while :; do
+    number=$((10#$number + 1))
+    candidate="${prefix}${number}"
+    valid_client_name "$candidate" || die_with_status 409 conflict "не удалось подобрать имя клиента после ${requested}: получилось некорректное имя ${candidate}."
+    if ! client_name_exists "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
 }
 
 client_uuid() {
@@ -231,7 +377,7 @@ stats_query_json() {
   local pattern="${1:-user>>>}"
   local out
 
-  have xray || die "xray is required."
+  have xray || die_with_status 500 dependency_error "xray не найден. Установите Xray или запустите установщик заново."
   if out="$(xray api statsquery --server="$XRAY_API_LISTEN" -pattern "$pattern" 2>&1)"; then
     :
   elif out="$(xray api statsquery -server="$XRAY_API_LISTEN" -pattern "$pattern" 2>&1)"; then
@@ -240,12 +386,12 @@ stats_query_json() {
     :
   else
     echo "$out" >&2
-    die "Xray stats API is unavailable at $XRAY_API_LISTEN. Run: vlessctl restart"
+    die_with_status 503 service_unavailable "Xray Stats API недоступен на $XRAY_API_LISTEN. Выполните: vlessctl restart"
   fi
 
   if ! jq -e . >/dev/null 2>&1 <<< "$out"; then
     echo "$out" >&2
-    die "Xray stats API returned non-JSON output."
+    die_with_status 502 bad_gateway "Xray Stats API вернул не JSON."
   fi
   printf '%s\n' "$out"
 }
@@ -282,7 +428,7 @@ print_link_for() {
   local path_enc
   local name_enc
   uuid="$(client_uuid "$name")"
-  [[ -n "$uuid" && "$uuid" != "null" ]] || die "Client not found: $name"
+  [[ -n "$uuid" && "$uuid" != "null" ]] || die_with_status 404 not_found "клиент не найден: $name"
   path_enc="$(urlencode "$VLESS_PATH")"
   name_enc="$(urlencode "$name")"
   if [[ "$FRONTEND_MODE" == "direct" ]]; then
@@ -295,18 +441,7 @@ print_link_for() {
 }
 
 ensure_qrencode() {
-  if have qrencode; then
-    return 0
-  fi
-
-  if have apt-get; then
-    echo "qrencode is not installed. Installing it..."
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y qrencode
-  fi
-
-  have qrencode || die "qrencode is not installed. Install it manually and retry."
+  ensure_command qrencode qrencode
 }
 
 print_link_and_qr_for() {
@@ -314,23 +449,33 @@ print_link_and_qr_for() {
   local link
   link="$(print_link_for "$name")"
   printf '%s\n\n' "$link"
-  echo "QR code:"
+  echo "QR для импорта:"
   ensure_qrencode
   qrencode -t ANSIUTF8 "$link"
 }
 
 cmd_add() {
   local name="${1:-}"
+  local requested_name auto_incremented=0
   local uuid
   local created_at
   local tmp
+  local link qr_ansi qr_png_base64
 
   if [[ -z "$name" ]]; then
-    read -r -p "Client name: " name
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      name="pipiska1"
+    else
+      read -r -p "Имя клиента [pipiska1]: " name
+      name="${name:-pipiska1}"
+    fi
   fi
-  valid_client_name "$name" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
-  if client_exists "$name"; then
-    die "Client already exists: $name"
+  requested_name="$name"
+  valid_client_name "$name" || die_with_status 400 bad_request "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
+  if client_name_exists "$name"; then
+    name="$(next_client_name "$name")"
+    auto_incremented=1
+    [[ "$JSON_OUTPUT" == "1" ]] || echo "Клиент уже существует, создаю следующего: $name"
   fi
 
   uuid="$(new_uuid)"
@@ -347,26 +492,55 @@ cmd_add() {
 
   render_config
   restart_xray
-  echo "Client added: $name"
-  print_link_and_qr_for "$name"
+  link="$(print_link_for "$name")"
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    ensure_qrencode
+    ensure_command base64 coreutils
+    qr_ansi="$(printf '%s' "$link" | qrencode -t ANSIUTF8)"
+    qr_png_base64="$(qr_png_base64_from_text "$link")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"uuid":%s,"created_at":%s,"link":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}\n' \
+      "$(json_escape "$requested_name")" \
+      "$(json_escape "$name")" \
+      "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
+      "$(json_escape "$uuid")" \
+      "$(json_escape "$created_at")" \
+      "$(json_escape "$link")" \
+      "$(json_escape "$qr_ansi")" \
+      "$(json_escape "$qr_png_base64")" \
+      "$(json_escape "data:image/png;base64,${qr_png_base64}")"
+    return 0
+  fi
+
+  echo "Клиент добавлен: $name"
+  printf '%s\n\n' "$link"
+  echo "QR для импорта:"
+  ensure_qrencode
+  qrencode -t ANSIUTF8 "$link"
 }
 
 cmd_delete() {
   local name="${1:-}"
+  local uuid created_at
   local tmp
 
   if [[ -z "$name" ]]; then
-    echo "Current clients:"
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для удаления: vlessctl -j delete <name|number>"
+    fi
+    echo "Текущие клиенты:"
     jq -r 'to_entries[] | "\(.key + 1)) \(.value.name)"' "$USERS_FILE"
-    read -r -p "Client to delete: " name
+    read -r -p "Клиент для удаления: " name
   fi
 
   if [[ "$name" =~ ^[0-9]+$ ]]; then
-    name="$(jq -r --argjson n "$name" '.[$n - 1].name // empty' "$USERS_FILE")"
+    name="$(client_name_by_number "$name")"
   fi
 
-  [[ -n "$name" ]] || die "No client selected."
-  client_exists "$name" || die "Client not found: $name"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  client_exists "$name" || die_with_status 404 not_found "клиент не найден: $name"
+  uuid="$(client_uuid "$name")"
+  created_at="$(jq -r --arg name "$name" '.[] | select(.name == $name) | .created_at // empty' "$USERS_FILE" | head -n 1)"
 
   tmp="$(mktemp)"
   jq --arg name "$name" '[.[] | select(.name != $name)]' "$USERS_FILE" > "$tmp"
@@ -375,12 +549,24 @@ cmd_delete() {
 
   render_config
   restart_xray
-  echo "Client deleted: $name"
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"deleted","action":"delete","name":%s,"uuid":%s,"created_at":%s}\n' \
+      "$(json_escape "$name")" \
+      "$(json_string_or_null "$uuid")" \
+      "$(json_string_or_null "$created_at")"
+    return 0
+  fi
+  echo "Клиент удален: $name"
 }
 
 cmd_list() {
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    jq -c '{ok:true,status_code:200,status:"ok",clients:.}' "$USERS_FILE"
+    return 0
+  fi
+
   if [[ "$(jq 'length' "$USERS_FILE")" == "0" ]]; then
-    echo "No clients."
+    echo "Клиентов нет."
     return 0
   fi
   printf '%-24s %-36s %s\n' "name" "uuid" "created_at"
@@ -392,44 +578,120 @@ cmd_list() {
 
 cmd_show() {
   local name="${1:-}"
+  local uuid created_at link first one
   if [[ -z "$name" ]]; then
-    echo "Current clients:"
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для показа: vlessctl -j show <name|number|all>"
+    fi
+    echo "Текущие клиенты:"
     jq -r 'to_entries[] | "\(.key + 1)) \(.value.name)"' "$USERS_FILE"
-    read -r -p "Client to show, or all: " name
+    read -r -p "Клиент для показа, или all: " name
   fi
   if [[ "$name" == "all" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      printf '{"ok":true,"status_code":200,"status":"ok","links":['
+      first=1
+      while IFS=$'\t' read -r one uuid created_at; do
+        [[ -n "$one" ]] || continue
+        link="$(print_link_for "$one")"
+        (( first == 1 )) || printf ','
+        first=0
+        printf '{"name":%s,"uuid":%s,"created_at":%s,"link":%s}' \
+          "$(json_escape "$one")" \
+          "$(json_escape "$uuid")" \
+          "$(json_string_or_null "$created_at")" \
+          "$(json_escape "$link")"
+      done < <(jq -r '.[] | [.name, .uuid, (.created_at // "")] | @tsv' "$USERS_FILE")
+      printf ']}\n'
+      return 0
+    fi
     jq -r '.[].name' "$USERS_FILE" | while read -r one; do
       print_link_for "$one"
     done
     return 0
   fi
   if [[ "$name" =~ ^[0-9]+$ ]]; then
-    name="$(jq -r --argjson n "$name" '.[$n - 1].name // empty' "$USERS_FILE")"
+    name="$(client_name_by_number "$name")"
   fi
-  [[ -n "$name" ]] || die "No client selected."
-  print_link_for "$name"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  client_exists "$name" || die_with_status 404 not_found "клиент не найден: $name"
+  uuid="$(client_uuid "$name")"
+  created_at="$(jq -r --arg name "$name" '.[] | select(.name == $name) | .created_at // empty' "$USERS_FILE" | head -n 1)"
+  link="$(print_link_for "$name")"
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"uuid":%s,"created_at":%s,"link":%s}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$uuid")" \
+      "$(json_string_or_null "$created_at")" \
+      "$(json_escape "$link")"
+    return 0
+  fi
+  printf '%s\n' "$link"
 }
 
 cmd_qr() {
   local name="${1:-}"
+  local link qr_ansi qr_png_base64 first one
   if [[ -z "$name" ]]; then
-    echo "Current clients:"
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для QR: vlessctl -j qr <name|number|all>"
+    fi
+    echo "Текущие клиенты:"
     jq -r 'to_entries[] | "\(.key + 1)) \(.value.name)"' "$USERS_FILE"
-    read -r -p "Client to show QR, or all: " name
+    read -r -p "Клиент для показа QR, или all: " name
   fi
   if [[ "$name" == "all" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      ensure_qrencode
+      ensure_command base64 coreutils
+      printf '{"ok":true,"status_code":200,"status":"ok","items":['
+      first=1
+      while read -r one; do
+        [[ -n "$one" ]] || continue
+        link="$(print_link_for "$one")"
+        qr_ansi="$(printf '%s' "$link" | qrencode -t ANSIUTF8)"
+        qr_png_base64="$(qr_png_base64_from_text "$link")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${one}."
+        (( first == 1 )) || printf ','
+        first=0
+        printf '{"name":%s,"link":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}' \
+          "$(json_escape "$one")" \
+          "$(json_escape "$link")" \
+          "$(json_escape "$qr_ansi")" \
+          "$(json_escape "$qr_png_base64")" \
+          "$(json_escape "data:image/png;base64,${qr_png_base64}")"
+      done < <(jq -r '.[].name' "$USERS_FILE")
+      printf ']}\n'
+      return 0
+    fi
     jq -r '.[].name' "$USERS_FILE" | while read -r one; do
-      echo "Client: $one"
+      echo "Клиент: $one"
       print_link_and_qr_for "$one"
       echo
     done
     return 0
   fi
   if [[ "$name" =~ ^[0-9]+$ ]]; then
-    name="$(jq -r --argjson n "$name" '.[$n - 1].name // empty' "$USERS_FILE")"
+    name="$(client_name_by_number "$name")"
   fi
-  [[ -n "$name" ]] || die "No client selected."
-  print_link_and_qr_for "$name"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  client_exists "$name" || die_with_status 404 not_found "клиент не найден: $name"
+  link="$(print_link_for "$name")"
+  ensure_qrencode
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    ensure_command base64 coreutils
+    qr_ansi="$(printf '%s' "$link" | qrencode -t ANSIUTF8)"
+    qr_png_base64="$(qr_png_base64_from_text "$link")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"link":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$link")" \
+      "$(json_escape "$qr_ansi")" \
+      "$(json_escape "$qr_png_base64")" \
+      "$(json_escape "data:image/png;base64,${qr_png_base64}")"
+    return 0
+  fi
+  printf '%s\n\n' "$link"
+  echo "QR для импорта:"
+  qrencode -t ANSIUTF8 "$link"
 }
 
 cmd_traffic() {
@@ -437,13 +699,50 @@ cmd_traffic() {
   local name up down total
   local sum_up=0
   local sum_down=0
+  local first=1
 
   if [[ "$(jq 'length' "$USERS_FILE")" == "0" ]]; then
-    echo "No clients."
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      printf '{"ok":true,"status_code":200,"status":"ok","clients":[],"total":{"uplink_bytes":0,"downlink_bytes":0,"total_bytes":0}}\n'
+    else
+      echo "Клиентов нет."
+    fi
     return 0
   fi
 
   stats="$(stats_query_json "user>>>")"
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","clients":['
+    while read -r name; do
+      up="$(stat_value "$stats" "user>>>${name}>>>traffic>>>uplink")"
+      down="$(stat_value "$stats" "user>>>${name}>>>traffic>>>downlink")"
+      [[ "$up" =~ ^[0-9]+$ ]] || up=0
+      [[ "$down" =~ ^[0-9]+$ ]] || down=0
+      total=$((up + down))
+      sum_up=$((sum_up + up))
+      sum_down=$((sum_down + down))
+      (( first == 1 )) || printf ','
+      first=0
+      printf '{"name":%s,"uplink_bytes":%s,"downlink_bytes":%s,"total_bytes":%s,"uplink":%s,"downlink":%s,"total":%s}' \
+        "$(json_escape "$name")" \
+        "$up" \
+        "$down" \
+        "$total" \
+        "$(json_escape "$(bytes_human "$up")")" \
+        "$(json_escape "$(bytes_human "$down")")" \
+        "$(json_escape "$(bytes_human "$total")")"
+    done < <(jq -r '.[].name' "$USERS_FILE")
+    total=$((sum_up + sum_down))
+    printf '],"total":{"uplink_bytes":%s,"downlink_bytes":%s,"total_bytes":%s,"uplink":%s,"downlink":%s,"total":%s}}\n' \
+      "$sum_up" \
+      "$sum_down" \
+      "$total" \
+      "$(json_escape "$(bytes_human "$sum_up")")" \
+      "$(json_escape "$(bytes_human "$sum_down")")" \
+      "$(json_escape "$(bytes_human "$total")")"
+    return 0
+  fi
+
   printf '%-24s %14s %14s %14s\n' "name" "uplink" "downlink" "total"
   while read -r name; do
     up="$(stat_value "$stats" "user>>>${name}>>>traffic>>>uplink")"
@@ -467,10 +766,15 @@ cmd_online() {
   local before after tcp_count
   local name before_up before_down after_up after_down delta_up delta_down delta_total
   local active active_users=0
+  local first=1
 
-  valid_interval "$interval" || die "Interval must be a number from 1 to 3600 seconds."
+  valid_interval "$interval" || die_with_status 400 bad_request "интервал должен быть числом от 1 до 3600 секунд."
   if [[ "$(jq 'length' "$USERS_FILE")" == "0" ]]; then
-    echo "No clients."
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      printf '{"ok":true,"status_code":200,"status":"ok","interval_seconds":%s,"tcp_connections":null,"active_users":0,"clients":[]}\n' "$interval"
+    else
+      echo "Клиентов нет."
+    fi
     return 0
   fi
 
@@ -479,10 +783,16 @@ cmd_online() {
   after="$(stats_query_json "user>>>")"
   tcp_count="$(active_xray_tcp_connections)"
 
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","interval_seconds":%s,"tcp_connections":%s,"clients":[' \
+      "$interval" \
+      "$(json_number_or_null "$tcp_count")"
+  else
   echo "Observed interval: ${interval}s"
   echo "Established local Xray TCP connections: ${tcp_count}"
   echo "Note: idle connected clients may show no traffic during this interval."
   printf '%-24s %-8s %14s %14s %14s\n' "name" "active" "uplink" "downlink" "total"
+  fi
 
   while read -r name; do
     before_up="$(stat_value "$before" "user>>>${name}>>>traffic>>>uplink")"
@@ -505,9 +815,29 @@ cmd_online() {
       active_users=$((active_users + 1))
     fi
 
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      (( first == 1 )) || printf ','
+      first=0
+      printf '{"name":%s,"active":%s,"uplink_bytes":%s,"downlink_bytes":%s,"total_bytes":%s,"uplink":%s,"downlink":%s,"total":%s}' \
+        "$(json_escape "$name")" \
+        "$([[ "$active" == "yes" ]] && echo true || echo false)" \
+        "$delta_up" \
+        "$delta_down" \
+        "$delta_total" \
+        "$(json_escape "$(bytes_human "$delta_up")")" \
+        "$(json_escape "$(bytes_human "$delta_down")")" \
+        "$(json_escape "$(bytes_human "$delta_total")")"
+      continue
+    fi
+
     printf '%-24s %-8s %14s %14s %14s\n' \
       "$name" "$active" "$(bytes_human "$delta_up")" "$(bytes_human "$delta_down")" "$(bytes_human "$delta_total")"
   done < <(jq -r '.[].name' "$USERS_FILE")
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '],"active_users":%s}\n' "$active_users"
+    return 0
+  fi
 
   echo "Users with traffic during interval: ${active_users}"
 }
@@ -515,6 +845,7 @@ cmd_online() {
 cmd_help() {
   cat <<'EOF'
 Usage:
+  vlessctl -j|--json <command>
   vlessctl add [name]
   vlessctl delete [name|number]
   vlessctl list
@@ -528,7 +859,20 @@ EOF
 }
 
 main() {
-  local cmd="${1:-help}"
+  local cmd
+  local args=()
+
+  while (($#)); do
+    case "$1" in
+      -j|--json) JSON_OUTPUT=1 ;;
+      *) args+=("$1") ;;
+    esac
+    shift
+  done
+
+  set -- "${args[@]}"
+  cmd="${1:-help}"
+  cmd="$(normalize_command "$cmd")"
   shift || true
 
   case "$cmd" in
@@ -539,7 +883,7 @@ main() {
   esac
 
   require_root
-  have jq || die "jq is required."
+  have jq || die_with_status 500 dependency_error "jq не найден. Установите jq или запустите install_vless.sh заново."
   load_env
   ensure_files
 
@@ -549,11 +893,28 @@ main() {
     list|ls) cmd_list ;;
     show|link) cmd_show "${1:-}" ;;
     qr|qrcode) cmd_qr "${1:-}" ;;
-    traffic|stats) cmd_traffic ;;
+    traffic|stats|stat|trafic) cmd_traffic ;;
     online) cmd_online "${1:-10}" ;;
-    render) render_config ;;
-    restart) render_config; restart_xray ;;
-    *) cmd_help; exit 1 ;;
+    render)
+      render_config
+      if [[ "$JSON_OUTPUT" == "1" ]]; then
+        printf '{"ok":true,"status_code":200,"status":"ok","action":"render","config_file":%s}\n' "$(json_escape "$CONFIG_FILE")"
+      fi
+      ;;
+    restart)
+      render_config
+      restart_xray
+      if [[ "$JSON_OUTPUT" == "1" ]]; then
+        printf '{"ok":true,"status_code":200,"status":"ok","action":"restart"}\n'
+      fi
+      ;;
+    *)
+      if [[ "$JSON_OUTPUT" == "1" ]]; then
+        die_with_status 400 bad_request "неизвестная команда: $cmd"
+      fi
+      cmd_help
+      exit 1
+      ;;
   esac
 }
 

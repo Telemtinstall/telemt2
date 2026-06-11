@@ -11,6 +11,7 @@ PUBLIC_HOST="${PUBLIC_HOST:-}"
 PUBLIC_IP="${PUBLIC_IP:-}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 CLIENT_NAME="${CLIENT_NAME:-}"
+DEFAULT_CLIENT_NAME="${DEFAULT_CLIENT_NAME:-pipiska1}"
 FRONTEND_MODE="${FRONTEND_MODE:-}"
 HTTPS_PORT="${HTTPS_PORT:-443}"
 LOCAL_PORT="${LOCAL_PORT:-12710}"
@@ -43,12 +44,59 @@ step() {
 }
 
 die() {
-  echo "ERROR: $*" >&2
+  echo "ОШИБКА: $*" >&2
   exit 1
 }
 
 have() {
   command -v "$1" >/dev/null 2>&1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./install_vless.sh [--auto] [--mask|--direct]
+
+Options:
+  --auto, -y, --yes, --assume-yes
+      Use defaults, continue without interactive confirmations, and require PUBLIC_HOST
+      when mask mode is selected.
+  --mask
+      Use domain + HTTPS mask mode.
+  --direct
+      Use direct WebSocket mode without nginx/certbot mask site.
+  -h, --help
+      Show this help.
+
+Useful examples:
+  PUBLIC_HOST=proxy.example.com ./install_vless.sh --auto
+  FRONTEND_MODE=direct ./install_vless.sh --auto
+  RESET_INSTALL_STATE=1 PUBLIC_HOST=proxy.example.com CLIENT_NAME=pipiska1 ./install_vless.sh --auto
+EOF
+}
+
+parse_args() {
+  while (($#)); do
+    case "$1" in
+      --auto|-y|--yes|--assume-yes)
+        ASSUME_YES=1
+        ;;
+      --mask)
+        FRONTEND_MODE="mask"
+        ;;
+      --direct)
+        FRONTEND_MODE="direct"
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "неизвестный аргумент: $1"
+        ;;
+    esac
+    shift
+  done
 }
 
 retry_command() {
@@ -64,11 +112,11 @@ retry_command() {
 
     rc=$?
     if (( attempt >= INSTALL_RETRIES )); then
-      echo "ERROR: ${label} failed after ${INSTALL_RETRIES} attempts." >&2
+      echo "ОШИБКА: ${label} не выполнено после ${INSTALL_RETRIES} попыток." >&2
       return "$rc"
     fi
 
-    echo "WARN: ${label} failed with exit code ${rc}. Retrying in ${RETRY_DELAY_SECONDS}s (${attempt}/${INSTALL_RETRIES})..." >&2
+    echo "ПРЕДУПРЕЖДЕНИЕ: ${label} завершилось с кодом ${rc}. Повтор через ${RETRY_DELAY_SECONDS}s (${attempt}/${INSTALL_RETRIES})..." >&2
     sleep "$RETRY_DELAY_SECONDS"
     attempt=$((attempt + 1))
   done
@@ -159,9 +207,25 @@ prompt() {
   local answer=""
   local current_value="${!var:-}"
 
-  if [[ "$ASSUME_YES" == "1" && -n "$current_value" ]]; then
-    printf '%s: %s\n' "$label" "$current_value"
-    return 0
+  if [[ "$ASSUME_YES" == "1" ]]; then
+    if [[ -n "$current_value" ]]; then
+      printf '%s: %s\n' "$label" "$current_value"
+      return 0
+    fi
+    if [[ -n "$default_value" ]]; then
+      printf -v "$var" '%s' "$default_value"
+      printf '%s: %s\n' "$label" "$default_value"
+      return 0
+    fi
+    die "автоматический режим не знает значение '${label}'. Укажите переменную окружения перед запуском."
+  fi
+
+  if [[ -n "$current_value" && -z "$default_value" ]]; then
+    default_value="$current_value"
+  fi
+
+  if [[ -n "$current_value" && "$current_value" != "$default_value" ]]; then
+    default_value="$current_value"
   fi
 
   if [[ -n "$default_value" ]]; then
@@ -173,9 +237,9 @@ prompt() {
 
   if [[ -n "$answer" ]]; then
     printf -v "$var" '%s' "$answer"
-  else
-    printf -v "$var" '%s' "$default_value"
+    return 0
   fi
+  printf -v "$var" '%s' "$default_value"
 }
 
 valid_domain() {
@@ -217,7 +281,7 @@ normalize_bool() {
   case "${value,,}" in
     1|y|yes|true|on) echo "1" ;;
     0|n|no|false|off|"") echo "0" ;;
-    *) die "Use yes/no for access logs." ;;
+    *) die "для access logs используйте yes/no." ;;
   esac
 }
 
@@ -228,7 +292,7 @@ normalize_yes_no() {
   case "${value,,}" in
     1|y|yes|true|on) echo "1" ;;
     0|n|no|false|off|"") echo "0" ;;
-    *) die "Use yes/no for ${label}." ;;
+    *) die "для '${label}' используйте yes/no." ;;
   esac
 }
 
@@ -311,16 +375,16 @@ backup_path() {
 }
 
 detect_os() {
-  [[ $EUID -eq 0 ]] || die "Run this script as root."
-  [[ -r /etc/os-release ]] || die "Cannot detect OS."
+  [[ $EUID -eq 0 ]] || die "запустите установщик от root."
+  [[ -r /etc/os-release ]] || die "не удалось определить ОС: нет /etc/os-release."
   # shellcheck disable=SC1091
   . /etc/os-release
   case "${ID:-}" in
     debian|ubuntu) ;;
-    *) die "Only Debian/Ubuntu are supported. Detected ID=${ID:-unknown}." ;;
+    *) die "поддерживаются только Debian/Ubuntu. Обнаружено: ID=${ID:-unknown}." ;;
   esac
-  have systemctl || die "systemd is required."
-  have apt-get || die "apt-get is required."
+  have systemctl || die "нужен systemd."
+  have apt-get || die "нужен apt-get."
 }
 
 install_base_tools() {
@@ -331,7 +395,7 @@ install_base_tools() {
 
 detect_public_ip() {
   if [[ -n "$PUBLIC_IP" ]]; then
-    is_public_ipv4 "$PUBLIC_IP" || die "PUBLIC_IP is not a public IPv4 address: $PUBLIC_IP"
+    is_public_ipv4 "$PUBLIC_IP" || die "PUBLIC_IP не является публичным IPv4: $PUBLIC_IP"
     return 0
   fi
 
@@ -348,9 +412,9 @@ PY
   elif have ip; then
     PUBLIC_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}')"
   else
-    die "Cannot detect public IPv4 before installing packages. Run as: PUBLIC_IP=<SERVER_PUBLIC_IP> ./install_vless.sh"
+    die "не удалось определить публичный IPv4 до установки пакетов. Запустите так: PUBLIC_IP=<SERVER_PUBLIC_IP> ./install_vless.sh"
   fi
-  is_public_ipv4 "$PUBLIC_IP" || die "Could not detect this server public IPv4."
+  is_public_ipv4 "$PUBLIC_IP" || die "не удалось определить публичный IPv4 этого сервера."
 }
 
 resolve_ipv4() {
@@ -404,29 +468,29 @@ preflight() {
       if port_in_use 80; then
         echo "Port 80 listeners:"
         port_listeners 80 || true
-        die "80/tcp is busy. Use a clean server or stop the conflicting service."
+        die "80/tcp уже занят. Используйте чистый сервер или остановите конфликтующий сервис."
       fi
     fi
     if port_in_use "$HTTPS_PORT"; then
       echo "Port $HTTPS_PORT listeners:"
       port_listeners "$HTTPS_PORT" || true
-      die "$HTTPS_PORT/tcp is busy. Use a clean server or choose another HTTPS port."
+      die "$HTTPS_PORT/tcp уже занят. Используйте чистый сервер или выберите другой HTTPS/VLESS порт."
     fi
     if [[ "$FRONTEND_MODE" == "mask" ]]; then
       if port_in_use "$LOCAL_PORT"; then
         echo "Port $LOCAL_PORT listeners:"
         port_listeners "$LOCAL_PORT" || true
-        die "$LOCAL_PORT/tcp is busy. Choose another local Xray port."
+        die "$LOCAL_PORT/tcp уже занят. Выберите другой локальный порт Xray."
       fi
     fi
     if port_in_use "$api_port"; then
       echo "Port $api_port listeners:"
       port_listeners "$api_port" || true
-      die "$api_port/tcp is busy. Choose another local Xray API port with XRAY_API_LISTEN=127.0.0.1:<port>."
+      die "$api_port/tcp уже занят. Выберите другой локальный порт Xray API через XRAY_API_LISTEN=127.0.0.1:<port>."
     fi
     if [[ "$FRONTEND_MODE" == "mask" ]]; then
       if nginx_has_foreign_sites; then
-        die "Existing nginx sites were found. Use a clean server or integrate manually."
+        die "найдены чужие nginx sites. Используйте чистый сервер или интегрируйте вручную."
       fi
     fi
   fi
@@ -449,7 +513,7 @@ You can continue without a mask site. In that mode:
 EOF
 
   if [[ "$ASSUME_YES" == "1" ]]; then
-    die "Mask mode failed and ASSUME_YES=1 cannot switch to direct mode automatically."
+    die "режим mask не прошел проверку, а ASSUME_YES=1 не переключает установку в direct автоматически."
   fi
 
   if confirm "Continue without mask using ${PUBLIC_IP}? [y/N]: "; then
@@ -468,14 +532,14 @@ early_preflight() {
   local resolved_ips
   local ip
 
-  [[ -f "$SCRIPT_DIR/vlessctl.sh" ]] || die "vlessctl.sh must be next to install_vless.sh."
+  [[ -f "$SCRIPT_DIR/vlessctl.sh" ]] || die "vlessctl.sh должен лежать рядом с install_vless.sh."
 
   if [[ -f "$ENV_FILE" ]]; then
     EXISTING_INSTALL=1
     echo "Existing VLESS install detected: $ENV_FILE"
-    confirm "Reconfigure this VLESS installation? [y/N]: " || die "Cancelled."
+    confirm "Reconfigure this VLESS installation? [y/N]: " || die "отменено."
   elif [[ -e "$CONFIG_FILE" ]]; then
-    die "Xray config already exists but is not managed by this installer: $CONFIG_FILE"
+    die "конфиг Xray уже существует, но не управляется этим установщиком: $CONFIG_FILE"
   fi
 
   detect_public_ip
@@ -484,13 +548,13 @@ early_preflight() {
   if [[ "$FRONTEND_MODE" == "direct" ]]; then
     PUBLIC_HOST="${PUBLIC_HOST:-$PUBLIC_IP}"
     if is_public_ipv4 "$PUBLIC_HOST"; then
-      [[ "$PUBLIC_HOST" == "$PUBLIC_IP" ]] || die "Direct mode IP must be this server public IPv4: $PUBLIC_IP"
+      [[ "$PUBLIC_HOST" == "$PUBLIC_IP" ]] || die "в direct-режиме IP должен быть публичным IPv4 этого сервера: $PUBLIC_IP"
       echo "client_address=${PUBLIC_HOST}"
       save_resume_config
       return 0
     fi
 
-    have getent || die "getent is required for domain DNS check. Use PUBLIC_HOST=${PUBLIC_IP} for IP-only direct mode."
+    have getent || die "для проверки DNS нужен getent. Для direct-режима без домена используйте PUBLIC_HOST=${PUBLIC_IP}."
     resolved_ips="$(resolve_ipv4 "$PUBLIC_HOST" | tr '\n' ' ')"
     echo "domain_ipv4=${resolved_ips:-none}"
     if ! printf ' %s ' "$resolved_ips" | grep -q " $PUBLIC_IP "; then
@@ -507,7 +571,7 @@ Current A records:
   ${resolved_ips:-none}
 EOF
       if [[ "$ASSUME_YES" == "1" ]]; then
-        die "Direct mode domain does not point to this server. Use PUBLIC_HOST=${PUBLIC_IP} or fix DNS."
+        die "домен direct-режима не указывает на этот сервер. Используйте PUBLIC_HOST=${PUBLIC_IP} или исправьте DNS."
       fi
       if confirm "Use ${PUBLIC_IP} in the client link instead? [y/N]: "; then
         PUBLIC_HOST="$PUBLIC_IP"
@@ -520,7 +584,7 @@ EOF
     return 0
   fi
 
-  have getent || die "getent is required for early DNS check."
+  have getent || die "для ранней DNS-проверки нужен getent."
   resolved_ips="$(resolve_ipv4 "$PUBLIC_HOST" | tr '\n' ' ')"
   echo "domain_ipv4=${resolved_ips:-none}"
 
@@ -806,12 +870,12 @@ print_install_qr() {
   local link
   [[ -s "$LINKS_FILE" ]] || return 0
   if ! have qrencode; then
-    echo "Client QR:"
+    echo "QR клиента:"
     echo "  qrencode is not installed; run: apt-get install -y qrencode"
     return 0
   fi
   link="$(cat "$LINKS_FILE")"
-  echo "Client QR:"
+  echo "QR клиента:"
   qrencode -t ANSIUTF8 "$link"
 }
 
@@ -895,20 +959,20 @@ verify_install() {
   if ! systemctl is-active --quiet xray; then
     systemctl --no-pager --full status xray || true
     journalctl -u xray -n 60 --no-pager || true
-    die "xray service is not active."
+    die "сервис xray не активен."
   fi
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
     if ! systemctl is-active --quiet nginx; then
       systemctl --no-pager --full status nginx || true
       journalctl -u nginx -n 60 --no-pager || true
-      die "nginx service is not active."
+      die "сервис nginx не активен."
     fi
     if ! curl -fsSI --resolve "${PUBLIC_HOST}:${HTTPS_PORT}:${PUBLIC_IP}" "https://${PUBLIC_HOST}:${HTTPS_PORT}/" >/dev/null; then
-      die "HTTPS verification failed for https://${PUBLIC_HOST}:${HTTPS_PORT}/."
+      die "HTTPS-проверка не прошла для https://${PUBLIC_HOST}:${HTTPS_PORT}/."
     fi
   else
     if ! wait_for_listener "$HTTPS_PORT"; then
-      die "Direct VLESS listener is not active on ${HTTPS_PORT}/tcp."
+      die "direct VLESS не слушает ${HTTPS_PORT}/tcp."
     fi
   fi
   write_links_file
@@ -920,6 +984,7 @@ main() {
   local mask_answer
 
   load_resume_config
+  parse_args "$@"
   detect_os
 
   cat <<'EOF'
@@ -942,7 +1007,7 @@ EOF
   else
     FRONTEND_MODE="direct"
   fi
-  valid_frontend_mode "$FRONTEND_MODE" || die "Frontend mode must be mask or direct."
+  valid_frontend_mode "$FRONTEND_MODE" || die "FRONTEND_MODE должен быть mask или direct."
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
     prompt PUBLIC_HOST "Proxy domain" "$PUBLIC_HOST"
@@ -951,10 +1016,10 @@ EOF
       if confirm "Continue without mask using ${PUBLIC_HOST}? [y/N]: "; then
         FRONTEND_MODE="direct"
       else
-        die "Enter a domain for mask mode."
+        die "для режима mask укажите домен."
       fi
     elif ! valid_domain "$PUBLIC_HOST"; then
-      die "Domain must be a valid DNS name, for example proxy.example.com."
+      die "домен должен быть корректным DNS-именем, например proxy.example.com."
     fi
   fi
 
@@ -964,7 +1029,7 @@ EOF
       PUBLIC_HOST="$PUBLIC_IP"
     fi
     prompt PUBLIC_HOST "Server IP/host for VLESS link" "$PUBLIC_HOST"
-    valid_public_host "$PUBLIC_HOST" || die "Server IP/host must be a public IPv4 address or DNS name."
+    valid_public_host "$PUBLIC_HOST" || die "IP/host сервера должен быть публичным IPv4 или DNS-именем."
   fi
 
   VLESS_PATH="${VLESS_PATH:-/vless-$(openssl rand -hex 8 2>/dev/null || date +%s)}"
@@ -975,6 +1040,7 @@ EOF
   else
     LETSENCRYPT_EMAIL=""
   fi
+  CLIENT_NAME="${CLIENT_NAME:-$DEFAULT_CLIENT_NAME}"
   prompt CLIENT_NAME "First client name" "$CLIENT_NAME"
   prompt HTTPS_PORT "HTTPS/VLESS external port" "$HTTPS_PORT"
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
@@ -988,25 +1054,25 @@ EOF
   ENABLE_ACCESS_LOGS="$(normalize_bool "$ENABLE_ACCESS_LOGS")"
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    [[ "$LETSENCRYPT_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || die "Email must be a plain email address."
+    [[ "$LETSENCRYPT_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || die "email должен быть обычным адресом."
   fi
-  valid_client_name "$CLIENT_NAME" || die "Client name must be 1-64 chars: letters, digits, dot, underscore, dash, @."
-  valid_port "$HTTPS_PORT" || die "HTTPS port must be a number from 1 to 65535."
+  valid_client_name "$CLIENT_NAME" || die "имя клиента должно быть 1-64 символа: буквы, цифры, точка, underscore, дефис, @."
+  valid_port "$HTTPS_PORT" || die "HTTPS/VLESS порт должен быть числом от 1 до 65535."
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    valid_port "$LOCAL_PORT" || die "Local Xray port must be a number from 1 to 65535."
+    valid_port "$LOCAL_PORT" || die "локальный порт Xray должен быть числом от 1 до 65535."
   fi
-  valid_api_listen "$XRAY_API_LISTEN" || die "XRAY_API_LISTEN must be 127.0.0.1:<port>."
+  valid_api_listen "$XRAY_API_LISTEN" || die "XRAY_API_LISTEN должен быть 127.0.0.1:<port>."
   api_port="${XRAY_API_LISTEN##*:}"
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    [[ "$HTTPS_PORT" != "80" ]] || die "HTTPS/VLESS port cannot be 80 because 80 is used for Let's Encrypt."
-    [[ "$LOCAL_PORT" != "80" && "$LOCAL_PORT" != "$HTTPS_PORT" ]] || die "Local Xray port must not be 80 or the external HTTPS port."
-    [[ "$api_port" != "80" && "$api_port" != "$HTTPS_PORT" && "$api_port" != "$LOCAL_PORT" ]] || die "Xray API port must not be 80, HTTPS port, or local Xray port."
+    [[ "$HTTPS_PORT" != "80" ]] || die "HTTPS/VLESS порт не может быть 80, потому что 80 используется для Let's Encrypt."
+    [[ "$LOCAL_PORT" != "80" && "$LOCAL_PORT" != "$HTTPS_PORT" ]] || die "локальный порт Xray не должен совпадать с 80 или внешним HTTPS-портом."
+    [[ "$api_port" != "80" && "$api_port" != "$HTTPS_PORT" && "$api_port" != "$LOCAL_PORT" ]] || die "порт Xray API не должен совпадать с 80, HTTPS-портом или локальным портом Xray."
   else
-    [[ "$api_port" != "$HTTPS_PORT" ]] || die "Xray API port must not be the external VLESS port."
+    [[ "$api_port" != "$HTTPS_PORT" ]] || die "порт Xray API не должен совпадать с внешним VLESS-портом."
   fi
-  valid_path "$VLESS_PATH" || die "VLESS path must start with / and contain only A-Z, a-z, 0-9, dot, dash, underscore, tilde, slash."
-  valid_retry_number "$INSTALL_RETRIES" || die "INSTALL_RETRIES must be a number from 1 to 20."
-  valid_retry_number "$RETRY_DELAY_SECONDS" || die "RETRY_DELAY_SECONDS must be a number from 1 to 20."
+  valid_path "$VLESS_PATH" || die "VLESS path должен начинаться с / и содержать только A-Z, a-z, 0-9, точку, дефис, underscore, тильду и slash."
+  valid_retry_number "$INSTALL_RETRIES" || die "INSTALL_RETRIES должен быть числом от 1 до 20."
+  valid_retry_number "$RETRY_DELAY_SECONDS" || die "RETRY_DELAY_SECONDS должен быть числом от 1 до 20."
 
   save_resume_config
 
@@ -1036,7 +1102,7 @@ EOF
     read -r answer
     answer="$(trim_value "$answer")"
     answer="${answer,,}"
-    [[ "$answer" == "y" || "$answer" == "yes" ]] || die "Cancelled."
+    [[ "$answer" == "y" || "$answer" == "yes" ]] || die "отменено."
     mark_done "confirmed"
   else
     echo "ASSUME_YES=1, continuing."

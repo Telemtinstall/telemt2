@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-11
+
+### Added
+
+- Added VLESS installer `--auto` / `--direct` non-interactive modes with `pipiska1` as the default first client name.
+- Added `vlessctl -j` JSON output for client management, links, QR PNG data, traffic, and online checks.
+- Documented VLESS JSON response fields, status codes, QR handling, and default client-name auto-numbering.
+
+### Changed
+
+- Improved VLESS installer and `vlessctl` error messages for Russian-speaking operators.
+- Made `vlessctl add` auto-increment an existing client name instead of failing.
+
 ## 2026-06-04
 
 ### Fixed
