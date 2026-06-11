@@ -29,6 +29,8 @@ ENV_FILE="$CONFIG_DIR/vless.env"
 USERS_FILE="$CONFIG_DIR/users.json"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 CTL_PATH="/usr/local/sbin/vlessctl"
+LOGROTATE_FILE="/etc/logrotate.d/vless-xray"
+NGINX_LOG_FORMAT_FILE="/etc/nginx/conf.d/vless-log-format.conf"
 BACKUP_ROOT="/root/vless-install-backups"
 LINKS_FILE="/root/vless-links.txt"
 STATE_FILE="/root/.install_vless.state"
@@ -381,10 +383,39 @@ bool_word() {
 
 nginx_access_log_line() {
   if bool_enabled "$ENABLE_ACCESS_LOGS"; then
-    printf 'access_log /var/log/nginx/vless-%s-access.log combined;' "$PUBLIC_HOST"
+    printf 'access_log /var/log/nginx/vless-%s-access.log vless_ip;' "$PUBLIC_HOST"
   else
     printf 'access_log off;'
   fi
+}
+
+write_nginx_log_format() {
+  [[ "$FRONTEND_MODE" == "mask" ]] || return 0
+  write_file_root "$NGINX_LOG_FORMAT_FILE" 0644 root:root <<'EOF'
+# Managed by Telemt VLESS installer.
+log_format vless_ip '[$time_iso8601] [ip=$remote_addr] [xff="$http_x_forwarded_for"] [host="$host"] [request="$request"] [status=$status] [bytes=$body_bytes_sent] [referer="$http_referer"] [ua="$http_user_agent"]';
+EOF
+}
+
+write_logrotate_config() {
+  write_file_root "$LOGROTATE_FILE" 0644 root:root <<'EOF'
+# Managed by Telemt VLESS installer.
+# Keeps one daily file for seven days. copytruncate avoids restarting Xray just for rotation.
+/var/log/xray/access.log
+/var/log/xray/error.log
+/var/log/nginx/vless-*.log
+{
+    daily
+    rotate 7
+    missingok
+    notifempty
+    dateext
+    dateformat -%Y%m%d
+    compress
+    delaycompress
+    copytruncate
+}
+EOF
 }
 
 access_log_prompt_label() {
@@ -456,7 +487,7 @@ detect_os() {
 install_base_tools() {
   export DEBIAN_FRONTEND=noninteractive
   retry_command "apt-get update" apt-get update
-  retry_command "apt-get install base tools" apt-get install -y ca-certificates curl jq openssl iproute2 unzip lsb-release qrencode
+  retry_command "apt-get install base tools" apt-get install -y ca-certificates curl jq openssl iproute2 unzip lsb-release qrencode logrotate
 }
 
 detect_public_ip() {
@@ -976,6 +1007,7 @@ write_nginx_http_config() {
   local web_root="/var/www/${PUBLIC_HOST}"
   local access_log_line
 
+  write_nginx_log_format
   access_log_line="$(nginx_access_log_line)"
   backup_path "$site_available"
   write_file_root "$site_available" 0644 root:root <<EOF
@@ -1033,6 +1065,7 @@ write_nginx_final_config() {
   local redirect_target
   local access_log_line
 
+  write_nginx_log_format
   access_log_line="$(nginx_access_log_line)"
   if [[ "$HTTPS_PORT" == "443" ]]; then
     redirect_target="https://\$host\$request_uri"
@@ -1193,6 +1226,7 @@ setup_nginx_certbot() {
 setup_xray_runtime() {
   install_xray
   configure_xray_user
+  write_logrotate_config
   install_vlessctl
 }
 

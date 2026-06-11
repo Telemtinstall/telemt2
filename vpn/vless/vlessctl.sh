@@ -5,6 +5,8 @@ CONFIG_DIR="${CONFIG_DIR:-/usr/local/etc/xray}"
 ENV_FILE="${ENV_FILE:-$CONFIG_DIR/vless.env}"
 JSON_OUTPUT="${JSON_OUTPUT:-0}"
 ONLINE_STATE_FILE="${ONLINE_STATE_FILE:-}"
+LOGROTATE_FILE="${LOGROTATE_FILE:-/etc/logrotate.d/vless-xray}"
+NGINX_LOG_FORMAT_FILE="${NGINX_LOG_FORMAT_FILE:-/etc/nginx/conf.d/vless-log-format.conf}"
 
 json_escape() {
   local value="${1:-}"
@@ -112,6 +114,19 @@ ensure_command() {
   have "$command_name" || die_with_status 500 dependency_error "команда ${command_name} не появилась после установки пакета ${package}."
 }
 
+install_root_file_from_stdin() {
+  local path="$1"
+  local mode="$2"
+  local owner="$3"
+  local tmp
+
+  tmp="$(mktemp)"
+  cat > "$tmp"
+  install -d -m 0755 "$(dirname "$path")"
+  install -m "$mode" -o "${owner%%:*}" -g "${owner##*:}" "$tmp" "$path"
+  rm -f "$tmp"
+}
+
 qr_png_base64_from_text() {
   local text="$1"
   local tmp
@@ -163,6 +178,115 @@ logs_enabled() {
     1|y|yes|true|on) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+nginx_access_log_line() {
+  if logs_enabled; then
+    printf '    access_log /var/log/nginx/vless-%s-access.log vless_ip;' "$PUBLIC_HOST"
+  else
+    printf '    access_log off;'
+  fi
+}
+
+write_nginx_log_format() {
+  [[ "${FRONTEND_MODE:-mask}" == "mask" ]] || return 0
+  install_root_file_from_stdin "$NGINX_LOG_FORMAT_FILE" 0644 root:root <<'EOF'
+# Managed by Telemt VLESS installer.
+log_format vless_ip '[$time_iso8601] [ip=$remote_addr] [xff="$http_x_forwarded_for"] [host="$host"] [request="$request"] [status=$status] [bytes=$body_bytes_sent] [referer="$http_referer"] [ua="$http_user_agent"]';
+EOF
+}
+
+write_logrotate_config() {
+  ensure_command logrotate logrotate
+  install_root_file_from_stdin "$LOGROTATE_FILE" 0644 root:root <<'EOF'
+# Managed by Telemt VLESS installer.
+# Keeps one daily file for seven days. copytruncate avoids restarting Xray just for rotation.
+/var/log/xray/access.log
+/var/log/xray/error.log
+/var/log/nginx/vless-*.log
+{
+    daily
+    rotate 7
+    missingok
+    notifempty
+    dateext
+    dateformat -%Y%m%d
+    compress
+    delaycompress
+    copytruncate
+}
+EOF
+}
+
+ensure_xray_log_files() {
+  install -d -m 0750 -o xray -g xray /var/log/xray
+  touch /var/log/xray/access.log /var/log/xray/error.log
+  chown xray:xray /var/log/xray/access.log /var/log/xray/error.log
+  chmod 0640 /var/log/xray/access.log /var/log/xray/error.log
+}
+
+update_env_var() {
+  local key="$1"
+  local value="$2"
+  local escaped
+  local tmp
+
+  escaped="$(printf '%q' "$value")"
+  tmp="$(mktemp)"
+  awk -v key="$key" -v line="${key}=${escaped}" '
+    BEGIN { done = 0 }
+    $0 ~ "^" key "=" {
+      if (!done) {
+        print line
+        done = 1
+      }
+      next
+    }
+    { print }
+    END {
+      if (!done) {
+        print line
+      }
+    }
+  ' "$ENV_FILE" > "$tmp"
+  install -m 0600 -o xray -g xray "$tmp" "$ENV_FILE"
+  rm -f "$tmp"
+}
+
+update_nginx_access_logs() {
+  local site_available="/etc/nginx/sites-available/vless-${PUBLIC_HOST}.conf"
+  local site_enabled="/etc/nginx/sites-enabled/vless-${PUBLIC_HOST}.conf"
+  local line
+  local file target tmp seen=""
+
+  [[ "${FRONTEND_MODE:-mask}" == "mask" ]] || return 0
+  have nginx || die_with_status 500 dependency_error "nginx не найден, но установка в режиме mask. Запустите install_vless.sh заново."
+
+  write_nginx_log_format
+  line="$(nginx_access_log_line)"
+
+  for file in "$site_available" "$site_enabled"; do
+    [[ -e "$file" ]] || continue
+    target="$(readlink -f "$file" 2>/dev/null || printf '%s' "$file")"
+    case " $seen " in
+      *" $target "*) continue ;;
+    esac
+    seen="${seen} ${target}"
+    [[ -f "$target" ]] || continue
+    tmp="$(mktemp)"
+    awk -v line="$line" '
+      /^[[:space:]]*access_log[[:space:]].*;[[:space:]]*$/ {
+        print line
+        next
+      }
+      { print }
+    ' "$target" > "$tmp"
+    install -m 0644 -o root -g root "$tmp" "$target"
+    rm -f "$tmp"
+  done
+
+  nginx -t || die_with_status 500 internal_error "nginx -t не прошел после изменения access_log."
+  systemctl reload nginx || die_with_status 500 internal_error "не удалось reload nginx после изменения access_log."
 }
 
 ensure_files() {
@@ -981,6 +1105,80 @@ cmd_online() {
   echo "Users online now: ${online_users}"
 }
 
+print_logs_status_json() {
+  local enabled=false
+  logs_enabled && enabled=true
+  printf '{"ok":true,"status_code":200,"status":"ok","enabled":%s,"retention_days":7,"frontend_mode":%s,"xray_access_log":"/var/log/xray/access.log","xray_error_log":"/var/log/xray/error.log","nginx_access_log":%s,"logrotate_config":%s,"nginx_log_format":%s}\n' \
+    "$enabled" \
+    "$(json_escape "$FRONTEND_MODE")" \
+    "$([[ "$FRONTEND_MODE" == "mask" ]] && json_escape "/var/log/nginx/vless-${PUBLIC_HOST}-access.log" || printf 'null')" \
+    "$(json_escape "$LOGROTATE_FILE")" \
+    "$([[ "$FRONTEND_MODE" == "mask" ]] && json_escape "$NGINX_LOG_FORMAT_FILE" || printf 'null')"
+}
+
+print_logs_status_text() {
+  echo "Access logs: $(logs_enabled && echo enabled || echo disabled)"
+  echo "Retention: daily, 7 days, date suffix YYYYMMDD"
+  echo "Xray access log: /var/log/xray/access.log"
+  echo "Xray error log: /var/log/xray/error.log"
+  if [[ "$FRONTEND_MODE" == "mask" ]]; then
+    echo "Nginx access log: /var/log/nginx/vless-${PUBLIC_HOST}-access.log"
+    echo "Nginx IP marker: [ip=<client-ip>]"
+  fi
+  echo "Logrotate config: $LOGROTATE_FILE"
+}
+
+cmd_logs() {
+  local action="${1:-status}"
+
+  case "$(lower_value "$action")" in
+    status|"")
+      if [[ "$JSON_OUTPUT" == "1" ]]; then
+        print_logs_status_json
+      else
+        print_logs_status_text
+      fi
+      ;;
+    on|enable|enabled|yes|true|1)
+      ENABLE_ACCESS_LOGS=1
+      update_env_var ENABLE_ACCESS_LOGS "$ENABLE_ACCESS_LOGS"
+      ensure_xray_log_files
+      write_logrotate_config
+      render_config
+      restart_xray
+      update_nginx_access_logs
+      if [[ "$JSON_OUTPUT" == "1" ]]; then
+        print_logs_status_json
+      else
+        echo "Access logs enabled."
+        echo "Xray будет писать кто и куда ходил: /var/log/xray/access.log"
+        if [[ "$FRONTEND_MODE" == "mask" ]]; then
+          echo "Nginx будет писать реальный IP клиента с маркером [ip=...]: /var/log/nginx/vless-${PUBLIC_HOST}-access.log"
+        fi
+        echo "Ротация: ежедневно, хранить 7 дней: $LOGROTATE_FILE"
+      fi
+      ;;
+    off|disable|disabled|no|false|0)
+      ENABLE_ACCESS_LOGS=0
+      update_env_var ENABLE_ACCESS_LOGS "$ENABLE_ACCESS_LOGS"
+      ensure_xray_log_files
+      write_logrotate_config
+      render_config
+      restart_xray
+      update_nginx_access_logs
+      if [[ "$JSON_OUTPUT" == "1" ]]; then
+        print_logs_status_json
+      else
+        echo "Access logs disabled. Старые файлы логов не удалены."
+        echo "Ротация оставлена: $LOGROTATE_FILE"
+      fi
+      ;;
+    *)
+      die_with_status 400 bad_request "используйте: vlessctl logs on|off|status"
+      ;;
+  esac
+}
+
 cmd_help() {
   cat <<'EOF'
 Usage:
@@ -992,6 +1190,7 @@ Usage:
   vlessctl qr [name|number|all]
   vlessctl traffic
   vlessctl online [seconds]
+  vlessctl logs on|off|status
   vlessctl render
   vlessctl restart
 EOF
@@ -1034,6 +1233,7 @@ main() {
     qr|qrcode) cmd_qr "${1:-}" ;;
     traffic|stats|stat|trafic) cmd_traffic ;;
     online) cmd_online "${1:-10}" ;;
+    logs|log) cmd_logs "${1:-status}" ;;
     render)
       render_config
       if [[ "$JSON_OUTPUT" == "1" ]]; then

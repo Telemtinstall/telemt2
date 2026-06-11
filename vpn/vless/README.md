@@ -254,6 +254,7 @@ openssl
 iproute2
 unzip
 qrencode
+logrotate
 ca-certificates
 ```
 
@@ -265,6 +266,8 @@ ca-certificates
 /usr/local/etc/xray/config.json
 /usr/local/sbin/vlessctl
 /etc/nginx/sites-available/vless-<PROXY_DOMAIN>.conf   только режим mask
+/etc/nginx/conf.d/vless-log-format.conf                только режим mask
+/etc/logrotate.d/vless-xray
 /var/www/<PROXY_DOMAIN>/index.html                      только режим mask
 /root/vless-links.txt
 /root/.install_vless.state
@@ -277,6 +280,7 @@ ca-certificates
 /var/log/nginx/vless-<PROXY_DOMAIN>-access.log
 /var/log/xray/access.log
 /var/log/xray/error.log
+/etc/logrotate.d/vless-xray
 ```
 
 ### Управление Пользователями
@@ -442,6 +446,11 @@ vlessctl -j online [seconds]
                 clients[].last_seen_epoch, clients[].last_seen_at,
                 clients[].last_seen, clients[].last_seen_source
 
+vlessctl -j logs status
+  status_code: 200
+  fields: enabled, retention_days, frontend_mode, xray_access_log, xray_error_log,
+          nginx_access_log, logrotate_config, nginx_log_format
+
 vlessctl -j delete <name|number>
   status_code: 200
   fields: name, uuid, created_at
@@ -533,6 +542,44 @@ Enable nginx/Xray access logs? yes/no [no]:
 ```
 
 Включайте это только если вам нужна диагностика подключений. Для приватного режима оставляйте `no`.
+
+Включить или выключить логи на уже установленном сервере можно без переустановки:
+
+```bash
+cd /root/telemt2
+git pull
+install -m 0755 /root/telemt2/vpn/vless/vlessctl.sh /usr/local/sbin/vlessctl
+vlessctl logs status
+vlessctl logs on
+vlessctl logs off
+vlessctl -j logs status
+```
+
+`vlessctl logs on` включает Xray access log, пересобирает Xray config, перезапускает Xray и, в режиме `mask`, включает nginx access log. Пользователи, UUID и ссылки клиентов не меняются.
+
+Для задачи "кто куда ходил" основной файл:
+
+```text
+/var/log/xray/access.log
+```
+
+Xray пишет имя VLESS-клиента как `email` и destination, например домен или IP:порт. Благодаря включенному sniffing многие HTTPS-запросы видны по SNI/домену, но если домен определить нельзя, в логе будет IP назначения.
+
+Это access-метаданные, а не запись содержимого HTTPS/сообщений: логируются время, клиент, направление и техническая информация соединения.
+
+Для реального внешнего IP клиента в режиме `mask` используйте nginx-лог:
+
+```text
+/var/log/nginx/vless-<PROXY_DOMAIN>-access.log
+```
+
+Строки nginx пишутся с маркером `[ip=<client-ip>]`, чтобы было удобно фильтровать:
+
+```bash
+grep '\[ip=1.2.3.4\]' /var/log/nginx/vless-<PROXY_DOMAIN>-access.log
+```
+
+Ротация ставится в `/etc/logrotate.d/vless-xray`: каждый день отдельный файл, хранить 7 дней, старые файлы с суффиксом даты `YYYYMMDD`.
 
 Что можно узнать без логирования:
 
@@ -856,6 +903,7 @@ openssl
 iproute2
 unzip
 qrencode
+logrotate
 ca-certificates
 ```
 
@@ -867,6 +915,8 @@ Created files:
 /usr/local/etc/xray/config.json
 /usr/local/sbin/vlessctl
 /etc/nginx/sites-available/vless-<PROXY_DOMAIN>.conf
+/etc/nginx/conf.d/vless-log-format.conf
+/etc/logrotate.d/vless-xray
 /var/www/<PROXY_DOMAIN>/index.html
 /root/vless-links.txt
 /root/.install_vless.state
@@ -879,6 +929,7 @@ If access logs are enabled during installation, these files are also used:
 /var/log/nginx/vless-<PROXY_DOMAIN>-access.log
 /var/log/xray/access.log
 /var/log/xray/error.log
+/etc/logrotate.d/vless-xray
 ```
 
 ### User Management
@@ -1044,6 +1095,11 @@ vlessctl -j online [seconds]
                 clients[].last_seen_epoch, clients[].last_seen_at,
                 clients[].last_seen, clients[].last_seen_source
 
+vlessctl -j logs status
+  status_code: 200
+  fields: enabled, retention_days, frontend_mode, xray_access_log, xray_error_log,
+          nginx_access_log, logrotate_config, nginx_log_format
+
 vlessctl -j delete <name|number>
   status_code: 200
   fields: name, uuid, created_at
@@ -1137,6 +1193,44 @@ If you answer `yes`, these files are enabled:
 ```
 
 Enable this only when you need connection diagnostics. For private mode, keep `no`.
+
+Enable or disable logs on an already installed server without reinstalling:
+
+```bash
+cd /root/telemt2
+git pull
+install -m 0755 /root/telemt2/vpn/vless/vlessctl.sh /usr/local/sbin/vlessctl
+vlessctl logs status
+vlessctl logs on
+vlessctl logs off
+vlessctl -j logs status
+```
+
+`vlessctl logs on` enables Xray access logs, rebuilds the Xray config, restarts Xray, and, in `mask` mode, enables the nginx access log. Existing users, UUIDs, and client links are not changed.
+
+For "who visited where", the main file is:
+
+```text
+/var/log/xray/access.log
+```
+
+Xray writes the VLESS client name as `email` and the destination, for example a domain or IP:port. Because sniffing is enabled, many HTTPS requests are visible by SNI/domain; when the domain cannot be detected, the destination IP is logged.
+
+These are access metadata, not HTTPS/message contents: the logs contain time, client, destination, and technical connection details.
+
+For the real external client IP in `mask` mode, use the nginx log:
+
+```text
+/var/log/nginx/vless-<PROXY_DOMAIN>-access.log
+```
+
+Nginx lines include the `[ip=<client-ip>]` marker for filtering:
+
+```bash
+grep '\[ip=1.2.3.4\]' /var/log/nginx/vless-<PROXY_DOMAIN>-access.log
+```
+
+Rotation is installed in `/etc/logrotate.d/vless-xray`: one file per day, keep 7 days, old files use the `YYYYMMDD` date suffix.
 
 What you can see without logging:
 

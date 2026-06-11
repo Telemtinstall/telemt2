@@ -10,6 +10,7 @@
 - Added VLESS online-state fields without removing existing JSON fields: `online_users`, `clients[].online`, and `clients[].last_seen_*`.
 - Documented VLESS JSON response fields, status codes, QR handling, and default client-name auto-numbering.
 - Documented VLESS `online` JSON compatibility notes for Telegram bots and other integrations.
+- Added VLESS access-log management through `vlessctl logs on|off|status`, nginx `[ip=...]` access format, and 7-day daily logrotate config.
 
 ### Changed
 
