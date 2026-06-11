@@ -1076,9 +1076,13 @@ EOF
 
   save_resume_config
 
-  run_step "early_preflight" "Early DNS preflight" early_preflight
-  run_step "base_tools" "Install base tools" install_base_tools
-  run_step "port_preflight" "Port preflight" preflight
+  step "Early DNS preflight"
+  early_preflight
+  if have ss; then
+    preflight
+  else
+    echo "ПРЕДУПРЕЖДЕНИЕ: ss не найден, проверю занятые порты после подтверждения и установки базовых пакетов."
+  fi
 
   cat <<EOF
 
@@ -1110,6 +1114,9 @@ EOF
   fi
 
   create_backup_dir
+
+  run_step "base_tools" "Install base tools" install_base_tools
+  run_step "port_preflight" "Port preflight" preflight
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
     run_step "install_nginx_certbot" "Install nginx and certbot" setup_nginx_certbot

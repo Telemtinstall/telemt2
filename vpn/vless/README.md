@@ -210,6 +210,8 @@ Continue without mask using <SERVER_PUBLIC_IP>? [y/N]:
 
 Если ответить `y`, установка продолжится в режиме `direct` без домена, сайта-маски и сертификата.
 
+До подтверждения плана (`Type y or yes to continue`) установщик не ставит пакеты и не меняет nginx/Xray. Он только собирает ответы, сохраняет resume-файл, проверяет DNS и, если на сервере уже есть `ss`, заранее проверяет занятые порты.
+
 После `y` начинается установка. В режиме `mask` ставятся nginx, certbot и Xray, выпускается Let's Encrypt сертификат, создаётся маскировочная HTML-страница и пишутся nginx/Xray-конфиги. В режиме `direct` ставится Xray, который слушает внешний порт напрямую. В обоих режимах включается локальный Xray Stats API на `127.0.0.1:10085`, применяются выбранные настройки логов, запускаются сервисы, открываются firewall-правила через `ufw`, если `ufw` активен.
 
 По умолчанию Xray включает sniffing для `http`, `tls` и `quic`, а исходящие подключения предпочитают IPv4. Это нужно для VPS без IPv6: если телефон или приложение сначала выбирает IPv6-адрес сайта, Xray старается восстановить домен и отправить запрос через IPv4. Если на сервере нужен полноценный IPv6, запустите установку с `XRAY_FORCE_IPV4=0`.
@@ -776,6 +778,8 @@ Continue without mask using <SERVER_PUBLIC_IP>? [y/N]:
 ```
 
 If you answer `y`, installation continues in `direct` mode without a domain, mask site, or certificate.
+
+Before the install-plan confirmation (`Type y or yes to continue`), the installer does not install packages and does not change nginx/Xray. It only collects answers, saves the resume file, checks DNS, and, if `ss` is already available, checks busy ports early.
 
 After `y`, installation starts. In `mask` mode, nginx, certbot, and Xray are installed, a Let's Encrypt certificate is issued, a mask HTML page is created, and nginx/Xray configs are written. In `direct` mode, Xray is installed and listens on the public port directly. In both modes, the local Xray Stats API is enabled on `127.0.0.1:10085`, the selected logging mode is applied, services are started, and firewall rules are opened through `ufw` if `ufw` is active.
 
