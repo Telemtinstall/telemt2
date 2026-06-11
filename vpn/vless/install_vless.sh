@@ -20,6 +20,7 @@ VLESS_PATH="${VLESS_PATH:-}"
 ENABLE_ACCESS_LOGS="${ENABLE_ACCESS_LOGS:-0}"
 XRAY_FORCE_IPV4="${XRAY_FORCE_IPV4:-1}"
 ASSUME_YES="${ASSUME_YES:-0}"
+INSTALL_LANG="${INSTALL_LANG:-en}"
 INSTALL_RETRIES="${INSTALL_RETRIES:-3}"
 RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-5}"
 
@@ -52,10 +53,64 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+lower_value() {
+  printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_lang() {
+  local value="${1:-}"
+  value="$(lower_value "$value")"
+  case "$value" in
+    ru|ru_ru|ru-ru|russian) echo "ru" ;;
+    en|en_us|en-us|english|"") echo "en" ;;
+    *) die "неизвестный язык: $value. Доступно: ru, en." ;;
+  esac
+}
+
+is_ru() {
+  [[ "${INSTALL_LANG:-en}" == "ru" ]]
+}
+
+tr_text() {
+  local ru="$1"
+  local en="$2"
+  if is_ru; then
+    printf '%s' "$ru"
+  else
+    printf '%s' "$en"
+  fi
+}
+
 usage() {
+  if is_ru; then
+    cat <<'EOF'
+Использование:
+  ./install_vless.sh [--auto] [--mask|--direct] [-lang ru|en]
+
+Опции:
+  --auto, -y, --yes, --assume-yes
+      Использовать значения по умолчанию и не спрашивать подтверждения.
+      В режиме mask нужно заранее указать PUBLIC_HOST.
+  --mask
+      Использовать домен + HTTPS-маскировку.
+  --direct
+      Использовать прямой WebSocket без nginx/certbot-маскировки.
+  -lang, --lang ru|en
+      Язык вопросов и основного вывода.
+  -h, --help
+      Показать эту справку.
+
+Примеры:
+  PUBLIC_HOST=proxy.example.com ./install_vless.sh -lang ru
+  PUBLIC_HOST=proxy.example.com ./install_vless.sh --auto -lang ru
+  ./install_vless.sh --direct -lang ru
+EOF
+    return 0
+  fi
+
   cat <<'EOF'
 Usage:
-  ./install_vless.sh [--auto] [--mask|--direct]
+  ./install_vless.sh [--auto] [--mask|--direct] [-lang ru|en]
 
 Options:
   --auto, -y, --yes, --assume-yes
@@ -65,6 +120,8 @@ Options:
       Use domain + HTTPS mask mode.
   --direct
       Use direct WebSocket mode without nginx/certbot mask site.
+  -lang, --lang ru|en
+      Prompt/output language.
   -h, --help
       Show this help.
 
@@ -78,6 +135,14 @@ EOF
 parse_args() {
   while (($#)); do
     case "$1" in
+      -lang|--lang)
+        shift
+        [[ $# -gt 0 ]] || die "после -lang укажите ru или en."
+        INSTALL_LANG="$(normalize_lang "$1")"
+        ;;
+      -lang=*|--lang=*)
+        INSTALL_LANG="$(normalize_lang "${1#*=}")"
+        ;;
       --auto|-y|--yes|--assume-yes)
         ASSUME_YES=1
         ;;
@@ -171,6 +236,7 @@ VLESS_PATH=$(printf '%q' "$VLESS_PATH")
 ENABLE_ACCESS_LOGS=$(printf '%q' "$ENABLE_ACCESS_LOGS")
 XRAY_FORCE_IPV4=$(printf '%q' "$XRAY_FORCE_IPV4")
 FRONTEND_MODE=$(printf '%q' "$FRONTEND_MODE")
+INSTALL_LANG=$(printf '%q' "$INSTALL_LANG")
 BACKUP_DIR=$(printf '%q' "$BACKUP_DIR")
 EOF
   chmod 600 "$RESUME_CONFIG"
@@ -196,7 +262,7 @@ confirm() {
   fi
   read -r -p "$prompt_text" answer
   answer="$(trim_value "$answer")"
-  answer="${answer,,}"
+  answer="$(lower_value "$answer")"
   [[ "$answer" == "y" || "$answer" == "yes" ]]
 }
 
@@ -278,7 +344,7 @@ valid_api_listen() {
 normalize_bool() {
   local value
   value="$(trim_value "$1")"
-  case "${value,,}" in
+  case "$(lower_value "$value")" in
     1|y|yes|true|on) echo "1" ;;
     0|n|no|false|off|"") echo "0" ;;
     *) die "для access logs используйте yes/no." ;;
@@ -289,7 +355,7 @@ normalize_yes_no() {
   local value
   local label="${2:-answer}"
   value="$(trim_value "$1")"
-  case "${value,,}" in
+  case "$(lower_value "$value")" in
     1|y|yes|true|on) echo "1" ;;
     0|n|no|false|off|"") echo "0" ;;
     *) die "для '${label}' используйте yes/no." ;;
@@ -299,7 +365,7 @@ normalize_yes_no() {
 bool_enabled() {
   local value
   value="$(trim_value "$1")"
-  case "${value,,}" in
+  case "$(lower_value "$value")" in
     1|y|yes|true|on) return 0 ;;
     *) return 1 ;;
   esac
@@ -323,9 +389,9 @@ nginx_access_log_line() {
 
 access_log_prompt_label() {
   if [[ "$FRONTEND_MODE" == "direct" ]]; then
-    echo "Enable Xray access logs? yes/no"
+    tr_text "Включить access-логи Xray? yes/no" "Enable Xray access logs? yes/no"
   else
-    echo "Enable nginx/Xray access logs? yes/no"
+    tr_text "Включить access-логи nginx/Xray? yes/no" "Enable nginx/Xray access logs? yes/no"
   fi
 }
 
@@ -615,7 +681,21 @@ preflight() {
 switch_to_direct_mode() {
   local reason="$1"
 
-  cat >&2 <<EOF
+  if is_ru; then
+    cat >&2 <<EOF
+
+Режим mask не может продолжить:
+  ${reason}
+
+Можно продолжить без сайта-маски. В этом режиме:
+  - сертификат для домена не выпускается;
+  - nginx-маскировка не ставится;
+  - Xray слушает напрямую на ${PUBLIC_IP}:${HTTPS_PORT};
+  - клиентская ссылка использует security=none.
+
+EOF
+  else
+    cat >&2 <<EOF
 
 Mask mode cannot continue:
   ${reason}
@@ -627,12 +707,13 @@ You can continue without a mask site. In that mode:
   - the client link uses security=none.
 
 EOF
+  fi
 
   if [[ "$ASSUME_YES" == "1" ]]; then
     die "режим mask не прошел проверку, а ASSUME_YES=1 не переключает установку в direct автоматически."
   fi
 
-  if confirm "Continue without mask using ${PUBLIC_IP}? [y/N]: "; then
+  if confirm "$(tr_text "Продолжить без маски на ${PUBLIC_IP}? [y/N]: " "Continue without mask using ${PUBLIC_IP}? [y/N]: ")"; then
     FRONTEND_MODE="direct"
     PUBLIC_HOST="$PUBLIC_IP"
     LETSENCRYPT_EMAIL=""
@@ -674,7 +755,21 @@ early_preflight() {
     resolved_ips="$(resolve_ipv4 "$PUBLIC_HOST" | tr '\n' ' ')"
     echo "domain_ipv4=${resolved_ips:-none}"
     if ! printf ' %s ' "$resolved_ips" | grep -q " $PUBLIC_IP "; then
-      cat >&2 <<EOF
+      if is_ru; then
+        cat >&2 <<EOF
+
+DNS предупреждение.
+
+${PUBLIC_HOST} не указывает на IPv4 этого сервера.
+
+Ожидалось:
+  ${PUBLIC_HOST} -> ${PUBLIC_IP}
+
+Текущие A-записи:
+  ${resolved_ips:-none}
+EOF
+      else
+        cat >&2 <<EOF
 
 DNS warning.
 
@@ -686,10 +781,11 @@ Expected:
 Current A records:
   ${resolved_ips:-none}
 EOF
+      fi
       if [[ "$ASSUME_YES" == "1" ]]; then
         die "домен direct-режима не указывает на этот сервер. Используйте PUBLIC_HOST=${PUBLIC_IP} или исправьте DNS."
       fi
-      if confirm "Use ${PUBLIC_IP} in the client link instead? [y/N]: "; then
+      if confirm "$(tr_text "Использовать ${PUBLIC_IP} в клиентской ссылке? [y/N]: " "Use ${PUBLIC_IP} in the client link instead? [y/N]: ")"; then
         PUBLIC_HOST="$PUBLIC_IP"
         save_resume_config
         return 0
@@ -705,7 +801,20 @@ EOF
   echo "domain_ipv4=${resolved_ips:-none}"
 
   if [[ -z "$resolved_ips" ]]; then
-    cat >&2 <<EOF
+    if is_ru; then
+      cat >&2 <<EOF
+
+DNS проверка не прошла.
+
+У ${PUBLIC_HOST} нет IPv4 A-записи.
+
+Сначала создайте DNS A-запись:
+  ${PUBLIC_HOST} -> ${PUBLIC_IP}
+
+Потом запустите установщик снова.
+EOF
+    else
+      cat >&2 <<EOF
 
 DNS check failed.
 
@@ -716,13 +825,28 @@ Create DNS A record first:
 
 Then rerun this script.
 EOF
+    fi
     switch_to_direct_mode "${PUBLIC_HOST} has no IPv4 A record."
     return 0
   fi
 
   for ip in $resolved_ips; do
     if ! is_public_ipv4 "$ip"; then
-      cat >&2 <<EOF
+      if is_ru; then
+        cat >&2 <<EOF
+
+DNS проверка не прошла.
+
+${PUBLIC_HOST} указывает на непубличный IPv4:
+  ${ip}
+
+Для Let's Encrypt нужна публичная A-запись:
+  ${PUBLIC_HOST} -> ${PUBLIC_IP}
+
+Исправьте DNS и запустите установщик снова.
+EOF
+      else
+        cat >&2 <<EOF
 
 DNS check failed.
 
@@ -734,13 +858,30 @@ Let's Encrypt needs a public A record:
 
 Fix DNS and rerun this script.
 EOF
+      fi
       switch_to_direct_mode "${PUBLIC_HOST} resolves to non-public IPv4 ${ip}."
       return 0
     fi
   done
 
   if ! printf ' %s ' "$resolved_ips" | grep -q " $PUBLIC_IP "; then
-    cat >&2 <<EOF
+    if is_ru; then
+      cat >&2 <<EOF
+
+DNS проверка не прошла.
+
+${PUBLIC_HOST} должен указывать на IPv4 этого сервера до выпуска SSL.
+
+Ожидалось:
+  ${PUBLIC_HOST} -> ${PUBLIC_IP}
+
+Текущие A-записи:
+  ${resolved_ips}
+
+Исправьте DNS и запустите установщик снова.
+EOF
+    else
+      cat >&2 <<EOF
 
 DNS check failed.
 
@@ -754,6 +895,7 @@ Current A records:
 
 Fix DNS and rerun this script.
 EOF
+    fi
     switch_to_direct_mode "${PUBLIC_HOST} does not resolve to this server IPv4."
     return 0
   fi
@@ -1101,9 +1243,22 @@ main() {
 
   load_resume_config
   parse_args "$@"
+  INSTALL_LANG="$(normalize_lang "$INSTALL_LANG")"
   detect_os
 
-  cat <<'EOF'
+  if is_ru; then
+    cat <<'EOF'
+Установщик VLESS WebSocket для Debian/Ubuntu.
+
+Перед запуском:
+  1. Лучше использовать чистый сервер.
+  2. Для режима mask заранее создайте DNS A-запись: <domain> -> IPv4 сервера.
+  3. Убедитесь, что нужные порты доступны из интернета.
+  4. Не закрывайте текущую SSH-сессию, пока не проверите второй вход.
+
+EOF
+  else
+    cat <<'EOF'
 VLESS WebSocket installer for Debian/Ubuntu.
 
 Before running:
@@ -1113,10 +1268,11 @@ Before running:
   4. Keep the current SSH session open until a second login works.
 
 EOF
+  fi
 
   mask_answer="yes"
   [[ "$FRONTEND_MODE" == "direct" ]] && mask_answer="no"
-  prompt mask_answer "Use domain + HTTPS mask site? yes/no" "$mask_answer"
+  prompt mask_answer "$(tr_text "Включить домен + HTTPS-маскировку? yes/no" "Use domain + HTTPS mask site? yes/no")" "$mask_answer"
   mask_answer="$(normalize_yes_no "$mask_answer" "mask mode")"
   if [[ "$mask_answer" == "1" ]]; then
     FRONTEND_MODE="mask"
@@ -1126,10 +1282,10 @@ EOF
   valid_frontend_mode "$FRONTEND_MODE" || die "FRONTEND_MODE должен быть mask или direct."
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    prompt PUBLIC_HOST "Proxy domain" "$PUBLIC_HOST"
+    prompt PUBLIC_HOST "$(tr_text "Домен прокси" "Proxy domain")" "$PUBLIC_HOST"
     if is_public_ipv4 "$PUBLIC_HOST"; then
-      echo "IP address was entered. A mask site needs a domain and Let's Encrypt certificate."
-      if confirm "Continue without mask using ${PUBLIC_HOST}? [y/N]: "; then
+      echo "$(tr_text "Введен IP-адрес. Для сайта-маски нужен домен и Let's Encrypt сертификат." "IP address was entered. A mask site needs a domain and Let's Encrypt certificate.")"
+      if confirm "$(tr_text "Продолжить без маски на ${PUBLIC_HOST}? [y/N]: " "Continue without mask using ${PUBLIC_HOST}? [y/N]: ")"; then
         FRONTEND_MODE="direct"
       else
         die "для режима mask укажите домен."
@@ -1144,7 +1300,7 @@ EOF
       detect_public_ip
       PUBLIC_HOST="$PUBLIC_IP"
     fi
-    prompt PUBLIC_HOST "Server IP/host for VLESS link" "$PUBLIC_HOST"
+    prompt PUBLIC_HOST "$(tr_text "IP/host сервера для VLESS-ссылки" "Server IP/host for VLESS link")" "$PUBLIC_HOST"
     valid_public_host "$PUBLIC_HOST" || die "IP/host сервера должен быть публичным IPv4 или DNS-именем."
   fi
 
@@ -1152,19 +1308,19 @@ EOF
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
     LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@${PUBLIC_HOST}}"
-    prompt LETSENCRYPT_EMAIL "Let's Encrypt email" "$LETSENCRYPT_EMAIL"
+    prompt LETSENCRYPT_EMAIL "$(tr_text "Email для Let's Encrypt" "Let's Encrypt email")" "$LETSENCRYPT_EMAIL"
   else
     LETSENCRYPT_EMAIL=""
   fi
   CLIENT_NAME="${CLIENT_NAME:-$DEFAULT_CLIENT_NAME}"
-  prompt CLIENT_NAME "First client name" "$CLIENT_NAME"
-  prompt HTTPS_PORT "HTTPS/VLESS external port" "$HTTPS_PORT"
+  prompt CLIENT_NAME "$(tr_text "Имя первого клиента" "First client name")" "$CLIENT_NAME"
+  prompt HTTPS_PORT "$(tr_text "Внешний порт HTTPS/VLESS" "HTTPS/VLESS external port")" "$HTTPS_PORT"
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    prompt LOCAL_PORT "Local Xray port" "$LOCAL_PORT"
+    prompt LOCAL_PORT "$(tr_text "Локальный порт Xray" "Local Xray port")" "$LOCAL_PORT"
   else
     LOCAL_PORT="$HTTPS_PORT"
   fi
-  prompt VLESS_PATH "VLESS WebSocket path" "$VLESS_PATH"
+  prompt VLESS_PATH "$(tr_text "VLESS WebSocket path" "VLESS WebSocket path")" "$VLESS_PATH"
   logs_default="$(bool_word "$ENABLE_ACCESS_LOGS")"
   prompt ENABLE_ACCESS_LOGS "$(access_log_prompt_label)" "$logs_default"
   ENABLE_ACCESS_LOGS="$(normalize_bool "$ENABLE_ACCESS_LOGS")"
@@ -1192,7 +1348,7 @@ EOF
 
   save_resume_config
 
-  step "Early DNS preflight"
+  step "$(tr_text "Ранняя DNS-проверка" "Early DNS preflight")"
   early_preflight
   if have ss; then
     preflight
@@ -1201,7 +1357,25 @@ EOF
     echo "ПРЕДУПРЕЖДЕНИЕ: ss не найден, проверю занятые порты после подтверждения и установки базовых пакетов."
   fi
 
-  cat <<EOF
+  if is_ru; then
+    cat <<EOF
+
+План установки:
+  режим:          ${FRONTEND_MODE}
+  домен/host:     ${PUBLIC_HOST}
+  публичный IPv4: ${PUBLIC_IP}
+  email:          ${LETSENCRYPT_EMAIL:-не используется}
+  внешний порт:   ${HTTPS_PORT}
+  локальный порт: ${LOCAL_PORT}
+  stats API:      ${XRAY_API_LISTEN}
+  VLESS path:     ${VLESS_PATH}
+  access logs:    $(bool_word "$ENABLE_ACCESS_LOGS")
+  первый клиент:  ${CLIENT_NAME}
+
+Введите y или yes для продолжения:
+EOF
+  else
+    cat <<EOF
 
 Install plan:
   mode:         ${FRONTEND_MODE}
@@ -1217,46 +1391,77 @@ Install plan:
 
 Type y or yes to continue:
 EOF
+  fi
   if step_done "confirmed"; then
-    echo "Install plan already confirmed."
+    echo "$(tr_text "План установки уже подтвержден." "Install plan already confirmed.")"
   elif [[ "$ASSUME_YES" != "1" ]]; then
     read -r answer
     answer="$(trim_value "$answer")"
-    answer="${answer,,}"
+    answer="$(lower_value "$answer")"
     [[ "$answer" == "y" || "$answer" == "yes" ]] || die "отменено."
     mark_done "confirmed"
   else
-    echo "ASSUME_YES=1, continuing."
+    echo "$(tr_text "ASSUME_YES=1, продолжаю." "ASSUME_YES=1, continuing.")"
     mark_done "confirmed"
   fi
 
   create_backup_dir
 
-  run_step "base_tools" "Install base tools" install_base_tools
-  run_step "port_preflight" "Port preflight" preflight
+  run_step "base_tools" "$(tr_text "Установка базовых пакетов" "Install base tools")" install_base_tools
+  run_step "port_preflight" "$(tr_text "Проверка портов" "Port preflight")" preflight
   save_resume_config
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    run_step "install_nginx_certbot" "Install nginx and certbot" setup_nginx_certbot
-    run_step "issue_certificate" "Issue Let's Encrypt certificate" issue_certificate
+    run_step "install_nginx_certbot" "$(tr_text "Установка nginx и certbot" "Install nginx and certbot")" setup_nginx_certbot
+    run_step "issue_certificate" "$(tr_text "Выпуск Let's Encrypt сертификата" "Issue Let's Encrypt certificate")" issue_certificate
   else
-    step "Install nginx and certbot (skipped: direct mode)"
-    step "Issue Let's Encrypt certificate (skipped: direct mode)"
+    step "$(tr_text "Установка nginx и certbot (пропущено: direct mode)" "Install nginx and certbot (skipped: direct mode)")"
+    step "$(tr_text "Выпуск Let's Encrypt сертификата (пропущено: direct mode)" "Issue Let's Encrypt certificate (skipped: direct mode)")"
   fi
-  run_step "install_xray" "Install Xray" setup_xray_runtime
-  run_step "write_config" "Write VLESS config" write_vless_config
+  run_step "install_xray" "$(tr_text "Установка Xray" "Install Xray")" setup_xray_runtime
+  run_step "write_config" "$(tr_text "Запись VLESS-конфига" "Write VLESS config")" write_vless_config
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
-    run_step "nginx_tls" "Configure nginx TLS frontend" write_nginx_final_config
+    run_step "nginx_tls" "$(tr_text "Настройка nginx TLS frontend" "Configure nginx TLS frontend")" write_nginx_final_config
   else
-    step "Configure nginx TLS frontend (skipped: direct mode)"
+    step "$(tr_text "Настройка nginx TLS frontend (пропущено: direct mode)" "Configure nginx TLS frontend (skipped: direct mode)")"
   fi
-  run_step "start_services" "Start services" start_services
-  run_step "verify" "Verify" verify_install
+  run_step "start_services" "$(tr_text "Запуск сервисов" "Start services")" start_services
+  run_step "verify" "$(tr_text "Проверка установки" "Verify")" verify_install
   mark_done "done"
   save_resume_config
 
-  step "Done"
-  cat <<EOF
+  step "$(tr_text "Готово" "Done")"
+  if is_ru; then
+    cat <<EOF
+VLESS WebSocket установлен.
+
+Режим: ${FRONTEND_MODE}
+Proxy host: ${PUBLIC_HOST}:${HTTPS_PORT}
+VLESS path: ${VLESS_PATH}
+Access logs: $(bool_word "$ENABLE_ACCESS_LOGS")
+Первый клиент: ${CLIENT_NAME}
+Ссылка клиента:
+$(cat "$LINKS_FILE")
+
+$(print_install_qr)
+
+Управление пользователями:
+  vlessctl add
+  vlessctl delete
+  vlessctl list
+  vlessctl show
+  vlessctl qr
+  vlessctl traffic
+  vlessctl online
+
+Сохраненная ссылка:
+  ${LINKS_FILE}
+
+Бэкапы:
+  ${BACKUP_DIR}
+EOF
+  else
+    cat <<EOF
 Installed VLESS WebSocket.
 
 Mode: ${FRONTEND_MODE}
@@ -1284,6 +1489,7 @@ Saved link:
 Backups:
   ${BACKUP_DIR}
 EOF
+  fi
 }
 
 main "$@"

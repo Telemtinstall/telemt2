@@ -105,7 +105,7 @@ chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```bash
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_vless.sh /root/vlessctl.sh
-/root/install_vless.sh
+/root/install_vless.sh -lang ru
 ```
 
 Для долгой установки лучше использовать `tmux`:
@@ -113,22 +113,22 @@ chmod +x /root/install_vless.sh /root/vlessctl.sh
 ```bash
 tmux new -s vless-install
 chmod +x /root/install_vless.sh /root/vlessctl.sh
-/root/install_vless.sh
+/root/install_vless.sh -lang ru
 ```
 
 Автоматический режим без вопросов:
 
 ```bash
-PUBLIC_HOST=<PROXY_DOMAIN> /root/install_vless.sh --auto
+PUBLIC_HOST=<PROXY_DOMAIN> /root/install_vless.sh --auto -lang ru
 ```
 
 Для прямого режима без домена:
 
 ```bash
-/root/install_vless.sh --direct --auto
+/root/install_vless.sh --direct --auto -lang ru
 ```
 
-В `mask`-режиме автоустановка не угадывает домен: задайте `PUBLIC_HOST`. Если первый клиент не задан, используется `pipiska1`.
+В `mask`-режиме автоустановка не угадывает домен: задайте `PUBLIC_HOST`. Если первый клиент не задан, используется `pipiska1`. Флаг `-lang ru` включает русские вопросы, план установки и основной вывод; также можно использовать `-lang en`.
 
 ### Что Спросит Установщик
 
@@ -677,7 +677,7 @@ Log in to the server and run the installer:
 ```bash
 ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_vless.sh /root/vlessctl.sh
-/root/install_vless.sh
+/root/install_vless.sh -lang en
 ```
 
 For longer installations, use `tmux`:
@@ -685,22 +685,22 @@ For longer installations, use `tmux`:
 ```bash
 tmux new -s vless-install
 chmod +x /root/install_vless.sh /root/vlessctl.sh
-/root/install_vless.sh
+/root/install_vless.sh -lang en
 ```
 
 Non-interactive mode:
 
 ```bash
-PUBLIC_HOST=<PROXY_DOMAIN> /root/install_vless.sh --auto
+PUBLIC_HOST=<PROXY_DOMAIN> /root/install_vless.sh --auto -lang en
 ```
 
 Direct mode without a domain:
 
 ```bash
-/root/install_vless.sh --direct --auto
+/root/install_vless.sh --direct --auto -lang en
 ```
 
-In `mask` mode, auto install does not guess the domain: set `PUBLIC_HOST`. If the first client is not set, `pipiska1` is used.
+In `mask` mode, auto install does not guess the domain: set `PUBLIC_HOST`. If the first client is not set, `pipiska1` is used. Use `-lang ru` or `-lang en` to choose the installer prompt/output language.
 
 ### Installer Prompts
 

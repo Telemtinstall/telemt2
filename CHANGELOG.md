@@ -5,6 +5,7 @@
 ### Added
 
 - Added VLESS installer `--auto` / `--direct` non-interactive modes with `pipiska1` as the default first client name.
+- Added VLESS installer `-lang ru|en` mode for localized prompts, install plan, and final output.
 - Added `vlessctl -j` JSON output for client management, links, QR PNG data, traffic, and online checks.
 - Documented VLESS JSON response fields, status codes, QR handling, and default client-name auto-numbering.
 

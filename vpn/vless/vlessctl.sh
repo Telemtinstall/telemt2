@@ -56,6 +56,10 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+lower_value() {
+  printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]'
+}
+
 normalize_command() {
   local value="$1"
 
@@ -153,7 +157,7 @@ valid_client_name() {
 }
 
 logs_enabled() {
-  case "${ENABLE_ACCESS_LOGS,,}" in
+  case "$(lower_value "$ENABLE_ACCESS_LOGS")" in
     1|y|yes|true|on) return 0 ;;
     *) return 1 ;;
   esac
