@@ -13,6 +13,7 @@
 - Improved VLESS installer and `vlessctl` error messages for Russian-speaking operators.
 - Made `vlessctl add` auto-increment an existing client name instead of failing.
 - Moved VLESS base package installation after the install-plan confirmation so operators can inspect prompts, DNS errors, and the plan before package changes begin.
+- Made VLESS port preflight print busy listeners and suggest free replacement ports for HTTPS/VLESS, local Xray, and Stats API ports.
 
 ## 2026-06-04
 

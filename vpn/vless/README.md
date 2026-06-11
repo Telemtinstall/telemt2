@@ -212,6 +212,8 @@ Continue without mask using <SERVER_PUBLIC_IP>? [y/N]:
 
 До подтверждения плана (`Type y or yes to continue`) установщик не ставит пакеты и не меняет nginx/Xray. Он только собирает ответы, сохраняет resume-файл, проверяет DNS и, если на сервере уже есть `ss`, заранее проверяет занятые порты.
 
+Если внешний `443/tcp`, локальный порт Xray `12710/tcp` или порт Stats API `10085/tcp` заняты, скрипт покажет процесс, который слушает порт, предложит следующий свободный порт и даст принять его или ввести свой. В `--auto` режиме свободный порт выбирается автоматически и печатается в выводе. Если в режиме `mask` занят `80/tcp`, скрипт объяснит, что этот порт нужен Let's Encrypt, и предложит перейти в `direct`-режим или освободить `80/tcp`.
+
 После `y` начинается установка. В режиме `mask` ставятся nginx, certbot и Xray, выпускается Let's Encrypt сертификат, создаётся маскировочная HTML-страница и пишутся nginx/Xray-конфиги. В режиме `direct` ставится Xray, который слушает внешний порт напрямую. В обоих режимах включается локальный Xray Stats API на `127.0.0.1:10085`, применяются выбранные настройки логов, запускаются сервисы, открываются firewall-правила через `ufw`, если `ufw` активен.
 
 По умолчанию Xray включает sniffing для `http`, `tls` и `quic`, а исходящие подключения предпочитают IPv4. Это нужно для VPS без IPv6: если телефон или приложение сначала выбирает IPv6-адрес сайта, Xray старается восстановить домен и отправить запрос через IPv4. Если на сервере нужен полноценный IPv6, запустите установку с `XRAY_FORCE_IPV4=0`.
@@ -231,11 +233,12 @@ INSTALL_RETRIES=5 RETRY_DELAY_SECONDS=10 /root/install_vless.sh
 3. Наличие systemd.
 4. DNS A-запись домена до установки пакетов.
 5. Публичность A-записи и совпадение с публичным IPv4 сервера.
-6. Для режима `mask`: свободные `80/tcp`, внешний HTTPS-порт и локальный Xray-порт.
-7. Для режима `direct`: свободный внешний VLESS WebSocket порт.
-8. Свободный локальный порт Xray Stats API `10085/tcp`.
-9. Отсутствие чужих nginx sites на сервере в режиме `mask`.
-10. Отсутствие уже существующего чужого Xray-конфига.
+6. Для режима `mask`: `80/tcp` для Let's Encrypt.
+7. Свободный внешний HTTPS/VLESS-порт; если он занят, предлагается другой.
+8. Свободный локальный Xray-порт в режиме `mask`; если он занят, предлагается другой.
+9. Свободный локальный порт Xray Stats API `10085/tcp`; если он занят, предлагается другой.
+10. Отсутствие чужих nginx sites на сервере в режиме `mask`.
+11. Отсутствие уже существующего чужого Xray-конфига.
 
 Если проверка не проходит, установка останавливается до изменения сервисов.
 
@@ -781,6 +784,8 @@ If you answer `y`, installation continues in `direct` mode without a domain, mas
 
 Before the install-plan confirmation (`Type y or yes to continue`), the installer does not install packages and does not change nginx/Xray. It only collects answers, saves the resume file, checks DNS, and, if `ss` is already available, checks busy ports early.
 
+If external `443/tcp`, local Xray `12710/tcp`, or Stats API `10085/tcp` is busy, the script prints the listener, suggests the next free port, and lets you accept it or enter your own. In `--auto` mode, the free port is selected automatically and printed. If `80/tcp` is busy in `mask` mode, the script explains that Let's Encrypt needs that port and offers switching to `direct` mode or freeing `80/tcp`.
+
 After `y`, installation starts. In `mask` mode, nginx, certbot, and Xray are installed, a Let's Encrypt certificate is issued, a mask HTML page is created, and nginx/Xray configs are written. In `direct` mode, Xray is installed and listens on the public port directly. In both modes, the local Xray Stats API is enabled on `127.0.0.1:10085`, the selected logging mode is applied, services are started, and firewall rules are opened through `ufw` if `ufw` is active.
 
 By default, Xray enables sniffing for `http`, `tls`, and `quic`, and outgoing connections prefer IPv4. This is useful for VPS providers without working IPv6: if a phone or app chooses an IPv6 destination first, Xray tries to recover the domain and connect through IPv4. If the server has proper IPv6 and you want to use it, run the installer with `XRAY_FORCE_IPV4=0`.
@@ -800,10 +805,12 @@ Before the main install, the script checks:
 3. systemd availability.
 4. Domain A record before package installation.
 5. Public A record matching the server public IPv4.
-6. Free `80/tcp`, external HTTPS port, and local Xray port.
-7. Free local Xray Stats API port `10085/tcp`.
-8. No foreign nginx sites on the server.
-9. No existing unmanaged Xray config.
+6. `80/tcp` for Let's Encrypt in `mask` mode.
+7. Free external HTTPS/VLESS port; if busy, another port is suggested.
+8. Free local Xray port in `mask` mode; if busy, another port is suggested.
+9. Free local Xray Stats API port `10085/tcp`; if busy, another port is suggested.
+10. No foreign nginx sites on the server.
+11. No existing unmanaged Xray config.
 
 If a check fails, installation stops before changing services.
 

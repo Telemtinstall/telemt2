@@ -431,6 +431,119 @@ port_in_use() {
   [[ -n "$(port_listeners "$1")" ]]
 }
 
+candidate_port_free() {
+  local port="$1"
+  shift || true
+  local blocked
+
+  valid_port "$port" || return 1
+  for blocked in "$@"; do
+    [[ -n "$blocked" && "$port" == "$blocked" ]] && return 1
+  done
+  ! port_in_use "$port"
+}
+
+find_free_tcp_port() {
+  local start="$1"
+  shift || true
+  local port
+
+  valid_port "$start" || start=1024
+  for (( port=start; port<=65535; port++ )); do
+    if candidate_port_free "$port" "$@"; then
+      printf '%s' "$port"
+      return 0
+    fi
+  done
+  return 1
+}
+
+next_port_start() {
+  local current="$1"
+  local fallback="$2"
+
+  if [[ "$current" == "443" ]]; then
+    printf '%s' "$fallback"
+    return 0
+  fi
+  if valid_port "$current" && (( current < 65535 )); then
+    printf '%s' "$((current + 1))"
+    return 0
+  fi
+  printf '%s' "$fallback"
+}
+
+choose_free_tcp_port() {
+  local var="$1"
+  local label="$2"
+  local start="$3"
+  shift 3
+  local current="${!var:-}"
+  local suggested answer
+
+  echo "Порт ${current}/tcp занят:"
+  port_listeners "$current" || true
+
+  suggested="$(find_free_tcp_port "$start" "$@")" || die "не удалось подобрать свободный порт для ${label}. Укажите порт вручную через переменную ${var}."
+
+  if [[ "$ASSUME_YES" == "1" ]]; then
+    printf -v "$var" '%s' "$suggested"
+    echo "Автоматический режим: ${label} переключен с ${current} на свободный порт ${suggested}."
+    return 0
+  fi
+
+  while :; do
+    printf '%s [%s]: ' "$label" "$suggested"
+    read -r answer
+    answer="$(trim_value "$answer")"
+    [[ -n "$answer" ]] || answer="$suggested"
+    if candidate_port_free "$answer" "$@"; then
+      printf -v "$var" '%s' "$answer"
+      echo "${label}: выбран порт ${answer}."
+      return 0
+    fi
+    echo "Порт ${answer}/tcp занят или конфликтует с другим портом VLESS. Выберите другой."
+    if valid_port "$answer" && port_in_use "$answer"; then
+      port_listeners "$answer" || true
+    fi
+    if valid_port "$answer" && (( answer < 65535 )); then
+      suggested="$(find_free_tcp_port "$((answer + 1))" "$@" 2>/dev/null || find_free_tcp_port "$start" "$@")" || die "не удалось подобрать свободный порт для ${label}."
+    else
+      suggested="$(find_free_tcp_port "$start" "$@")" || die "не удалось подобрать свободный порт для ${label}."
+    fi
+  done
+}
+
+handle_required_http_port_busy() {
+  echo "Порт 80/tcp занят:"
+  port_listeners 80 || true
+  cat >&2 <<'EOF'
+
+80/tcp нужен режиму mask для Let's Encrypt HTTP-01 проверки.
+Этот порт нельзя просто заменить на другой в обычном certbot webroot-сценарии.
+
+Варианты:
+  1. Освободить 80/tcp и запустить установщик снова.
+  2. Перейти в direct-режим без nginx-маскировки и без сертификата.
+
+EOF
+
+  if [[ "$ASSUME_YES" == "1" ]]; then
+    die "80/tcp занят, а автоматический режим не переключает mask в direct сам. Освободите 80/tcp или запустите: ./install_vless.sh --direct --auto"
+  fi
+
+  if confirm "Перейти в direct-режим на публичном IP ${PUBLIC_IP}? [y/N]: "; then
+    FRONTEND_MODE="direct"
+    PUBLIC_HOST="$PUBLIC_IP"
+    LETSENCRYPT_EMAIL=""
+    LOCAL_PORT="$HTTPS_PORT"
+    echo "Режим изменен на direct. Сертификат и nginx-маска ставиться не будут."
+    return 0
+  fi
+
+  die "80/tcp занят. Освободите порт или запустите direct-режим."
+}
+
 listener_active() {
   local port="$1"
   ss -H -ltn | awk -v p=":${port}" '$4 ~ p"$" {found=1} END {exit found ? 0 : 1}'
@@ -462,31 +575,34 @@ nginx_has_foreign_sites() {
 
 preflight() {
   local api_port="${XRAY_API_LISTEN##*:}"
+  local start
 
   if (( EXISTING_INSTALL == 0 )); then
     if [[ "$FRONTEND_MODE" == "mask" ]]; then
       if port_in_use 80; then
-        echo "Port 80 listeners:"
-        port_listeners 80 || true
-        die "80/tcp уже занят. Используйте чистый сервер или остановите конфликтующий сервис."
+        handle_required_http_port_busy
       fi
     fi
     if port_in_use "$HTTPS_PORT"; then
-      echo "Port $HTTPS_PORT listeners:"
-      port_listeners "$HTTPS_PORT" || true
-      die "$HTTPS_PORT/tcp уже занят. Используйте чистый сервер или выберите другой HTTPS/VLESS порт."
+      start="$(next_port_start "$HTTPS_PORT" 8443)"
+      if [[ "$FRONTEND_MODE" == "mask" ]]; then
+        choose_free_tcp_port HTTPS_PORT "Новый внешний HTTPS/VLESS порт" "$start" 80 "$LOCAL_PORT" "$api_port"
+      else
+        choose_free_tcp_port HTTPS_PORT "Новый внешний VLESS порт" "$start" "$api_port"
+        LOCAL_PORT="$HTTPS_PORT"
+      fi
     fi
     if [[ "$FRONTEND_MODE" == "mask" ]]; then
       if port_in_use "$LOCAL_PORT"; then
-        echo "Port $LOCAL_PORT listeners:"
-        port_listeners "$LOCAL_PORT" || true
-        die "$LOCAL_PORT/tcp уже занят. Выберите другой локальный порт Xray."
+        start="$(next_port_start "$LOCAL_PORT" 12711)"
+        choose_free_tcp_port LOCAL_PORT "Новый локальный порт Xray" "$start" 80 "$HTTPS_PORT" "$api_port"
       fi
     fi
+    api_port="${XRAY_API_LISTEN##*:}"
     if port_in_use "$api_port"; then
-      echo "Port $api_port listeners:"
-      port_listeners "$api_port" || true
-      die "$api_port/tcp уже занят. Выберите другой локальный порт Xray API через XRAY_API_LISTEN=127.0.0.1:<port>."
+      start="$(next_port_start "$api_port" 10086)"
+      choose_free_tcp_port api_port "Новый локальный порт Xray Stats API" "$start" 80 "$HTTPS_PORT" "$LOCAL_PORT"
+      XRAY_API_LISTEN="127.0.0.1:${api_port}"
     fi
     if [[ "$FRONTEND_MODE" == "mask" ]]; then
       if nginx_has_foreign_sites; then
@@ -1080,6 +1196,7 @@ EOF
   early_preflight
   if have ss; then
     preflight
+    save_resume_config
   else
     echo "ПРЕДУПРЕЖДЕНИЕ: ss не найден, проверю занятые порты после подтверждения и установки базовых пакетов."
   fi
@@ -1117,6 +1234,7 @@ EOF
 
   run_step "base_tools" "Install base tools" install_base_tools
   run_step "port_preflight" "Port preflight" preflight
+  save_resume_config
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
     run_step "install_nginx_certbot" "Install nginx and certbot" setup_nginx_certbot
