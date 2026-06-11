@@ -373,7 +373,7 @@ vlessctl -j show client1
 vlessctl -j qr client1
 ```
 
-В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `traffic` и `online` возвращают числовые счетчики байтов.
+В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `traffic` и `online` возвращают числовые счетчики байтов. Формат `online` расширяется добавлением новых полей, старые поля не удаляются.
 
 #### JSON-ответы
 
@@ -435,8 +435,12 @@ vlessctl -j traffic
 
 vlessctl -j online [seconds]
   status_code: 200
-  fields: interval_seconds, tcp_connections, active_users, clients[].active,
-          clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes
+  old fields kept: interval_seconds, tcp_connections, active_users, clients[].active,
+                   clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes
+  added fields: observed_at_epoch, observed_at, online_users, last_seen_state_file,
+                clients[].online, clients[].online_source,
+                clients[].last_seen_epoch, clients[].last_seen_at,
+                clients[].last_seen, clients[].last_seen_source
 
 vlessctl -j delete <name|number>
   status_code: 200
@@ -482,7 +486,11 @@ vlessctl online
 vlessctl online 30
 ```
 
-`online` не пишет логи и не хранит IP клиентов. Команда делает два замера счётчиков Xray и показывает пользователей, у которых за выбранный интервал изменился uplink/downlink. Если клиент подключён, но ничего не передаёт, он может быть idle и будет показан как `active no`.
+`online` не пишет access-логи и не хранит IP клиентов. Команда делает два замера счётчиков Xray и показывает пользователей, у которых за выбранный интервал изменился uplink/downlink. Старое поле `active` означает именно "был трафик за интервал".
+
+Для "кто онлайн сейчас" команда использует Xray `statsUserOnline`, если эта метрика доступна. Тогда `clients[].online` показывает idle-клиентов тоже. Если установленная версия Xray не отдаёт online-метрику, `online` fallback-режимом совпадает с `active`.
+
+`last_seen_epoch` и `last_seen_at` обновляются, когда клиент виден онлайн через Xray online-метрику или когда у него был трафик за интервал. Состояние хранится в `/usr/local/etc/xray/online-state.json`. Это не исторический лог подключений: если `vlessctl online` не запускался, он не мог наблюдать клиента.
 
 Счётчики Xray находятся в памяти процесса. После `systemctl restart xray` или `vlessctl restart` накопленные значения начнутся заново.
 
@@ -511,7 +519,9 @@ Enable nginx/Xray access logs? yes/no [no]:
 1. Список пользователей: `vlessctl list`.
 2. Накопленный трафик по пользователям с момента старта Xray: `vlessctl traffic`.
 3. Кто реально передавал трафик за последние N секунд: `vlessctl online 30`.
-4. Общее число локальных TCP-соединений nginx -> Xray в момент проверки: выводится в `vlessctl online`.
+4. Кто онлайн сейчас, если Xray отдаёт `statsUserOnline`: `vlessctl -j online 5`.
+5. Когда клиент последний раз был замечен online/active: поля `last_seen_epoch` и `last_seen_at`.
+6. Общее число локальных TCP-соединений nginx -> Xray в момент проверки: выводится в `vlessctl online`.
 
 Что нельзя надёжно узнать без включения логов:
 
@@ -945,7 +955,7 @@ vlessctl -j show client1
 vlessctl -j qr client1
 ```
 
-In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `traffic` and `online` return numeric byte counters.
+In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `traffic` and `online` return numeric byte counters. The `online` response is extended by adding fields; existing fields are not removed.
 
 #### JSON Responses
 
@@ -1007,8 +1017,12 @@ vlessctl -j traffic
 
 vlessctl -j online [seconds]
   status_code: 200
-  fields: interval_seconds, tcp_connections, active_users, clients[].active,
-          clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes
+  old fields kept: interval_seconds, tcp_connections, active_users, clients[].active,
+                   clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes
+  added fields: observed_at_epoch, observed_at, online_users, last_seen_state_file,
+                clients[].online, clients[].online_source,
+                clients[].last_seen_epoch, clients[].last_seen_at,
+                clients[].last_seen, clients[].last_seen_source
 
 vlessctl -j delete <name|number>
   status_code: 200
@@ -1054,7 +1068,11 @@ Use a custom interval:
 vlessctl online 30
 ```
 
-`online` does not write logs and does not store client IPs. It samples Xray counters twice and marks users as active only when their uplink/downlink changes during the selected interval. If a client is connected but idle, it may be shown as `active no`.
+`online` does not write access logs and does not store client IPs. It samples Xray counters twice and marks users as active only when their uplink/downlink changes during the selected interval. The existing `active` field means "had traffic during the interval".
+
+For "who is online now", the command uses Xray `statsUserOnline` when that metric is available. In that case, `clients[].online` also sees idle clients. If the installed Xray version does not return the online metric, `online` falls back to the same result as `active`.
+
+`last_seen_epoch` and `last_seen_at` are updated when a client is seen online through the Xray online metric or when it has traffic during the interval. State is stored in `/usr/local/etc/xray/online-state.json`. This is not a historical connection log: if `vlessctl online` was not running, it could not observe the client.
 
 Xray counters live in process memory. After `systemctl restart xray` or `vlessctl restart`, accumulated values start from zero again.
 
@@ -1085,7 +1103,9 @@ What you can see without logging:
 1. User list: `vlessctl list`.
 2. Accumulated traffic per user since Xray start: `vlessctl traffic`.
 3. Users that transferred traffic during the last N seconds: `vlessctl online 30`.
-4. Current total TCP connections to Xray: printed by `vlessctl online`.
+4. Users online now, if Xray returns `statsUserOnline`: `vlessctl -j online 5`.
+5. Last time a client was observed online/active: `last_seen_epoch` and `last_seen_at`.
+6. Current total TCP connections to Xray: printed by `vlessctl online`.
 
 What you cannot reliably see without enabling logs:
 

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 CONFIG_DIR="${CONFIG_DIR:-/usr/local/etc/xray}"
 ENV_FILE="${ENV_FILE:-$CONFIG_DIR/vless.env}"
 JSON_OUTPUT="${JSON_OUTPUT:-0}"
+ONLINE_STATE_FILE="${ONLINE_STATE_FILE:-}"
 
 json_escape() {
   local value="${1:-}"
@@ -130,6 +131,7 @@ load_env() {
   . "$ENV_FILE"
   CONFIG_FILE="${CONFIG_FILE:-$CONFIG_DIR/config.json}"
   USERS_FILE="${USERS_FILE:-$CONFIG_DIR/users.json}"
+  ONLINE_STATE_FILE="${ONLINE_STATE_FILE:-$CONFIG_DIR/online-state.json}"
   [[ -n "${PUBLIC_HOST:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет PUBLIC_HOST."
   [[ -n "${HTTPS_PORT:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет HTTPS_PORT."
   [[ -n "${LOCAL_PORT:-}" ]] || die_with_status 409 conflict "в $ENV_FILE нет LOCAL_PORT."
@@ -373,6 +375,31 @@ bytes_human() {
   }'
 }
 
+epoch_to_utc() {
+  local ts="${1:-}"
+  [[ "$ts" =~ ^[0-9]+$ && "$ts" -gt 0 ]] || return 1
+  date -u -r "$ts" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$ts" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null
+}
+
+last_seen_human() {
+  local ts="${1:-}"
+  local now delta
+
+  [[ "$ts" =~ ^[0-9]+$ && "$ts" -gt 0 ]] || { echo "never"; return 0; }
+  now="$(date +%s)"
+  delta=$((now - ts))
+  (( delta < 0 )) && delta=0
+  if (( delta < 60 )); then
+    echo "${delta}s ago"
+  elif (( delta < 3600 )); then
+    echo "$((delta / 60))m ago"
+  elif (( delta < 86400 )); then
+    echo "$((delta / 3600))h ago"
+  else
+    echo "$((delta / 86400))d ago"
+  fi
+}
+
 valid_interval() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 3600 ))
 }
@@ -412,6 +439,34 @@ stat_value() {
   ' <<< "$json"
 }
 
+stat_key_exists() {
+  local json="$1"
+  local key="$2"
+  jq -e --arg key "$key" '
+    def stats_array:
+      if (.stat | type) == "array" then .stat
+      elif (.stats | type) == "array" then .stats
+      else [] end;
+    any(stats_array[]?; .name == $key)
+  ' <<< "$json" >/dev/null
+}
+
+online_stat_key_for() {
+  local json="$1"
+  local name="$2"
+  local key
+
+  for key in \
+    "user>>>${name}>>>online" \
+    "user>>>${name}>>>stats>>>online"; do
+    if stat_key_exists "$json" "$key"; then
+      printf '%s' "$key"
+      return 0
+    fi
+  done
+  return 1
+}
+
 active_xray_tcp_connections() {
   if ! have ss; then
     echo "unknown"
@@ -419,6 +474,43 @@ active_xray_tcp_connections() {
   fi
   ss -Htn state established 2>/dev/null |
     awk -v p=":${XRAY_LISTEN_PORT}$" '$4 ~ p {c++} END {print c + 0}'
+}
+
+ensure_online_state_file() {
+  install -d -m 0750 -o xray -g xray "$CONFIG_DIR"
+  if [[ ! -f "$ONLINE_STATE_FILE" ]]; then
+    echo '{}' > "$ONLINE_STATE_FILE"
+    chown xray:xray "$ONLINE_STATE_FILE"
+    chmod 600 "$ONLINE_STATE_FILE"
+  fi
+}
+
+record_last_seen() {
+  local name="$1"
+  local ts="$2"
+  local source="$3"
+  local seen_at
+  local tmp
+
+  ensure_online_state_file
+  seen_at="$(epoch_to_utc "$ts" || true)"
+  tmp="$(mktemp)"
+  jq \
+    --arg name "$name" \
+    --argjson ts "$ts" \
+    --arg seen_at "$seen_at" \
+    --arg source "$source" \
+    '.[$name] = {last_seen_epoch:$ts, last_seen_at:$seen_at, source:$source}' \
+    "$ONLINE_STATE_FILE" > "$tmp"
+  install -m 0600 -o xray -g xray "$tmp" "$ONLINE_STATE_FILE"
+  rm -f "$tmp"
+}
+
+last_seen_field() {
+  local name="$1"
+  local field="$2"
+  [[ -r "$ONLINE_STATE_FILE" ]] || return 0
+  jq -r --arg name "$name" --arg field "$field" '.[$name][$field] // empty' "$ONLINE_STATE_FILE" 2>/dev/null
 }
 
 restart_xray() {
@@ -770,12 +862,21 @@ cmd_online() {
   local before after tcp_count
   local name before_up before_down after_up after_down delta_up delta_down delta_total
   local active active_users=0
+  local online online_users=0 online_source online_key online_value
+  local observed_at_epoch observed_at
+  local last_seen_epoch last_seen_at last_seen_source
   local first=1
 
   valid_interval "$interval" || die_with_status 400 bad_request "интервал должен быть числом от 1 до 3600 секунд."
   if [[ "$(jq 'length' "$USERS_FILE")" == "0" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
-      printf '{"ok":true,"status_code":200,"status":"ok","interval_seconds":%s,"tcp_connections":null,"active_users":0,"clients":[]}\n' "$interval"
+      observed_at_epoch="$(date +%s)"
+      observed_at="$(epoch_to_utc "$observed_at_epoch" || true)"
+      printf '{"ok":true,"status_code":200,"status":"ok","interval_seconds":%s,"tcp_connections":null,"active_users":0,"clients":[],"online_users":0,"observed_at_epoch":%s,"observed_at":%s,"last_seen_state_file":%s}\n' \
+        "$interval" \
+        "$observed_at_epoch" \
+        "$(json_escape "$observed_at")" \
+        "$(json_escape "$ONLINE_STATE_FILE")"
     else
       echo "Клиентов нет."
     fi
@@ -786,16 +887,19 @@ cmd_online() {
   sleep "$interval"
   after="$(stats_query_json "user>>>")"
   tcp_count="$(active_xray_tcp_connections)"
+  observed_at_epoch="$(date +%s)"
+  observed_at="$(epoch_to_utc "$observed_at_epoch" || true)"
+  ensure_online_state_file
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     printf '{"ok":true,"status_code":200,"status":"ok","interval_seconds":%s,"tcp_connections":%s,"clients":[' \
       "$interval" \
       "$(json_number_or_null "$tcp_count")"
   else
-  echo "Observed interval: ${interval}s"
-  echo "Established local Xray TCP connections: ${tcp_count}"
-  echo "Note: idle connected clients may show no traffic during this interval."
-  printf '%-24s %-8s %14s %14s %14s\n' "name" "active" "uplink" "downlink" "total"
+    echo "Observed interval: ${interval}s"
+    echo "Established local Xray TCP connections: ${tcp_count}"
+    echo "Note: online uses Xray statsUserOnline when available; otherwise it falls back to traffic delta."
+    printf '%-24s %-8s %-8s %14s %14s %14s %-12s\n' "name" "online" "active" "uplink" "downlink" "total" "last_seen"
   fi
 
   while read -r name; do
@@ -819,10 +923,29 @@ cmd_online() {
       active_users=$((active_users + 1))
     fi
 
+    online="$active"
+    online_source="traffic_delta"
+    if online_key="$(online_stat_key_for "$after" "$name")"; then
+      online_value="$(stat_value "$after" "$online_key")"
+      [[ "$online_value" =~ ^[0-9]+$ ]] || online_value=0
+      online="no"
+      (( online_value > 0 )) && online="yes"
+      online_source="xray_stats_online"
+    fi
+    if [[ "$online" == "yes" ]]; then
+      online_users=$((online_users + 1))
+      record_last_seen "$name" "$observed_at_epoch" "$online_source"
+    elif [[ "$active" == "yes" ]]; then
+      record_last_seen "$name" "$observed_at_epoch" "traffic_delta"
+    fi
+    last_seen_epoch="$(last_seen_field "$name" last_seen_epoch)"
+    last_seen_at="$(last_seen_field "$name" last_seen_at)"
+    last_seen_source="$(last_seen_field "$name" source)"
+
     if [[ "$JSON_OUTPUT" == "1" ]]; then
       (( first == 1 )) || printf ','
       first=0
-      printf '{"name":%s,"active":%s,"uplink_bytes":%s,"downlink_bytes":%s,"total_bytes":%s,"uplink":%s,"downlink":%s,"total":%s}' \
+      printf '{"name":%s,"active":%s,"uplink_bytes":%s,"downlink_bytes":%s,"total_bytes":%s,"uplink":%s,"downlink":%s,"total":%s,"online":%s,"online_source":%s,"last_seen_epoch":%s,"last_seen_at":%s,"last_seen":%s,"last_seen_source":%s}' \
         "$(json_escape "$name")" \
         "$([[ "$active" == "yes" ]] && echo true || echo false)" \
         "$delta_up" \
@@ -830,20 +953,32 @@ cmd_online() {
         "$delta_total" \
         "$(json_escape "$(bytes_human "$delta_up")")" \
         "$(json_escape "$(bytes_human "$delta_down")")" \
-        "$(json_escape "$(bytes_human "$delta_total")")"
+        "$(json_escape "$(bytes_human "$delta_total")")" \
+        "$([[ "$online" == "yes" ]] && echo true || echo false)" \
+        "$(json_escape "$online_source")" \
+        "$(json_number_or_null "$last_seen_epoch")" \
+        "$(json_string_or_null "$last_seen_at")" \
+        "$(json_escape "$(last_seen_human "$last_seen_epoch")")" \
+        "$(json_string_or_null "$last_seen_source")"
       continue
     fi
 
-    printf '%-24s %-8s %14s %14s %14s\n' \
-      "$name" "$active" "$(bytes_human "$delta_up")" "$(bytes_human "$delta_down")" "$(bytes_human "$delta_total")"
+    printf '%-24s %-8s %-8s %14s %14s %14s %-12s\n' \
+      "$name" "$online" "$active" "$(bytes_human "$delta_up")" "$(bytes_human "$delta_down")" "$(bytes_human "$delta_total")" "$(last_seen_human "$last_seen_epoch")"
   done < <(jq -r '.[].name' "$USERS_FILE")
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '],"active_users":%s}\n' "$active_users"
+    printf '],"active_users":%s,"online_users":%s,"observed_at_epoch":%s,"observed_at":%s,"last_seen_state_file":%s}\n' \
+      "$active_users" \
+      "$online_users" \
+      "$observed_at_epoch" \
+      "$(json_escape "$observed_at")" \
+      "$(json_escape "$ONLINE_STATE_FILE")"
     return 0
   fi
 
   echo "Users with traffic during interval: ${active_users}"
+  echo "Users online now: ${online_users}"
 }
 
 cmd_help() {
