@@ -1,11 +1,8 @@
 # Telemt Tiny Core Linux Installer
 
-> RU: Это не официальный установщик Telemt или Tiny Core-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
-> EN: This is not an official Telemt or Tiny Core package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
-
 ## RU
 
-Tiny Core Linux-версия сделана отдельно и не заменяет Debian/Ubuntu или AlmaLinux-скрипты.
+Tiny Core Linux-версия сделана отдельно и не заменяет Debian 13 или Docker-скрипты.
 
 ```text
 install_telemt_tinycore.sh          установка одного Tiny Core сервера
@@ -33,15 +30,13 @@ add_key.sh                          вспомогательный скрипт 
 
 Официальный Telemt сейчас публикует `linux-musl` бинарники для `x86_64` и `aarch64`. Поэтому 32-bit Tiny Core x86 этим скриптом не поддерживается.
 
-По умолчанию используется последний release Telemt и закреплённый `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для закрепления конкретной версии передайте `TELEMT_RELEASE=<version>`. Если хотите не использовать upstream `.sha256`, можно также передать `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
-
-Telemt на Tiny Core запускается без Docker из native binary. Настройки такие же по смыслу: TLS mode only, `use_middle_proxy = false`, direct upstream, локальный read-only API, `config_strict = true`, лимит подключений по умолчанию `5000`.
+По умолчанию используется pinned Telemt release `3.4.18` и pinned `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для другого Telemt release достаточно указать точный `TELEMT_RELEASE`: скрипт скачает matching `.sha256` из GitHub release и проверит архив автоматически. `latest` намеренно не поддерживается.
 
 ### Что Ставит
 
 Скрипт ставит базовые зависимости (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), а также optional-компоненты `jq` и `iproute2`, если они доступны. Для сертификатов используется `acme.sh`, а Telemt ставится как нативный бинарник.
 
-При установке Telemt скачивается из последнего release, если не задан `TELEMT_RELEASE=<version>`. `acme.sh` закреплён по версии. Оба скачивания проверяются через sha256. Nginx access logs и Telemt runtime logs отключаются. На `80/tcp` nginx отдаёт только HTTP -> HTTPS редирект.
+При установке используются закреплённые версии Telemt и `acme.sh` с проверкой sha256. Nginx access logs и Telemt runtime logs отключаются. На `80/tcp` nginx отдаёт только HTTP -> HTTPS редирект.
 
 ### Схема
 
@@ -107,26 +102,7 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
-
-### Как обновлять уже установленный Telemt
-
-Скачайте свежий установщик и запустите update-режим. Он сохранит существующие настройки, пользователей, секреты, nginx/acme.sh-конфиги и обновит только native binary Telemt.
-
-```bash
-wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
-chmod +x /root/install_telemt_tinycore.sh
-/root/install_telemt_tinycore.sh --update -lang ru
-```
-
-По умолчанию обновляется `TELEMT_RELEASE=latest`. Чтобы закрепить версию, передайте, например:
-
-```bash
-TELEMT_RELEASE=v3.4.12 /root/install_telemt_tinycore.sh --update -lang ru
-```
-
-IDN-домены поддерживаются: если ввести кириллицу, скрипт переведёт домен в punycode; если ввести `xn--...`, скрипт проверит, что это корректный punycode.
-
-Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, а также лимит подключений Telemt со значением по умолчанию `5000`.
+Скрипт спросит домен прокси, email для Let's Encrypt со значением по умолчанию `admin@<domain>`, SSH-порт только для подсказок и batch-режима, лимит подключений Telemt, точный Telemt release, MSS-настройку и SYN limiter.
 
 Пример полного диалога:
 
@@ -135,6 +111,9 @@ Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
 Max Telemt connections [5000]: <Enter>
+Telemt release version [3.4.18]: <Enter>
+Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
+Telemt listener SYN limiter: false/iptables/nftables [false]: <Enter>
 
 Install plan:
   target OS:    Tiny Core Linux
@@ -142,13 +121,17 @@ Install plan:
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
   Telemt limit: 5000
-  release:      latest
+  release:      3.4.18
+  client_mss:   tspu
+  synlimit:     false
 
 Type y or yes to continue:
 y
 ```
 
 В примере пустой ответ означает “оставить значение по умолчанию”. После `y` начинается установка: через `tce-load` ставятся зависимости, настраивается nginx stream, скачивается и проверяется Telemt native binary, устанавливается `acme.sh`, выпускается сертификат, создаются конфиги, autostart и persistence через `/opt/.filetool.lst`.
+
+Telemt на Tiny Core запускается без Docker из pinned native binary. Настройки такие же по смыслу: TLS mode only, `use_middle_proxy = false`, direct upstream, локальный read-only API, `config_strict = true`, runtime cache/state, metrics на `127.0.0.1:9090`, `exclusive_mask`, `user_enabled`, `client_mss` для релизов, где ключ поддерживается, и лимит подключений по умолчанию `5000`.
 
 После установки:
 
@@ -174,7 +157,7 @@ telemt-report 5m
 
 ### Пакетный Режим
 
-`install_telemt_batch_tinycore.sh` запускается на админской машине: macOS, Debian, Ubuntu, AlmaLinux или любом Linux с `bash`, `ssh`, `scp` и DNS-утилитой.
+`install_telemt_batch_tinycore.sh` запускается на админской машине: macOS, Debian, Ubuntu или любом Linux с `bash`, `ssh`, `scp` и DNS-утилитой.
 
 Tiny Core нужен только на целевых серверах.
 
@@ -199,6 +182,9 @@ SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
 Telemt max TCP connections [5000]: <Enter>
+Telemt release version [3.4.18]: <Enter>
+Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
+Telemt listener SYN limiter: false/iptables/nftables [false]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com
@@ -238,7 +224,7 @@ RESET_INSTALL_STATE=1 sh /root/install_telemt_tinycore.sh
 
 ## EN
 
-The Tiny Core Linux version is separate and does not replace the Debian/Ubuntu or AlmaLinux scripts.
+The Tiny Core Linux version is separate and does not replace the Debian 13 or Docker scripts.
 
 ```text
 install_telemt_tinycore.sh          single Tiny Core server installer
@@ -266,15 +252,13 @@ Use a new Tiny Core server without existing websites, control panels, or network
 
 Official Telemt currently publishes `linux-musl` binaries for `x86_64` and `aarch64`. 32-bit Tiny Core x86 is not supported by this script.
 
-By default, the installer uses the latest Telemt release and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To pin a specific release, pass `TELEMT_RELEASE=<version>`. If you do not want to use upstream `.sha256`, you can also pass `TELEMT_SHA256_X86_64` / `TELEMT_SHA256_AARCH64`.
-
-On Tiny Core, Telemt runs without Docker from a native binary. The effective settings match the other installers: TLS mode only, `use_middle_proxy = false`, direct upstream, local read-only API, `config_strict = true`, and default connection limit `5000`.
+By default, the installer uses pinned Telemt release `3.4.18` and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To use another Telemt release, pass an exact `TELEMT_RELEASE`: the installer downloads the matching `.sha256` from the GitHub release and verifies the archive automatically. `latest` is intentionally unsupported.
 
 ### What It Installs
 
 The script installs base dependencies (`bash`, `curl`, `ca-certificates`, `openssl`, `nginx`, `socat`), plus optional `jq` and `iproute2` when available. Certificates are handled by `acme.sh`, and Telemt is installed as a native binary.
 
-Telemt is downloaded from the latest release unless `TELEMT_RELEASE=<version>` is set. `acme.sh` is pinned by version. Both downloads are verified with sha256. Nginx access logs and Telemt runtime logs are disabled. On `80/tcp`, nginx only serves the HTTP -> HTTPS redirect.
+The installer uses a pinned Telemt release and pinned `acme.sh` version with sha256 verification. Nginx access logs and Telemt runtime logs are disabled. On `80/tcp`, nginx only serves the HTTP -> HTTPS redirect.
 
 ### Layout
 
@@ -340,26 +324,7 @@ chmod +x /root/install_telemt_tinycore.sh
 /root/install_telemt_tinycore.sh
 ```
 
-
-### Updating an Existing Telemt Install
-
-Download the fresh installer and run update mode. It preserves existing settings, users, secrets, nginx/acme.sh configs, and updates only the native Telemt binary.
-
-```bash
-wget -O /root/install_telemt_tinycore.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/tinycore/install_telemt_tinycore.sh
-chmod +x /root/install_telemt_tinycore.sh
-/root/install_telemt_tinycore.sh --update -lang en
-```
-
-By default it updates `TELEMT_RELEASE=latest`. To pin a version, pass for example:
-
-```bash
-TELEMT_RELEASE=v3.4.12 /root/install_telemt_tinycore.sh --update -lang en
-```
-
-IDN domains are supported: Cyrillic input is converted to punycode; existing `xn--...` input is validated as real punycode.
-
-The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, and max Telemt connections with default `5000`.
+The script asks for the proxy domain, Let's Encrypt email with default `admin@<domain>`, SSH port only for hints and batch mode, max Telemt connections, exact Telemt release, MSS setting, and SYN limiter.
 
 Full dialogue example:
 
@@ -368,6 +333,9 @@ Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
 Max Telemt connections [5000]: <Enter>
+Telemt release version [3.4.18]: <Enter>
+Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
+Telemt listener SYN limiter: false/iptables/nftables [false]: <Enter>
 
 Install plan:
   target OS:    Tiny Core Linux
@@ -375,13 +343,17 @@ Install plan:
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
   Telemt limit: 5000
-  release:      latest
+  release:      3.4.18
+  client_mss:   tspu
+  synlimit:     false
 
 Type y or yes to continue:
 y
 ```
 
 In this example, an empty answer means “keep the default”. After `y`, installation starts: dependencies are installed through `tce-load`, nginx stream is configured, the Telemt native binary is downloaded and verified, `acme.sh` is installed, the certificate is issued, and configs, autostart, and persistence through `/opt/.filetool.lst` are written.
+
+On Tiny Core, Telemt runs without Docker from a pinned native binary. The effective settings match the other installers: TLS mode only, `use_middle_proxy = false`, direct upstream, local read-only API, `config_strict = true`, runtime cache/state, metrics on `127.0.0.1:9090`, `exclusive_mask`, `user_enabled`, `client_mss` for releases that support it, and default connection limit `5000`.
 
 After installation:
 
@@ -407,7 +379,7 @@ Manual restart:
 
 ### Batch Mode
 
-`install_telemt_batch_tinycore.sh` runs on the admin machine: macOS, Debian, Ubuntu, AlmaLinux, or any Linux with `bash`, `ssh`, `scp`, and a DNS lookup tool.
+`install_telemt_batch_tinycore.sh` runs on the admin machine: macOS, Debian, Ubuntu, or any Linux with `bash`, `ssh`, `scp`, and a DNS lookup tool.
 
 Tiny Core is required only on the target servers.
 
@@ -432,6 +404,9 @@ SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
 Telemt max TCP connections [5000]: <Enter>
+Telemt release version [3.4.18]: <Enter>
+Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
+Telemt listener SYN limiter: false/iptables/nftables [false]: <Enter>
 Common Let's Encrypt email, empty = admin@domain []: <Enter>
 
 Domain: proxy-one.example.com

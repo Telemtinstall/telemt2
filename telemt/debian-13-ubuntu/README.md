@@ -1,19 +1,10 @@
-# install_telemt.sh - Debian 13 / Ubuntu
-
-> RU: Это не официальный установщик Telemt, Debian или Ubuntu-пакетов. Полное уведомление и список источников ПО: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
-> EN: This is not an official Telemt, Debian, or Ubuntu package installer. Full notice and software source list: [README.md](../../README.md#installer-notice--уведомление-об-установщиках).
+# install_telemt.sh
 
 ## Русское описание
 
-`install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом Debian 13 или Ubuntu сервере.
+`install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом сервере.
 
-Для Debian 11 / bullseye есть отдельный установщик:
-
-```text
-telemt/debian-11/install_telemt_debian11.sh
-```
-
-Он нужен для старых версий `nftables`, `nginx` и `docker-compose`, а также для серверов, где `ufw` уже включён и закрывает `80/tcp` или `443/tcp`.
+Актуальная ветка предназначена для Debian 13. Старый отдельный установщик Debian 11 удалён из репозитория.
 
 Целевая схема после установки:
 
@@ -51,6 +42,100 @@ Internet
 
 Используйте новый VPS/server без существующих сайтов, панелей управления и сетевых сервисов. Установщик настраивает nginx, firewall, SSH-port, Docker/Telemt и сертификаты; ему нужны свободные `80/tcp` и `443/tcp`, а также локальные `8443`, `1443`, `9091`. Fail2ban включается только если выбрать `yes`. Если уже работают nginx/apache/caddy/traefik, почта, VPN, панели хостинга или другие прокси, возможны конфликты портов и конфигов. Для такого сервера лучше взять отдельную машину или интегрировать Telemt вручную.
 
+### Бездокерная systemd-установка
+
+Для серверов, где Telemt должен работать без Docker, используйте отдельный установщик:
+
+```text
+install_telemt_systemd.sh
+```
+
+Он ставит официальный бинарник Telemt в `/usr/local/bin/telemt`, запускает его через `systemd` как `telemt.service`, хранит конфиг в `/opt/telemt-config/telemt.toml` и даёт совместимый путь `/etc/telemt/telemt.toml`. Docker не ставится и не используется.
+
+Схема портов такая же:
+
+```text
+0.0.0.0:80       nginx HTTP -> HTTPS redirect / ACME challenge
+0.0.0.0:443      nginx stream SNI router
+127.0.0.1:8443   nginx HTTPS mask site
+127.0.0.1:1443   telemt backend
+127.0.0.1:9090   telemt metrics, only local
+127.0.0.1:9091   telemt API, only local
+```
+
+Скачать systemd-установщик прямо на сервер:
+
+```bash
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang ru
+```
+
+Обновить уже установленный бездокерный Telemt:
+
+```bash
+/root/install_telemt_systemd.sh --update -lang ru
+```
+
+`--update` не делает миграцию с Docker. Если он видит Docker/Compose-установку Telemt, он останавливается и просит использовать Docker-updater. Это нужно, чтобы случайно не заменить живой контейнер systemd-сервисом.
+
+Что делает `--update`:
+
+1. Читает текущий домен и первого пользователя из `telemt.toml`.
+2. Определяет текущую версию через `/usr/local/bin/telemt --version`.
+3. Выбирает целевую версию не по `latest`, а по точному совместимому release tag. По умолчанию это `3.4.18`.
+4. Показывает, каких совместимых ключей не хватает в текущем конфиге.
+5. После подтверждения делает бэкап бинарника, конфига, systemd unit, nginx-конфигов, секретов и ссылок.
+6. Скачивает с GitHub именно выбранный release asset и matching `.sha256`, проверяет checksum и только потом заменяет бинарник.
+7. Дополняет `telemt.toml` только отсутствующими безопасными ключами, не перезаписывая секреты и ручные значения.
+8. Перезапускает `telemt.service`, проверяет локальный API и делает active probing через `openssl`/`curl`.
+
+Если нужно обновиться не на default-версию, укажите точный tag:
+
+```bash
+TELEMT_VERSION=3.4.18 /root/install_telemt_systemd.sh --update -lang ru
+```
+
+`TELEMT_VERSION=latest` в update-режиме намеренно не используется: скрипт заменит его на проверенную совместимую версию, чтобы будущий upstream `latest` не сломал установку.
+
+### Что спрашивает systemd-установщик
+
+| Вопрос | Default | Что значит | Что обычно ставить |
+| --- | --- | --- | --- |
+| `Proxy domain` | пусто или сохранённый домен | Домен, который будет использоваться в TLS/SNI и proxy-ссылке. | Домен с A-записью на IPv4 сервера. |
+| `Let's Encrypt email` | `admin@<domain>` | Email для выпуска и продления сертификата. | Можно оставить default или указать свой рабочий email. |
+| `SSH port` | `22` | Порт SSH, который будет записан в `sshd_config`. | Оставить `22`, если нет причины менять. |
+| `Disable SSH password login...` | `no` | Отключает вход по паролю для root и оставляет вход только по ключу. | `no` для первой установки; `yes` только если ключ уже проверен. |
+| `Enable fail2ban for SSH` | `no` | Ставит fail2ban и банит перебор SSH. | `yes` на публичном сервере с открытым SSH; `no`, если доступ закрыт firewall-ом. |
+| `Add 1G swap if missing` | `no` | Добавляет `/swapfile`, если swap отсутствует. | `yes` на маленьком VPS с 512M/1G RAM; иначе `no`. |
+| `Telemt release version` | `3.4.18` | Точный upstream release tag для скачивания с GitHub. | Нажать Enter и оставить проверенную версию. |
+| `Telemt first user name` | `default` | Имя первого пользователя/ссылки в `[access.users]`. | `default` или понятное имя клиента, например `main`. |
+| `How many proxy links/users` | `1` | Сколько отдельных пользователей и ссылок создать сразу. | `1`, если нужна одна ссылка; больше, если хотите разделять клиентов. |
+| `Telemt user name #N` | `userN` | Имя дополнительного пользователя. | Короткое понятное имя без пробелов. |
+| `Max Telemt connections` | `5000` | Лимит TCP-подключений на пользователя. | Оставить `5000`, если нет строгого лимита. |
+| `Telemt listener TCP MSS` | `tspu` | MSS-настройка для устойчивости соединений в плохих сетях. | Оставить `tspu`. |
+| `Telemt listener SYN limiter` | `false` | Включает SYN limiter Telemt (`iptables` или `nftables`). | Оставить `false`; включать только при реальной атаке/нагрузке. |
+| `MTProxy ad_tag` | пусто | Telegram MTProxy promoted channel tag. | Оставить пустым, если нет официального tag. |
+| `Use Telegram middle proxy` | `no`, но `yes` если задан `ad_tag` | Включает middle proxy режим. | `no` без `ad_tag`; с `ad_tag` обычно `yes`. |
+| `Enable nginx access logs` | `no` | Включает access log для маскировочного nginx-сайта. | `no`, чтобы не писать лишнюю активность и не забивать диск. |
+| `Enable high-load tuning` | `yes` | Пишет sysctl для backlog, keepalive, file-max и BBR при наличии. | `yes` для прокси с большим числом клиентов. |
+
+После вопросов скрипт показывает план. Изменения начинаются только после ответа `y` или `yes`.
+
+Повторная установка поверх systemd-install по умолчанию запрещена. Для обычного обслуживания используйте:
+
+```bash
+/root/install_telemt_systemd.sh --update -lang ru
+```
+
+Если нужна именно переустановка с перезаписью systemd-конфига, запускать осознанно:
+
+```bash
+RESET_INSTALL_STATE=1 /root/install_telemt_systemd.sh -lang ru
+```
+
+Перед перезаписью скрипт всё равно делает бэкап в `/root/telemt-systemd-install-backups/<date>`.
+
 ### Как скачать файл на сервер
 
 Если файл уже есть на вашем компьютере, скопируйте его через `scp`:
@@ -71,13 +156,6 @@ chmod +x /root/install_telemt.sh
 ```bash
 curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
-```
-
-Для Debian 11 скачайте отдельный файл:
-
-```bash
-wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-11/install_telemt_debian11.sh
-chmod +x /root/install_telemt_debian11.sh
 ```
 
 Если нужен именно `git`, скачайте только каталог Debian/Ubuntu:
@@ -117,25 +195,6 @@ tmux attach -t telemt-install
 ```
 
 Если `tmux` не установлен, можно просто запустить скрипт повторно. Скрипт сохраняет прогресс и пропускает уже завершённые шаги.
-
-
-### Как обновлять уже установленный Telemt
-
-Скачайте свежий установщик и запустите update-режим. Он сохранит существующие настройки, пользователей, секреты, nginx/SSH-конфиги и сертификаты.
-
-```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
-chmod +x /root/install_telemt.sh
-/root/install_telemt.sh --update -lang ru
-```
-
-Если текущий Docker compose закреплён на `image@sha256:...`, update пересоздаст контейнер на том же digest. Чтобы явно перейти на другой image/tag, передайте:
-
-```bash
-TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt.sh --update -lang ru
-```
-
-IDN-домены поддерживаются: если ввести кириллицу, скрипт переведёт домен в punycode; если ввести `xn--...`, скрипт проверит, что это корректный punycode.
 
 ### Что спросит скрипт
 
@@ -323,7 +382,7 @@ config mount: /opt/telemt-config -> /etc/telemt
 runtime tmpfs: /tmp, /run/telemt
 ```
 
-CPU/RAM/PID лимиты в `docker-compose.yml` не задаются, чтобы Telemt не упирался в искусственные ограничения при большом числе клиентов и загрузке медиа.
+CPU/RAM/PID лимиты не задаются: контейнер не режется искусственно при загрузке медиа или большом числе клиентов.
 
 Основные параметры Telemt:
 
@@ -540,15 +599,9 @@ CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX
 
 ## English Description
 
-`install_telemt.sh` automatically installs a Telemt MTProto proxy on a new Debian 13 or Ubuntu server.
+`install_telemt.sh` automatically installs a Telemt MTProto proxy on a new server.
 
-For Debian 11 / bullseye, use the separate installer:
-
-```text
-telemt/debian-11/install_telemt_debian11.sh
-```
-
-It handles older `nftables`, `nginx`, and `docker-compose` behavior, and also opens `80/tcp` and `443/tcp` when `ufw` is already active and blocking them.
+The current branch is intended for Debian 13. The old separate Debian 11 installer has been removed from the repository.
 
 Target architecture after installation:
 
@@ -606,13 +659,6 @@ The same with `curl`:
 ```bash
 curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
 chmod +x /root/install_telemt.sh
-```
-
-For Debian 11, download the dedicated file:
-
-```bash
-wget -O /root/install_telemt_debian11.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-11/install_telemt_debian11.sh
-chmod +x /root/install_telemt_debian11.sh
 ```
 
 If you specifically want to use `git`, download only the Debian/Ubuntu directory:
@@ -839,7 +885,7 @@ config mount: /opt/telemt-config -> /etc/telemt
 runtime tmpfs: /tmp, /run/telemt
 ```
 
-CPU/RAM/PID limits are not set in `docker-compose.yml`, so Telemt does not hit artificial limits when many clients load media.
+No CPU/RAM/PID limits are set, so the container is not artificially throttled during media loading or high client counts.
 
 Main Telemt parameters:
 
@@ -973,25 +1019,6 @@ ssh root@<SERVER_PUBLIC_IP>
 chmod +x /root/install_telemt.sh
 /root/install_telemt.sh
 ```
-
-
-### Updating an Existing Telemt Install
-
-Download the fresh installer and run update mode. It preserves existing settings, users, secrets, nginx/SSH configs, and certificates.
-
-```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
-chmod +x /root/install_telemt.sh
-/root/install_telemt.sh --update -lang en
-```
-
-If the current Docker compose file is pinned to `image@sha256:...`, update recreates the container with the same digest. To explicitly move to another image/tag, pass:
-
-```bash
-TELEMT_IMAGE=<IMAGE_OR_TAG> /root/install_telemt.sh --update -lang en
-```
-
-IDN domains are supported: Cyrillic input is converted to punycode; existing `xn--...` input is validated as real punycode.
 
 ### Batch Installation install_telemt_batch.sh
 

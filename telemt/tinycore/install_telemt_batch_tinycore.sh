@@ -17,6 +17,9 @@ SSH_USER="${SSH_USER:-root}"
 CONNECT_SSH_PORT="${CONNECT_SSH_PORT:-22}"
 TARGET_SSH_PORT="${TARGET_SSH_PORT:-22}"
 TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-5000}"
+TELEMT_RELEASE="${TELEMT_RELEASE:-3.4.18}"
+TELEMT_CLIENT_MSS="${TELEMT_CLIENT_MSS:-tspu}"
+TELEMT_SYNLIMIT="${TELEMT_SYNLIMIT:-false}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 KEY_PATH="${KEY_PATH:-${HOME}/.ssh/id_ed25519}"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-15}"
@@ -84,6 +87,36 @@ valid_port() {
 
 valid_limit() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 1000000 ))
+}
+
+valid_telemt_release() {
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+normalize_client_mss() {
+  local value
+  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    off|none|no|false|0) printf '%s' "off" ;;
+    tspu|2in8|extreme-low) printf '%s' "$value" ;;
+    *)
+      if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 88 && value <= 4096 )); then
+        printf '%s' "$value"
+      else
+        return 1
+      fi
+      ;;
+  esac
+}
+
+normalize_synlimit() {
+  local value
+  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    false|no|off|0) printf '%s' "false" ;;
+    iptables|nftables) printf '%s' "$value" ;;
+    *) return 1 ;;
+  esac
 }
 
 shell_quote() {
@@ -404,6 +437,9 @@ run_remote_installer() {
   remote_cmd+="LETSENCRYPT_EMAIL=$(shell_quote "$email_answer") "
   remote_cmd+="SSH_PORT=$(shell_quote "$TARGET_SSH_PORT") "
   remote_cmd+="TELEMT_MAX_TCP_CONNS=$(shell_quote "$TELEMT_MAX_TCP_CONNS") "
+  remote_cmd+="TELEMT_RELEASE=$(shell_quote "$TELEMT_RELEASE") "
+  remote_cmd+="TELEMT_CLIENT_MSS=$(shell_quote "$TELEMT_CLIENT_MSS") "
+  remote_cmd+="TELEMT_SYNLIMIT=$(shell_quote "$TELEMT_SYNLIMIT") "
   remote_cmd+="ASSUME_YES=1 /root/${REMOTE_INSTALLER_NAME}"
   ssh "${SSH_OPTS[@]}" "$target" "$remote_cmd"
 }
@@ -467,6 +503,9 @@ show_plan() {
   echo "  connect SSH port:    $CONNECT_SSH_PORT"
   echo "  target SSH port:     $TARGET_SSH_PORT"
   echo "  Telemt limit:        $TELEMT_MAX_TCP_CONNS"
+  echo "  Telemt release:      $TELEMT_RELEASE"
+  echo "  Telemt client_mss:   $TELEMT_CLIENT_MSS"
+  echo "  Telemt synlimit:     $TELEMT_SYNLIMIT"
   if [[ -n "$LETSENCRYPT_EMAIL" ]]; then
     echo "  Let's Encrypt email: $LETSENCRYPT_EMAIL"
   else
@@ -501,11 +540,17 @@ EOF
   prompt_default CONNECT_SSH_PORT "Current SSH port for connecting to servers" "$CONNECT_SSH_PORT"
   prompt_default TARGET_SSH_PORT "SSH port after install, Tiny Core installer does not change SSH config" "$TARGET_SSH_PORT"
   prompt_default TELEMT_MAX_TCP_CONNS "Telemt max TCP connections" "$TELEMT_MAX_TCP_CONNS"
+  prompt_default TELEMT_RELEASE "Telemt release version" "$TELEMT_RELEASE"
+  prompt_default TELEMT_CLIENT_MSS "Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS"
+  prompt_default TELEMT_SYNLIMIT "Telemt listener SYN limiter: false/iptables/nftables" "$TELEMT_SYNLIMIT"
   prompt_default LETSENCRYPT_EMAIL "Common Let's Encrypt email, empty = admin@domain" "$LETSENCRYPT_EMAIL"
 
   valid_port "$CONNECT_SSH_PORT" || die "Current SSH port must be a number from 1 to 65535."
   valid_port "$TARGET_SSH_PORT" || die "Target SSH port must be a number from 1 to 65535."
   valid_limit "$TELEMT_MAX_TCP_CONNS" || die "Telemt limit must be a number from 1 to 1000000."
+  valid_telemt_release "$TELEMT_RELEASE" || die "Telemt release must be an exact tag like 3.4.18; latest is not allowed."
+  TELEMT_CLIENT_MSS="$(normalize_client_mss "$TELEMT_CLIENT_MSS")" || die "Bad Telemt client_mss."
+  TELEMT_SYNLIMIT="$(normalize_synlimit "$TELEMT_SYNLIMIT")" || die "Bad Telemt synlimit."
 
   collect_domains
 
