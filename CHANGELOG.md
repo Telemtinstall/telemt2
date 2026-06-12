@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-12
+
+### Changed
+
+- Pruned legacy Telemt installers from the public tree: AlmaLinux, Astra Linux, and Debian 11 are no longer published.
+- Added the Debian 13 systemd/no-Docker Telemt installer and published the Docker Telemt installer tree.
+- Updated Tiny Core Telemt to default to release `3.4.18`, verify official GitHub release `.sha256` files, and use the newer compatibility config keys when the selected release supports them.
+- Removed the experimental WireGuard-over-wstunnel tree from the public VPN tree.
+
 ## 2026-06-11
 
 ### Added
@@ -38,7 +47,7 @@
 - The same doctor mode now detects duplicate top-level nginx `stream {}` files, keeps the installer-managed Telemt stream config, backs up and disables the extra stream files, then reruns `nginx -t`.
 - Doctor mode no longer asks Docker Compose to recreate an existing Telemt container. It uses `docker start telemt` when the container already exists, avoiding the Compose v1 "image has been removed, volume data could be lost" prompt.
 - Normal installer mode now refuses to run over an existing installation unless `RESET_INSTALL_STATE=1` is explicitly set. Existing installs should use `--update` or `--fix-nginx`.
-- Restored the dark Telemt mask-site placeholder for Debian 13/Ubuntu, Debian 11, Astra Linux, AlmaLinux, Tiny Core, and removed service/administrator text from the generated page.
+- Restored the dark Telemt mask-site placeholder for Debian 13/Ubuntu and Tiny Core, and removed service/administrator text from the generated page.
 
 ## 2026-05-23
 
@@ -61,7 +70,7 @@
 
 ### Added
 
-- Added `--update` / `-update` mode to Telemt single-server installers for Debian 13/Ubuntu, Debian 11, Astra Linux, AlmaLinux, and Tiny Core.
+- Added `--update` / `-update` mode to Telemt single-server installers for Debian 13/Ubuntu and Tiny Core.
 - Added IDN/punycode normalization for Telemt installer domains and Let's Encrypt email domains.
 - Added conditional `censorship.exclusive_mask` generation for new configs when the selected Telemt image/release is `latest` or `3.4.12+`.
 - Documented update commands and installer prompts in the root README and Telemt OS README files.
@@ -89,15 +98,12 @@
 - Added this changelog to track repository-level changes.
 - Added a bilingual installer notice explaining that the scripts are Bash installers, not official upstream installers, and listing software sources.
 - Added short bilingual notice links at the top of subdirectory README files.
-- Added `telemt/debian-11/README.md` for the dedicated Debian 11 installer.
-
 ### Changed
 
 - Split the repository into two main trees:
   - `telemt/` for Telemt MTProto proxy installers and SSH helper tools.
   - `vpn/` for VLESS, WireGuard, OpenVPN, AmneziaWG, and experimental VPN installers.
 - Renamed the Debian/Ubuntu Telemt path to `telemt/debian-13-ubuntu/`.
-- Moved the Debian 11 Telemt installer to `telemt/debian-11/`.
 - Updated root README and per-directory documentation links to the new paths.
 - Updated VLESS download examples to use the public `Telemtinstall/telemt2` paths.
 - Updated Tiny Core Telemt installer to use the latest Telemt release by default with upstream `.sha256` verification.
