@@ -1,13 +1,14 @@
 # WhatsApp Chat Proxy Installer
 
-RU: Экспериментальный Bash-установщик для официального `WhatsApp/proxy`. Это не официальный установщик Meta/WhatsApp. Скрипт скачивает Docker image `facebook/whatsapp_proxy:latest` из официального Docker Hub образа проекта и настраивает минимальную безопасную схему.
+RU: Экспериментальный Bash-установщик для официального `WhatsApp/proxy`. Это не официальный установщик Meta/WhatsApp. Скрипт скачивает проверенный датированный Docker image `facebook/whatsapp_proxy:20260607` из официального Docker Hub образа проекта и настраивает минимальную безопасную схему.
 
-EN: Experimental Bash installer for the official `WhatsApp/proxy`. This is not an official Meta/WhatsApp installer. The script pulls the `facebook/whatsapp_proxy:latest` Docker image from the official Docker Hub image and configures a minimal safer layout.
+EN: Experimental Bash installer for the official `WhatsApp/proxy`. This is not an official Meta/WhatsApp installer. The script pulls the checked dated `facebook/whatsapp_proxy:20260607` Docker image from the official Docker Hub image and configures a minimal safer layout.
 
 Source:
 
 - Official repository: `https://github.com/WhatsApp/proxy`
-- Official image: `facebook/whatsapp_proxy:latest`
+- Official image repository: `facebook/whatsapp_proxy`
+- Default image tag: `20260607`
 
 ## Server Requirements / Требования К Серверу
 
@@ -138,9 +139,9 @@ chmod +x ./install_whatsapp_proxy.sh
 
 ## Update / Обновление
 
-RU: Режим обновления не меняет nginx/SNI-route, домен, локальные порты и существующий compose. Он берёт текущие настройки из `/opt/whatsapp-proxy/docker-compose.yml` и `/opt/whatsapp-proxy/whatsapp-proxy.env`, тянет свежий Docker image и пересоздаёт контейнер.
+RU: Режим обновления не меняет nginx/SNI-route, домен, локальные порты и остальную структуру compose. Он берёт текущие настройки из `/opt/whatsapp-proxy/docker-compose.yml` и `/opt/whatsapp-proxy/whatsapp-proxy.env`, проверяет официальный Docker Hub, выбирает самый свежий датированный tag `facebook/whatsapp_proxy:YYYYMMDD`, обновляет только строку `image:` в compose, тянет image и пересоздаёт контейнер. Если в compose указан кастомный image не из `facebook/whatsapp_proxy`, скрипт не заменяет его и просто обновляет текущий image.
 
-EN: Update mode does not change nginx/SNI routing, domain, local ports, or the existing compose layout. It reads current settings from `/opt/whatsapp-proxy/docker-compose.yml` and `/opt/whatsapp-proxy/whatsapp-proxy.env`, pulls the current Docker image, and recreates the container.
+EN: Update mode does not change nginx/SNI routing, domain, local ports, or the rest of the compose layout. It reads current settings from `/opt/whatsapp-proxy/docker-compose.yml` and `/opt/whatsapp-proxy/whatsapp-proxy.env`, checks the official Docker Hub tags, selects the newest dated `facebook/whatsapp_proxy:YYYYMMDD` tag, updates only the `image:` line in compose, pulls the image, and recreates the container. If compose uses a custom image outside `facebook/whatsapp_proxy`, the script keeps it and only updates the configured image.
 
 ```bash
 curl -fsSL -o /root/install_whatsapp_proxy.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/proxy/whatsapp/install_whatsapp_proxy.sh
@@ -182,9 +183,9 @@ EN: Usually keep `auto`.
 
 `Docker image`
 
-RU: По умолчанию `facebook/whatsapp_proxy:latest`. Обычно нажмите Enter. Менять стоит только если вы сознательно используете другой официальный tag/image.
+RU: По умолчанию `facebook/whatsapp_proxy:20260607`. Обычно нажмите Enter. Менять стоит только если вы сознательно используете другой официальный tag/image. `latest` лучше не указывать вручную: датированный tag делает установку повторяемой и защищает от неожиданного изменения образа в будущем.
 
-EN: Default is `facebook/whatsapp_proxy:latest`. Usually press Enter. Change it only if you intentionally use another official tag/image.
+EN: Default is `facebook/whatsapp_proxy:20260607`. Usually press Enter. Change it only if you intentionally use another official tag/image. Avoid setting `latest` manually: a dated tag makes installs repeatable and protects against unexpected image changes later.
 
 `Expose public 587/tcp for whatsapp.net/media yes/no`
 

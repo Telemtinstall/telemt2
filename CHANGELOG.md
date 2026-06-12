@@ -7,6 +7,7 @@
 - Pruned legacy Telemt installers from the public tree: AlmaLinux, Astra Linux, and Debian 11 are no longer published.
 - Added the Debian 13 systemd/no-Docker Telemt installer and published the Docker Telemt installer tree.
 - Updated Tiny Core Telemt to default to release `3.4.18`, verify official GitHub release `.sha256` files, and use the newer compatibility config keys when the selected release supports them.
+- Updated the WhatsApp proxy installer to default to the official dated Docker image `facebook/whatsapp_proxy:20260607`; update mode now checks Docker Hub for the newest dated `YYYYMMDD` tag instead of relying on mutable `latest`.
 - Removed the experimental WireGuard-over-wstunnel tree from the public VPN tree.
 
 ## 2026-06-11

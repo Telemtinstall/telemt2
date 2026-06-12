@@ -7,7 +7,10 @@ set -Eeuo pipefail
 
 PROXY_DOMAIN="${PROXY_DOMAIN:-}"
 INSTALL_MODE="${INSTALL_MODE:-auto}" # auto, direct, sni
-WHATSAPP_IMAGE="${WHATSAPP_IMAGE:-facebook/whatsapp_proxy:latest}"
+WHATSAPP_IMAGE_REPO="${WHATSAPP_IMAGE_REPO:-facebook/whatsapp_proxy}"
+WHATSAPP_IMAGE_DEFAULT_TAG="${WHATSAPP_IMAGE_DEFAULT_TAG:-20260607}"
+WHATSAPP_IMAGE="${WHATSAPP_IMAGE:-${WHATSAPP_IMAGE_REPO}:${WHATSAPP_IMAGE_DEFAULT_TAG}}"
+WHATSAPP_TAGS_API="${WHATSAPP_TAGS_API:-https://hub.docker.com/v2/repositories/facebook/whatsapp_proxy/tags?page_size=25&ordering=last_updated}"
 PUBLIC_587="${PUBLIC_587:-yes}"
 LOCAL_TLS_PORT="${LOCAL_TLS_PORT:-18443}"
 LOCAL_STATS_PORT="${LOCAL_STATS_PORT:-18199}"
@@ -203,6 +206,64 @@ valid_mode() {
   [[ "$1" == "auto" || "$1" == "direct" || "$1" == "sni" ]]
 }
 
+image_repo() {
+  local image="${1%%@*}"
+  if [[ "$image" == *:* && "${image##*:}" != */* ]]; then
+    printf '%s\n' "${image%:*}"
+  else
+    printf '%s\n' "$image"
+  fi
+}
+
+image_tag() {
+  local image="${1%%@*}"
+  if [[ "$image" == *:* && "${image##*:}" != */* ]]; then
+    printf '%s\n' "${image##*:}"
+  else
+    printf '%s\n' "latest"
+  fi
+}
+
+is_official_image_repo() {
+  case "$1" in
+    "$WHATSAPP_IMAGE_REPO"|"docker.io/$WHATSAPP_IMAGE_REPO"|"index.docker.io/$WHATSAPP_IMAGE_REPO")
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+latest_official_dated_tag() {
+  have curl || return 1
+  curl -fsS --max-time 20 "$WHATSAPP_TAGS_API" |
+    tr '{' '\n' |
+    sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([0-9]\{8\}\)".*/\1/p' |
+    sort -r |
+    head -n 1
+}
+
+select_update_image() {
+  local current_repo current_tag latest_tag
+  current_repo="$(image_repo "$WHATSAPP_IMAGE")"
+  current_tag="$(image_tag "$WHATSAPP_IMAGE")"
+
+  if ! is_official_image_repo "$current_repo"; then
+    echo "Custom image detected, keeping configured image: $WHATSAPP_IMAGE" >&2
+    printf '%s\n' "$WHATSAPP_IMAGE"
+    return 0
+  fi
+
+  latest_tag="$(latest_official_dated_tag || true)"
+  if [[ -z "$latest_tag" ]]; then
+    echo "WARN: Cannot query Docker Hub tags. Keeping configured image: $WHATSAPP_IMAGE" >&2
+    printf '%s\n' "$WHATSAPP_IMAGE"
+    return 0
+  fi
+
+  echo "Docker Hub official newest dated tag: $latest_tag (current tag: $current_tag)" >&2
+  printf '%s:%s\n' "$WHATSAPP_IMAGE_REPO" "$latest_tag"
+}
+
 validate_input() {
   PROXY_DOMAIN="$(trim_value "$PROXY_DOMAIN")"
   PROXY_DOMAIN="${PROXY_DOMAIN,,}"
@@ -312,7 +373,7 @@ load_existing_settings() {
   fi
 
   PROXY_DOMAIN="${PROXY_DOMAIN:-}"
-  WHATSAPP_IMAGE="${WHATSAPP_IMAGE:-facebook/whatsapp_proxy:latest}"
+  WHATSAPP_IMAGE="${WHATSAPP_IMAGE:-${WHATSAPP_IMAGE_REPO}:${WHATSAPP_IMAGE_DEFAULT_TAG}}"
   LOCAL_TLS_PORT="${LOCAL_TLS_PORT:-18443}"
   LOCAL_STATS_PORT="${LOCAL_STATS_PORT:-18199}"
   PUBLIC_587="${PUBLIC_587:-yes}"
@@ -605,6 +666,29 @@ EOF
   chmod 600 "$COMPOSE_FILE"
 }
 
+set_compose_image() {
+  local image="$1"
+  local tmp
+  tmp="$(mktemp)"
+
+  awk -v image="$image" '
+    /^[[:space:]]*image:[[:space:]]*/ && !changed {
+      sub(/image:.*/, "image: " image)
+      changed=1
+    }
+    { print }
+    END {
+      if (!changed) exit 2
+    }
+  ' "$COMPOSE_FILE" > "$tmp" || {
+    rm -f "$tmp"
+    die "Cannot update Docker image line in $COMPOSE_FILE."
+  }
+
+  install -m 0600 "$tmp" "$COMPOSE_FILE"
+  rm -f "$tmp"
+}
+
 patch_nginx_stream() {
   local tmp backup
   [[ "$SELECTED_MODE" == "sni" ]] || return 0
@@ -694,8 +778,16 @@ update_existing_install() {
   echo "image=$WHATSAPP_IMAGE"
   echo "compose=$COMPOSE_FILE"
 
+  step "Resolve compatible image update"
+  WHATSAPP_IMAGE="$(select_update_image)"
+  echo "target_image=$WHATSAPP_IMAGE"
+
   step "Backup current state"
   backup_current_state
+  save_resume_config
+
+  step "Update compose image"
+  set_compose_image "$WHATSAPP_IMAGE"
   save_resume_config
 
   step "Pull and recreate container"
