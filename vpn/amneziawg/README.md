@@ -41,7 +41,7 @@ chmod +x ./install_amneziawg.sh ./awgctl.sh
 cd /root/telemt2 && git pull
 ```
 
-Это экспериментальный установщик. Сначала тестируйте на чистой машине. Если уже заняты `80`, `443`, `51820` или стоит другой nginx/VPN, возможны конфликты.
+Это рабочий установщик для чистого сервера. Если уже заняты `80`, `443`, `51820` или стоит другой nginx/VPN, возможны конфликты; в таком случае используйте отдельный сервер или освобождайте порты перед установкой.
 
 ### Что такое AmneziaWG
 
@@ -349,7 +349,7 @@ chmod +x ./install_amneziawg.sh ./awgctl.sh
 ./install_amneziawg.sh
 ```
 
-This is an experimental installer. Test it on a clean server first. If ports `80`, `443`, `51820`, nginx, or another VPN are already in use, conflicts are possible.
+This is a production-use installer for a clean server. If ports `80`, `443`, `51820`, nginx, or another VPN are already in use, conflicts are possible; use a separate server or free the ports before installation.
 
 ### What is AmneziaWG
 

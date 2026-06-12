@@ -44,6 +44,11 @@ telemt/
     install_telemt_batch_tinycore.sh
     README.md
 
+proxy/
+  whatsapp/
+    install_whatsapp_proxy.sh
+    README.md
+
 vpn/
   amneziawg/
     install_amneziawg.sh
@@ -73,7 +78,8 @@ SSH key helper                  -> telemt/common/
 VLESS over WebSocket + TLS      -> vpn/vless/
 WireGuard                       -> vpn/wg/
 OpenVPN                         -> vpn/openvpn/
-AmneziaWG, test                 -> vpn/amneziawg/
+AmneziaWG                       -> vpn/amneziawg/
+WhatsApp Chat Proxy             -> proxy/whatsapp/
 ```
 
 Each service directory has its own `README.md` with Russian and English instructions.
@@ -87,6 +93,8 @@ Each service directory has its own `README.md` with Russian and English instruct
 `vpn/openvpn/` installs OpenVPN with client management. It supports UDP/TCP profiles, username/password handling, traffic viewing, and an optional HTTPS camouflage scheme through nginx/OpenVPN `port-share`.
 
 `vpn/amneziawg/` installs AmneziaWG. It supports plain UDP mode and a mode with an HTTPS camouflage site on TCP 443 plus AmneziaWG on UDP 443. Client configs are intended for AmneziaVPN-compatible clients, not ordinary WireGuard clients.
+
+`proxy/whatsapp/` installs the official WhatsApp Chat Proxy Docker image. It supports direct 443 mode on a clean server and SNI mode behind an existing Telemt nginx stream frontend. The installer uses the official dated Docker image tag and its update mode checks Docker Hub for the newest dated tag.
 
 `telemt/docker-telemt/` builds a local Telemt Docker image from official upstream release artifacts. It verifies upstream `.sha256`, uses a non-root distroless runtime by default, includes a healthcheck, and does not publish anything unless `PUSH=1` is explicitly set.
 

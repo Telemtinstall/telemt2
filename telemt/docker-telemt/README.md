@@ -154,7 +154,7 @@ docker run --rm --entrypoint /app/telemt telemt-local:3.4.18 --version
 
 Перед запуском нужен чистый Debian 13.x+ или Ubuntu 24.x+ сервер, A-запись домена на IPv4 сервера и свободные `80/tcp`, `443/tcp`. Debian 12/11 и Ubuntu ниже 24 установщик останавливает сразу, до установки пакетов.
 
-Если `80/tcp` или `443/tcp` уже заняты Docker-контейнером, установщик покажет имя контейнера, image и проброшенные порты, например `whatsapp-proxy facebook/whatsapp_proxy:latest`, и спросит, удалить ли эти контейнеры для продолжения установки Telemt. При ответе `no` установка остановится без удаления.
+Если `80/tcp` или `443/tcp` уже заняты Docker-контейнером, установщик покажет имя контейнера, image и проброшенные порты, например `whatsapp-proxy facebook/whatsapp_proxy:20260607`, и спросит, удалить ли эти контейнеры для продолжения установки Telemt. При ответе `no` установка остановится без удаления.
 
 ### Готовые команды
 
@@ -523,7 +523,7 @@ The mask site is intentionally configured as regular HTTPS without a separate `h
 
 Before running, use a clean Debian 13.x+ or Ubuntu 24.x+ server, create a DNS A record pointing to the server IPv4, and keep `80/tcp` and `443/tcp` free. Debian 12/11 and Ubuntu versions below 24 are stopped before package installation.
 
-If `80/tcp` or `443/tcp` is already used by a Docker container, the installer shows the container name, image, and published ports, for example `whatsapp-proxy facebook/whatsapp_proxy:latest`, and asks whether to remove those containers before continuing Telemt installation. If you answer `no`, installation stops without removing anything.
+If `80/tcp` or `443/tcp` is already used by a Docker container, the installer shows the container name, image, and published ports, for example `whatsapp-proxy facebook/whatsapp_proxy:20260607`, and asks whether to remove those containers before continuing Telemt installation. If you answer `no`, installation stops without removing anything.
 
 ### Ready Commands
 

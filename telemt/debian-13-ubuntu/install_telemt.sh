@@ -6,7 +6,9 @@ set -Eeuo pipefail
 # then installs nginx SNI routing + Telemt + local API firewall.
 # SSH key-only login, fail2ban, and swap are opt-in prompts.
 
-TELEMT_IMAGE_DEFAULT="ghcr.io/telemt/telemt:latest"
+# Legacy Docker installer default. Keep it pinned to a checked digest so a
+# future moving latest tag cannot change installs unexpectedly.
+TELEMT_IMAGE_DEFAULT="ghcr.io/telemt/telemt@sha256:f94fb1fbe1a9922b91eab9a60b8241fbaced2fb5e99c458bb4223de49fb37cbd"
 
 PUBLIC_HOST="${PUBLIC_HOST:-}"
 PUBLIC_IP="${PUBLIC_IP:-}"

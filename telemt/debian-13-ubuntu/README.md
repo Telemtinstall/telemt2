@@ -6,6 +6,13 @@
 
 Актуальная ветка предназначена для Debian 13. Старый отдельный установщик Debian 11 удалён из репозитория.
 
+Для новых установок предпочтительны:
+
+- `install_telemt_systemd.sh`, если Telemt нужен без Docker;
+- `../docker-telemt/install_docker-telemt.sh`, если нужен Docker с локальной сборкой точного release `3.4.18`.
+
+`install_telemt.sh` оставлен как совместимый legacy Docker-путь для старых инструкций. Он больше не использует плавающий `latest`: Docker image закреплён по digest.
+
 Целевая схема после установки:
 
 ```text
@@ -371,7 +378,7 @@ PubkeyAuthentication yes
 Telemt запускается в Docker:
 
 ```text
-image: ghcr.io/telemt/telemt:latest
+image: ghcr.io/telemt/telemt@sha256:f94fb1fbe1a9922b91eab9a60b8241fbaced2fb5e99c458bb4223de49fb37cbd
 container_name: telemt
 network_mode: host
 user: 65532:65532
@@ -874,7 +881,7 @@ PubkeyAuthentication yes
 Telemt runs in Docker:
 
 ```text
-image: ghcr.io/telemt/telemt:latest
+image: ghcr.io/telemt/telemt@sha256:f94fb1fbe1a9922b91eab9a60b8241fbaced2fb5e99c458bb4223de49fb37cbd
 container_name: telemt
 network_mode: host
 user: 65532:65532
