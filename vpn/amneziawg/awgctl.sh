@@ -88,12 +88,21 @@ qr_png_base64_from_config() {
   local tmp
 
   tmp="$(mktemp)"
-  if ! qrencode -t PNG -o "$tmp" < "$conf"; then
+  if ! qrencode -t PNG -s 10 -m 4 -o "$tmp" < "$conf"; then
     rm -f "$tmp"
     return 1
   fi
   base64_one_line "$tmp"
   rm -f "$tmp"
+}
+
+write_qr_png_from_config() {
+  local conf="$1"
+  local out="$2"
+
+  install -d -m 0700 "$(dirname "$out")"
+  qrencode -t PNG -s 10 -m 4 -o "$out" < "$conf"
+  chmod 0600 "$out"
 }
 
 install_apt_package() {
@@ -618,6 +627,35 @@ cmd_qr() {
   qrencode -t ANSIUTF8 < "$conf"
 }
 
+cmd_qrpng() {
+  local name="${1:-}"
+  local out="${2:-}"
+  local conf
+  if [[ -z "$name" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для PNG QR: awgctl -j qrpng <name|number> [output.png]"
+    fi
+    cmd_list
+    read -r -p "Клиент для сохранения PNG QR: " name
+  fi
+  [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  conf="$CLIENT_OUT_DIR/${name}.conf"
+  [[ -r "$conf" ]] || die_with_status 404 not_found "конфиг клиента не найден: $name"
+  repair_client_config "$name"
+  ensure_command qrencode qrencode
+  out="${out:-$CLIENT_OUT_DIR/${name}.png}"
+  write_qr_png_from_config "$conf" "$out" || die_with_status 500 dependency_error "не удалось сохранить PNG QR: $out"
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"qr_png_path":%s,"qr_png_mime":"image/png"}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$conf")" \
+      "$(json_escape "$out")"
+    return 0
+  fi
+  echo "PNG QR: $out"
+}
+
 latest_human() {
   local ts="$1"
   local now delta
@@ -697,6 +735,7 @@ Usage:
   awgctl show [name|number]
   awgctl show [name|number] --qr
   awgctl qr [name|number]
+  awgctl qrpng [name|number] [output.png]
   awgctl traffic|stats
 EOF
 }
@@ -732,6 +771,7 @@ main() {
     list|ls) cmd_list ;;
     show|config) cmd_show "$@" ;;
     qr|qrcode) cmd_qr "${1:-}" ;;
+    qrpng|png) cmd_qrpng "${1:-}" "${2:-}" ;;
     traffic|stats|stat|trafic) cmd_traffic ;;
     *)
       if [[ "$JSON_OUTPUT" == "1" ]]; then

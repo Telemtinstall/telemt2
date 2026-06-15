@@ -12,6 +12,7 @@
 - Made `sync_github.sh` explicitly publish `proxy/whatsapp` and all kept VPN directories from the local source tree.
 - Promoted AmneziaWG documentation from experimental/test wording to the supported working VPN installer wording.
 - Made the AmneziaWG installer check kernel/linux-headers reboot requirements at startup, before the long DKMS/PPA install path, and print the exact resume command after reboot.
+- Added bot-safe VPN QR export: `wgctl` now supports JSON mode with `qr_png_base64`/`qr_png_data_uri`, and `wgctl`, `awgctl`, and `vlessctl` now have `qrpng` commands for large PNG QR files.
 - Removed the experimental WireGuard-over-wstunnel tree from the public VPN tree.
 
 ## 2026-06-11

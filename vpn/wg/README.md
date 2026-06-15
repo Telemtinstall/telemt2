@@ -130,6 +130,7 @@ wgctl delete
 wgctl list
 wgctl show
 wgctl qr
+wgctl qrpng
 wgctl traffic
 ```
 
@@ -139,13 +140,23 @@ wgctl traffic
 wgctl add client1
 wgctl show client1
 wgctl qr client1
+wgctl qrpng client1
 wgctl traffic
 wgctl delete client1
 ```
 
 Если выполнить `wgctl add` без имени и просто нажать Enter, будет создан `pipiska1`. Если такое имя уже занято, будет выбран следующий свободный номер.
 
-После `wgctl add <name>` показывается QR для импорта. Текстовый конфиг можно посмотреть отдельно: `wgctl show <name>`.
+После `wgctl add <name>` показывается QR для импорта. Текстовый конфиг можно посмотреть отдельно: `wgctl show <name>`. Для Android и Telegram-ботов лучше использовать PNG, а не терминальный QR:
+
+```bash
+wgctl qrpng client1
+wgctl -j add client1
+wgctl -j qr client1
+wgctl -j traffic
+```
+
+В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `list` и `traffic` возвращают структурированные списки для бота. Бот должен декодировать `qr_png_base64` и отправлять bytes как photo/document. Не распознавайте терминальный QR через OCR/скриншот и не пересобирайте QR из отформатированного сообщения Telegram: так часто теряются переносы строк WireGuard-конфига.
 
 Конфиги клиентов сохраняются в:
 
@@ -272,6 +283,7 @@ wgctl delete
 wgctl list
 wgctl show
 wgctl qr
+wgctl qrpng
 wgctl traffic
 ```
 
@@ -281,13 +293,23 @@ Examples:
 wgctl add client1
 wgctl show client1
 wgctl qr client1
+wgctl qrpng client1
 wgctl traffic
 wgctl delete client1
 ```
 
 If you run `wgctl add` without a name and press Enter, it creates `pipiska1`. If that name already exists, the next free number is used.
 
-After `wgctl add <name>`, the command prints the QR for import. To view the text config separately, run `wgctl show <name>`.
+After `wgctl add <name>`, the command prints the QR for import. To view the text config separately, run `wgctl show <name>`. For Android and Telegram bots, use PNG instead of terminal QR:
+
+```bash
+wgctl qrpng client1
+wgctl -j add client1
+wgctl -j qr client1
+wgctl -j traffic
+```
+
+In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `list` and `traffic` return structured bot-friendly lists. A bot should decode `qr_png_base64` and send the bytes as photo/document. Do not OCR/decode terminal QR output and rebuild a QR from a formatted Telegram message: that often loses WireGuard config newlines.
 
 Client configs are saved to:
 

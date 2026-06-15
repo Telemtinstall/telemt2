@@ -375,9 +375,10 @@ vlessctl traffic --json
 vlessctl -j add client1
 vlessctl -j show client1
 vlessctl -j qr client1
+vlessctl qrpng client1
 ```
 
-В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `traffic` и `online` возвращают числовые счетчики байтов. Формат `online` расширяется добавлением новых полей, старые поля не удаляются.
+В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `qrpng` сохраняет PNG-файл на сервере; `traffic` и `online` возвращают числовые счетчики байтов. Формат `online` расширяется добавлением новых полей, старые поля не удаляются.
 
 #### JSON-ответы
 
@@ -433,6 +434,10 @@ vlessctl -j qr <name|number|all>
   fields: name, link, qr_ansi_utf8, qr_png_mime, qr_png_base64, qr_png_data_uri
   for all: items[]
 
+vlessctl -j qrpng <name|number> [output.png]
+  status_code: 200
+  fields: name, link, qr_png_path, qr_png_mime
+
 vlessctl -j traffic
   status_code: 200
   fields: clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes, total
@@ -478,7 +483,7 @@ clients[].last_seen_at       UTC-время последнего наблюде�
 
 Важно: `link`, `qr_png_base64` и `qr_png_data_uri` содержат секрет клиента. Не пишите эти ответы в публичные логи.
 
-Для Telegram-бота декодируйте `qr_png_base64` и отправляйте bytes как photo/document. Для сайта отдавайте `image/png` из своего backend API или показывайте `qr_png_data_uri`, если JSON не попадает в публичные логи.
+Для Telegram-бота декодируйте `qr_png_base64` и отправляйте bytes как photo/document. Для сайта отдавайте `image/png` из своего backend API или показывайте `qr_png_data_uri`, если JSON не попадает в публичные логи. Не пересобирайте VLESS-ссылку из HTML/Markdown-сообщения Telegram: символы `?`, `&`, `#`, `%2F` и имя после `#` должны остаться ровно такими, какими их вернул `vlessctl`.
 
 Пересобрать конфиг и перезапустить Xray:
 
@@ -1024,9 +1029,10 @@ vlessctl traffic --json
 vlessctl -j add client1
 vlessctl -j show client1
 vlessctl -j qr client1
+vlessctl qrpng client1
 ```
 
-In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `traffic` and `online` return numeric byte counters. The `online` response is extended by adding fields; existing fields are not removed.
+In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `qrpng` saves a PNG file on the server; `traffic` and `online` return numeric byte counters. The `online` response is extended by adding fields; existing fields are not removed.
 
 #### JSON Responses
 
@@ -1082,6 +1088,10 @@ vlessctl -j qr <name|number|all>
   fields: name, link, qr_ansi_utf8, qr_png_mime, qr_png_base64, qr_png_data_uri
   for all: items[]
 
+vlessctl -j qrpng <name|number> [output.png]
+  status_code: 200
+  fields: name, link, qr_png_path, qr_png_mime
+
 vlessctl -j traffic
   status_code: 200
   fields: clients[].uplink_bytes, clients[].downlink_bytes, clients[].total_bytes, total
@@ -1127,7 +1137,7 @@ If your bot needs fresh `last_seen`, run `vlessctl -j online <seconds>` periodic
 
 Important: `link`, `qr_png_base64`, and `qr_png_data_uri` contain the client secret. Do not write these responses to public logs.
 
-Telegram bot: decode `qr_png_base64` and send the bytes as photo/document. Website backend: serve decoded bytes as `image/png`, or use `qr_png_data_uri` if the JSON is not written to public logs.
+Telegram bot: decode `qr_png_base64` and send the bytes as photo/document. Website backend: serve decoded bytes as `image/png`, or use `qr_png_data_uri` if the JSON is not written to public logs. Do not rebuild the VLESS link from a Telegram HTML/Markdown message: `?`, `&`, `#`, `%2F`, and the fragment name after `#` must stay exactly as returned by `vlessctl`.
 
 Rebuild config and restart Xray:
 

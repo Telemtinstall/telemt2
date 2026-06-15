@@ -193,6 +193,7 @@ awgctl delete
 awgctl list
 awgctl show
 awgctl qr
+awgctl qrpng
 awgctl traffic
 ```
 
@@ -203,9 +204,11 @@ awgctl -j list
 awgctl traffic --json
 awgctl -j add client1
 awgctl -j show client1
+awgctl -j qr client1
+awgctl qrpng client1
 ```
 
-В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
+В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `qrpng` сохраняет PNG-файл на сервере; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
 
 #### JSON-ответы
 
@@ -262,6 +265,10 @@ awgctl -j qr <name|number>
   name, config_path, config, qr_ansi_utf8,
   qr_png_mime, qr_png_base64, qr_png_data_uri
 
+awgctl -j qrpng <name|number> [output.png]
+  status_code: 200
+  name, config_path, qr_png_path, qr_png_mime
+
 awgctl -j add [name]
   status_code: 201
   action=add, requested_name, name, auto_incremented, ip, public_key,
@@ -282,6 +289,8 @@ Telegram bot: декодируйте qr_png_base64 и отправьте bytes �
 Website backend: декодируйте qr_png_base64 и отдайте image/png из своего API.
 Frontend: можно показать <img src="<qr_png_data_uri>">, если этот JSON не попадает в публичные логи.
 ```
+
+Для бота не используйте терминальный QR из `awgctl qr` как источник данных. Берите `awgctl -j add/qr` и отправляйте PNG из `qr_png_base64` либо сам `.conf` файл. На Android импортируйте этот профиль в AmneziaWG/Amnezia VPN; обычный WireGuard-клиент не понимает параметры `Jc`, `S1/S2`, `H1-H4`.
 
 Отдельный HTTP-сервер на VPN-сервере для скачивания QR не нужен и не создается.
 
@@ -496,6 +505,7 @@ awgctl delete
 awgctl list
 awgctl show
 awgctl qr
+awgctl qrpng
 awgctl traffic
 ```
 
@@ -506,9 +516,11 @@ awgctl -j list
 awgctl traffic --json
 awgctl -j add client1
 awgctl -j show client1
+awgctl -j qr client1
+awgctl qrpng client1
 ```
 
-In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
+In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `qrpng` saves a PNG file on the server; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
 
 #### JSON Responses
 
@@ -565,6 +577,10 @@ awgctl -j qr <name|number>
   name, config_path, config, qr_ansi_utf8,
   qr_png_mime, qr_png_base64, qr_png_data_uri
 
+awgctl -j qrpng <name|number> [output.png]
+  status_code: 200
+  name, config_path, qr_png_path, qr_png_mime
+
 awgctl -j add [name]
   status_code: 201
   action=add, requested_name, name, auto_incremented, ip, public_key,
@@ -585,6 +601,8 @@ Telegram bot: decode qr_png_base64 and send the bytes as photo/document.
 Website backend: decode qr_png_base64 and serve image/png from your own API.
 Frontend: <img src="<qr_png_data_uri>"> works if the JSON is not written to public logs.
 ```
+
+For bots, do not use the terminal QR from `awgctl qr` as the data source. Use `awgctl -j add/qr` and send the PNG from `qr_png_base64`, or send the `.conf` file itself. On Android, import this profile into AmneziaWG/Amnezia VPN; the regular WireGuard client does not understand `Jc`, `S1/S2`, and `H1-H4`.
 
 No separate HTTP server is created on the VPN server for QR downloads.
 

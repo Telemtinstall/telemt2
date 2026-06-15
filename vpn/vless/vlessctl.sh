@@ -132,12 +132,21 @@ qr_png_base64_from_text() {
   local tmp
 
   tmp="$(mktemp)"
-  if ! printf '%s' "$text" | qrencode -t PNG -o "$tmp"; then
+  if ! printf '%s' "$text" | qrencode -t PNG -s 10 -m 4 -o "$tmp"; then
     rm -f "$tmp"
     return 1
   fi
   base64_one_line "$tmp"
   rm -f "$tmp"
+}
+
+write_qr_png_from_text() {
+  local text="$1"
+  local out="$2"
+
+  install -d -m 0700 "$(dirname "$out")"
+  printf '%s' "$text" | qrencode -t PNG -s 10 -m 4 -o "$out"
+  chmod 0600 "$out"
 }
 
 load_env() {
@@ -914,6 +923,40 @@ cmd_qr() {
   qrencode -t ANSIUTF8 "$link"
 }
 
+cmd_qrpng() {
+  local name="${1:-}"
+  local out="${2:-}"
+  local link
+  if [[ -z "$name" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для PNG QR: vlessctl -j qrpng <name|number> [output.png]"
+    fi
+    echo "Текущие клиенты:"
+    jq -r 'to_entries[] | "\(.key + 1)) \(.value.name)"' "$USERS_FILE"
+    read -r -p "Клиент для сохранения PNG QR: " name
+  fi
+  if [[ "$name" == "all" ]]; then
+    die_with_status 400 bad_request "qrpng сохраняет один PNG за раз: vlessctl qrpng <name|number> [output.png]"
+  fi
+  if [[ "$name" =~ ^[0-9]+$ ]]; then
+    name="$(client_name_by_number "$name")"
+  fi
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  client_exists "$name" || die_with_status 404 not_found "клиент не найден: $name"
+  link="$(print_link_for "$name")"
+  ensure_qrencode
+  out="${out:-/root/vless-${name}.png}"
+  write_qr_png_from_text "$link" "$out" || die_with_status 500 dependency_error "не удалось сохранить PNG QR: $out"
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"link":%s,"qr_png_path":%s,"qr_png_mime":"image/png"}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$link")" \
+      "$(json_escape "$out")"
+    return 0
+  fi
+  echo "PNG QR: $out"
+}
+
 cmd_traffic() {
   local stats
   local name up down total
@@ -1188,6 +1231,7 @@ Usage:
   vlessctl list
   vlessctl show [name|number|all]
   vlessctl qr [name|number|all]
+  vlessctl qrpng [name|number] [output.png]
   vlessctl traffic
   vlessctl online [seconds]
   vlessctl logs on|off|status
@@ -1231,6 +1275,7 @@ main() {
     list|ls) cmd_list ;;
     show|link) cmd_show "${1:-}" ;;
     qr|qrcode) cmd_qr "${1:-}" ;;
+    qrpng|png) cmd_qrpng "${1:-}" "${2:-}" ;;
     traffic|stats|stat|trafic) cmd_traffic ;;
     online) cmd_online "${1:-10}" ;;
     logs|log) cmd_logs "${1:-status}" ;;
