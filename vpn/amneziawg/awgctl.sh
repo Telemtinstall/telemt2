@@ -247,6 +247,144 @@ write_amnezia_qr_pngs_from_config() {
   rm -rf "$tmpdir"
 }
 
+make_amnezia_vpn_payload_files() {
+  local conf="$1"
+  local name="$2"
+  local out_json="$3"
+  local out_compressed="$4"
+  local out_key="$5"
+
+  python3 - "$conf" "$name" "$out_json" "$out_compressed" "$out_key" <<'PY'
+import base64
+import json
+import re
+import struct
+import sys
+import zlib
+
+conf_path, name, out_json, out_compressed, out_key = sys.argv[1:6]
+text = open(conf_path, "r", encoding="utf-8").read()
+
+values = {}
+for raw_line in text.splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or line.startswith("[") or " = " not in line:
+        continue
+    key, value = line.split(" = ", 1)
+    values[key.strip()] = value.strip()
+
+required = ["PrivateKey", "Address", "PublicKey", "Endpoint", "AllowedIPs"]
+missing = [key for key in required if not values.get(key)]
+if missing:
+    raise SystemExit("missing required AWG config fields: " + ", ".join(missing))
+
+endpoint = values["Endpoint"]
+host = ""
+port = ""
+if endpoint.startswith("[") and "]:" in endpoint:
+    host, port = endpoint[1:].split("]:", 1)
+elif ":" in endpoint:
+    host, port = endpoint.rsplit(":", 1)
+else:
+    host = endpoint
+if not host:
+    raise SystemExit("invalid Endpoint host")
+if not port.isdigit():
+    port = "55424"
+
+allowed_ips = [item.strip() for item in re.split(r"\s*,\s*", values.get("AllowedIPs", "")) if item.strip()]
+dns_values = [item.strip() for item in re.split(r"\s*,\s*", values.get("DNS", "")) if item.strip()]
+
+last_config = {
+    "config": text,
+    "hostName": host,
+    "port": int(port),
+    "client_priv_key": values["PrivateKey"],
+    "client_ip": values["Address"],
+    "server_pub_key": values["PublicKey"],
+    "allowed_ips": allowed_ips,
+    "mtu": values.get("MTU", "1280"),
+}
+
+if values.get("PresharedKey"):
+    last_config["psk_key"] = values["PresharedKey"]
+elif values.get("PreSharedKey"):
+    last_config["psk_key"] = values["PreSharedKey"]
+if values.get("PersistentKeepalive"):
+    last_config["persistent_keep_alive"] = values["PersistentKeepalive"]
+
+required_awg = ["Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4"]
+for key in required_awg:
+    if not values.get(key):
+        raise SystemExit("missing required AmneziaWG field: " + key)
+    last_config[key] = values[key]
+
+optional_awg = ["S3", "S4", "I1", "I2", "I3", "I4", "I5"]
+for key in optional_awg:
+    if values.get(key):
+        last_config[key] = values[key]
+
+protocol_version = ""
+if values.get("S3") and values.get("S4"):
+    protocol_version = "2"
+elif any(values.get(key) for key in ["I1", "I2", "I3", "I4", "I5"]):
+    protocol_version = "1.5"
+
+awg_config = {
+    "last_config": json.dumps(last_config, ensure_ascii=False, separators=(",", ":")),
+    "isThirdPartyConfig": True,
+    "port": port,
+    "transport_proto": "udp",
+}
+if protocol_version:
+    awg_config["protocol_version"] = protocol_version
+
+server_json = {
+    "description": name,
+    "hostName": host,
+    "containers": [
+        {
+            "container": "amnezia-awg",
+            "awg": awg_config,
+        }
+    ],
+    "defaultContainer": "amnezia-awg",
+}
+if len(dns_values) >= 1:
+    server_json["dns1"] = dns_values[0]
+if len(dns_values) >= 2:
+    server_json["dns2"] = dns_values[1]
+
+raw = json.dumps(server_json, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+compressed = struct.pack(">I", len(raw)) + zlib.compress(raw, 8)
+vpn_key = "vpn://" + base64.urlsafe_b64encode(compressed).rstrip(b"=").decode("ascii")
+
+with open(out_json, "w", encoding="utf-8") as fh:
+    fh.write(json.dumps(server_json, ensure_ascii=False, separators=(",", ":")))
+with open(out_compressed, "wb") as fh:
+    fh.write(compressed)
+with open(out_key, "w", encoding="utf-8") as fh:
+    fh.write(vpn_key)
+PY
+}
+
+amnezia_vpn_qr_png_base64_items_json_from_config() {
+  local conf="$1"
+  local name="$2"
+  local tmpdir compressed_file json_file key_file
+
+  tmpdir="$(mktemp -d)"
+  json_file="$tmpdir/amnezia-vpn.json"
+  compressed_file="$tmpdir/amnezia-vpn.bin"
+  key_file="$tmpdir/amnezia-vpn.key"
+  if ! make_amnezia_vpn_payload_files "$conf" "$name" "$json_file" "$compressed_file" "$key_file"; then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  amnezia_qr_png_base64_items_json_from_config "$compressed_file"
+  rm -rf "$tmpdir"
+}
+
 qr_png_base64_from_config() {
   local conf="$1"
   local tmp
@@ -542,7 +680,7 @@ repair_client_config() {
 cmd_add() {
   local name="${1:-}"
   local requested_name auto_incremented=0
-  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items
+  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_key_file vpn_payload_dir vpn_key
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
@@ -563,6 +701,7 @@ cmd_add() {
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     ensure_command qrencode qrencode
     ensure_command base64 coreutils
+    ensure_command python3 python3
   fi
 
   private_key="$(awg genkey)"
@@ -591,7 +730,19 @@ EOF
     config_text="$(cat "$CLIENT_OUT_DIR/${name}.conf")"
     qr_png_base64="$(qr_png_base64_from_config "$CLIENT_OUT_DIR/${name}.conf")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
     amnezia_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$CLIENT_OUT_DIR/${name}.conf")" || die_with_status 500 dependency_error "не удалось создать Amnezia-native PNG QR для клиента ${name}."
-    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s}\n' \
+    vpn_payload_dir="$(mktemp -d)"
+    vpn_key_file="$vpn_payload_dir/amnezia-vpn.key"
+    make_amnezia_vpn_payload_files "$CLIENT_OUT_DIR/${name}.conf" "$name" "$vpn_payload_dir/amnezia-vpn.json" "$vpn_payload_dir/amnezia-vpn.bin" "$vpn_key_file" || {
+      rm -rf "$vpn_payload_dir"
+      die_with_status 500 dependency_error "не удалось создать Amnezia .vpn payload для клиента ${name}."
+    }
+    vpn_key="$(cat "$vpn_key_file")"
+    vpn_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$vpn_payload_dir/amnezia-vpn.bin")" || {
+      rm -rf "$vpn_payload_dir"
+      die_with_status 500 dependency_error "не удалось создать Amnezia .vpn PNG QR для клиента ${name}."
+    }
+    rm -rf "$vpn_payload_dir"
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
       "$(json_escape "$requested_name")" \
       "$(json_escape "$name")" \
       "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
@@ -604,7 +755,9 @@ EOF
       "$(json_escape "$config_text")" \
       "$(json_escape "$qr_png_base64")" \
       "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
-      "$amnezia_qr_png_base64_items"
+      "$amnezia_qr_png_base64_items" \
+      "$(json_escape "$vpn_key")" \
+      "$vpn_qr_png_base64_items"
     return 0
   fi
 
@@ -615,6 +768,7 @@ EOF
   echo >&2
   echo "Текстовый конфиг: awgctl show ${name}" >&2
   echo "Android Amnezia QR: awgctl amqrpng ${name}" >&2
+  echo "AmneziaVPN .vpn QR: awgctl vpnqrpng ${name}" >&2
 }
 
 cmd_delete() {
@@ -763,7 +917,7 @@ cmd_show() {
 
 cmd_qr() {
   local name="${1:-}"
-  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items
+  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_payload_dir vpn_key_file vpn_key
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
       die_with_status 400 bad_request "укажите клиента для QR: awgctl -j qr <name|number>"
@@ -779,18 +933,33 @@ cmd_qr() {
   ensure_command qrencode qrencode
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     ensure_command base64 coreutils
+    ensure_command python3 python3
     config_text="$(cat "$conf")"
     qr_text="$(qrencode -t ANSIUTF8 < "$conf")"
     qr_png_base64="$(qr_png_base64_from_config "$conf")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
     amnezia_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$conf")" || die_with_status 500 dependency_error "не удалось создать Amnezia-native PNG QR для клиента ${name}."
-    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s}\n' \
+    vpn_payload_dir="$(mktemp -d)"
+    vpn_key_file="$vpn_payload_dir/amnezia-vpn.key"
+    make_amnezia_vpn_payload_files "$conf" "$name" "$vpn_payload_dir/amnezia-vpn.json" "$vpn_payload_dir/amnezia-vpn.bin" "$vpn_key_file" || {
+      rm -rf "$vpn_payload_dir"
+      die_with_status 500 dependency_error "не удалось создать Amnezia .vpn payload для клиента ${name}."
+    }
+    vpn_key="$(cat "$vpn_key_file")"
+    vpn_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$vpn_payload_dir/amnezia-vpn.bin")" || {
+      rm -rf "$vpn_payload_dir"
+      die_with_status 500 dependency_error "не удалось создать Amnezia .vpn PNG QR для клиента ${name}."
+    }
+    rm -rf "$vpn_payload_dir"
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$config_text")" \
       "$(json_escape "$qr_text")" \
       "$(json_escape "$qr_png_base64")" \
       "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
-      "$amnezia_qr_png_base64_items"
+      "$amnezia_qr_png_base64_items" \
+      "$(json_escape "$vpn_key")" \
+      "$vpn_qr_png_base64_items"
     return 0
   fi
   qrencode -t ANSIUTF8 < "$conf"
@@ -869,6 +1038,102 @@ cmd_amqrpng() {
     echo "Сканируйте части по порядку 1-${chunks_total} в приложении Amnezia."
   fi
   rm -f "$paths_file"
+}
+
+cmd_vpnkey() {
+  local name="${1:-}"
+  local conf tmpdir key_file
+
+  if [[ -z "$name" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для AmneziaVPN .vpn key: awgctl -j vpnkey <name|number>"
+    fi
+    cmd_list
+    read -r -p "Клиент для показа AmneziaVPN .vpn key: " name
+  fi
+  [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  conf="$CLIENT_OUT_DIR/${name}.conf"
+  [[ -r "$conf" ]] || die_with_status 404 not_found "конфиг клиента не найден: $name"
+  repair_client_config "$name"
+  ensure_command python3 python3
+
+  tmpdir="$(mktemp -d)"
+  key_file="$tmpdir/amnezia-vpn.key"
+  if ! make_amnezia_vpn_payload_files "$conf" "$name" "$tmpdir/amnezia-vpn.json" "$tmpdir/amnezia-vpn.bin" "$key_file"; then
+    rm -rf "$tmpdir"
+    die_with_status 500 dependency_error "не удалось создать AmneziaVPN .vpn key: $name"
+  fi
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"vpn_key":%s}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$conf")" \
+      "$(json_escape "$(cat "$key_file")")"
+    rm -rf "$tmpdir"
+    return 0
+  fi
+
+  cat "$key_file"
+  printf '\n'
+  rm -rf "$tmpdir"
+}
+
+cmd_vpnqrpng() {
+  local name="${1:-}"
+  local out="${2:-}"
+  local conf paths_file chunks_total tmpdir compressed_file key_file
+
+  if [[ -z "$name" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для AmneziaVPN .vpn PNG QR: awgctl -j vpnqrpng <name|number> [output.png]"
+    fi
+    cmd_list
+    read -r -p "Клиент для сохранения AmneziaVPN .vpn PNG QR: " name
+  fi
+  [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  conf="$CLIENT_OUT_DIR/${name}.conf"
+  [[ -r "$conf" ]] || die_with_status 404 not_found "конфиг клиента не найден: $name"
+  repair_client_config "$name"
+  ensure_command qrencode qrencode
+  ensure_command base64 coreutils
+  ensure_command python3 python3
+
+  tmpdir="$(mktemp -d)"
+  compressed_file="$tmpdir/amnezia-vpn.bin"
+  key_file="$tmpdir/amnezia-vpn.key"
+  if ! make_amnezia_vpn_payload_files "$conf" "$name" "$tmpdir/amnezia-vpn.json" "$compressed_file" "$key_file"; then
+    rm -rf "$tmpdir"
+    die_with_status 500 dependency_error "не удалось создать AmneziaVPN .vpn payload: $name"
+  fi
+
+  out="${out:-$CLIENT_OUT_DIR/${name}-amnezia-vpn.png}"
+  paths_file="$tmpdir/paths.txt"
+  if ! write_amnezia_qr_pngs_from_config "$compressed_file" "$out" > "$paths_file"; then
+    rm -rf "$tmpdir"
+    die_with_status 500 dependency_error "не удалось сохранить AmneziaVPN .vpn PNG QR: $out"
+  fi
+  chunks_total="$(wc -l < "$paths_file" | tr -d '[:space:]')"
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_paths":%s}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$conf")" \
+      "$(json_escape "$(cat "$key_file")")" \
+      "$chunks_total" \
+      "$(json_array_from_file_lines "$paths_file")"
+    rm -rf "$tmpdir"
+    return 0
+  fi
+
+  echo "AmneziaVPN .vpn PNG QR:"
+  cat "$paths_file"
+  if (( chunks_total > 1 )); then
+    echo "Сканируйте части по порядку 1-${chunks_total} в приложении Amnezia."
+  fi
+  echo "Текстовый ключ: awgctl vpnkey ${name}"
+  rm -rf "$tmpdir"
 }
 
 latest_human() {
@@ -952,6 +1217,8 @@ Usage:
   awgctl qr [name|number]
   awgctl qrpng [name|number] [output.png]
   awgctl amqrpng [name|number] [output.png]
+  awgctl vpnkey [name|number]
+  awgctl vpnqrpng [name|number] [output.png]
   awgctl traffic|stats
 EOF
 }
@@ -989,6 +1256,8 @@ main() {
     qr|qrcode) cmd_qr "${1:-}" ;;
     qrpng|png) cmd_qrpng "${1:-}" "${2:-}" ;;
     amqrpng|amneziaqrpng|amnezia-qrpng) cmd_amqrpng "${1:-}" "${2:-}" ;;
+    vpnkey|vpn-key|key) cmd_vpnkey "${1:-}" ;;
+    vpnqrpng|vpn-qrpng|vpnqr|nativeqrpng|native-qrpng) cmd_vpnqrpng "${1:-}" "${2:-}" ;;
     traffic|stats|stat|trafic) cmd_traffic ;;
     *)
       if [[ "$JSON_OUTPUT" == "1" ]]; then
