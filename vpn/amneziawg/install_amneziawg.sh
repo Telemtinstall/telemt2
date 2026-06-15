@@ -926,11 +926,17 @@ resume_command() {
 die_reboot_required_for_kernel() {
   local current="$1"
   local target="$2"
+  local resume_note
+  if [[ -s "$RESUME_CONFIG" ]]; then
+    resume_note="Установка продолжится без повторного ручного ввода, потому что ответы сохранены в ${RESUME_CONFIG}."
+  else
+    resume_note="Если это первый запуск, после reboot установщик задаст вопросы как обычно."
+  fi
   die "сейчас загружено ядро ${current}, но для AmneziaWG нужен DKMS-модуль под ядро с доступными headers (${target}). Перезагрузите сервер сейчас, затем зайдите по SSH и запустите установщик из правильного каталога:
 
   $(resume_command)
 
-После reboot команда uname -r должна показать ${target}. Установка продолжится без повторного ручного ввода, потому что ответы сохранены в ${RESUME_CONFIG}."
+После reboot команда uname -r должна показать ${target}. ${resume_note}"
 }
 
 die_missing_current_kernel_headers() {

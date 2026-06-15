@@ -181,7 +181,7 @@ awgctl qr dns1
 10. Создает первого клиента через awgctl и печатает QR.
 ```
 
-Если reboot был нужен, установщик не теряет ответы: resume-конфиг хранится в `/root/.install_amneziawg.config`, поэтому повторный запуск продолжит установку.
+Если reboot был нужен после уже введенных ответов, установщик не теряет их: resume-конфиг хранится в `/root/.install_amneziawg.config`, поэтому повторный запуск продолжит установку. Если установщик остановился на самом первом preflight до вопросов, после reboot он просто задаст вопросы как обычно.
 
 ### Управление клиентами
 
@@ -484,7 +484,7 @@ Important: the obfuscation profile cannot be changed only on the server. Paramet
 10. Creates the first client through awgctl and prints QR.
 ```
 
-If a reboot was required, installer answers are not lost: the resume config is stored in `/root/.install_amneziawg.config`, so the next run continues the installation.
+If a reboot was required after answers were already entered, they are not lost: the resume config is stored in `/root/.install_amneziawg.config`, so the next run continues the installation. If the installer stopped on the first preflight before asking questions, it simply asks the questions after reboot.
 
 ### Client management
 
