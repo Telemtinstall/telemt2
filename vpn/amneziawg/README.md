@@ -114,6 +114,13 @@ MTU по умолчанию — `1280`. При необходимости его
 Автоматические значения соблюдают диапазоны из документации AmneziaWG 2.0: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, `H1-H4` не пересекаются. Для диагностического профиля `plain` допускаются нулевые значения.
 По умолчанию используется UDP-порт `1234`, потому что в официальном troubleshooting отмечено: некоторые провайдеры в РФ могут блокировать UDP-порты выше `9999`. Если порт `1234` не подходит, пробуйте `AWG_PORT=443`.
 Если apt/PPA дает типовую ошибку, установщик сначала пробует исправить ее сам: удаляет старую битую запись AmneziaWG PPA и перебирает поддерживаемые ветки PPA. Если исправить не получилось, причина выводится на русском языке.
+Если установщик видит, что текущее загруженное ядро старее уже установленного kernel/headers, он остановится в начале и вежливо попросит перезагрузить сервер до долгой установки DKMS. После reboot возвращайтесь в каталог установщика:
+
+```bash
+cd /root/telemt2/vpn/amneziawg
+./install_amneziawg.sh
+```
+
 Если имя первого клиента уже занято, установщик создает следующего клиента с числовым суффиксом: `pipiska1`, `pipiska2`, `pipiska3` и так далее.
 
 ### Профили обфускации
@@ -174,7 +181,7 @@ awgctl qr dns1
 10. Создает первого клиента через awgctl и печатает QR.
 ```
 
-Если apt поставил headers только для нового ядра, установщик напишет об этом по-русски. В таком случае нужно перезагрузить сервер и запустить установщик повторно: после reboot DKMS-модуль соберется и загрузится для текущего ядра.
+Если reboot был нужен, установщик не теряет ответы: resume-конфиг хранится в `/root/.install_amneziawg.config`, поэтому повторный запуск продолжит установку.
 
 ### Управление клиентами
 
@@ -422,6 +429,13 @@ The default MTU is `1280`. Override it with the `AWG_MTU` environment variable i
 Generated values follow AmneziaWG 2.0 documentation ranges: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, and non-overlapping `H1-H4`. The diagnostic `plain` profile allows zero values.
 The default UDP port is `1234` because the official troubleshooting notes that some providers in Russia may block UDP ports above `9999`. If `1234` does not work, try `AWG_PORT=443`.
 For common apt/PPA failures, the installer first tries to repair the problem: it removes stale broken AmneziaWG PPA entries and tries supported PPA suites. If it cannot recover, it prints the reason in Russian.
+If the installer detects that the currently booted kernel is older than the already installed kernel/headers, it stops early and asks for a reboot before the long DKMS installation. After reboot, return to the installer directory:
+
+```bash
+cd /root/telemt2/vpn/amneziawg
+./install_amneziawg.sh
+```
+
 If the first client name already exists, the installer creates the next numbered client: `pipiska1`, `pipiska2`, `pipiska3`, and so on.
 
 ### Obfuscation Profiles
@@ -470,7 +484,7 @@ Important: the obfuscation profile cannot be changed only on the server. Paramet
 10. Creates the first client through awgctl and prints QR.
 ```
 
-If apt installs headers only for a newer kernel, the installer explains that explicitly. Reboot the server and run the installer again so the DKMS module can build and load for the currently booted kernel.
+If a reboot was required, installer answers are not lost: the resume config is stored in `/root/.install_amneziawg.config`, so the next run continues the installation.
 
 ### Client management
 

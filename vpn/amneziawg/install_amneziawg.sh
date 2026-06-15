@@ -878,6 +878,21 @@ kernel_headers_ready() {
   [[ -e "/lib/modules/$(uname -r)/build/Makefile" || -d "/lib/modules/$(uname -r)/build/include" ]]
 }
 
+newest_installed_kernel() {
+  local dir kernel
+  local kernels=()
+
+  shopt -s nullglob
+  for dir in /lib/modules/*; do
+    kernel="${dir##*/}"
+    [[ -n "$kernel" ]] && kernels+=("$kernel")
+  done
+  shopt -u nullglob
+
+  ((${#kernels[@]} > 0)) || return 0
+  printf '%s\n' "${kernels[@]}" | sort -V | tail -n 1
+}
+
 newest_other_kernel_with_headers() {
   local current dir kernel
   local kernels=()
@@ -897,20 +912,79 @@ newest_other_kernel_with_headers() {
   printf '%s\n' "${kernels[@]}" | sort -V | tail -n 1
 }
 
+kernel_is_newer_than_current() {
+  local current="$1"
+  local candidate="$2"
+  [[ -n "$candidate" && "$candidate" != "$current" ]] || return 1
+  [[ "$(printf '%s\n%s\n' "$current" "$candidate" | sort -V | tail -n 1)" == "$candidate" ]]
+}
+
+resume_command() {
+  printf 'cd %q && ./install_amneziawg.sh' "$SCRIPT_DIR"
+}
+
+die_reboot_required_for_kernel() {
+  local current="$1"
+  local target="$2"
+  die "сейчас загружено ядро ${current}, но для AmneziaWG нужен DKMS-модуль под ядро с доступными headers (${target}). Перезагрузите сервер сейчас, затем зайдите по SSH и запустите установщик из правильного каталога:
+
+  $(resume_command)
+
+После reboot команда uname -r должна показать ${target}. Установка продолжится без повторного ручного ввода, потому что ответы сохранены в ${RESUME_CONFIG}."
+}
+
 die_missing_current_kernel_headers() {
   local kernel other_kernel
   kernel="$(uname -r)"
   other_kernel="$(newest_other_kernel_with_headers)"
 
   if [[ -n "$other_kernel" ]]; then
-    die "не найдены linux-headers для текущего загруженного ядра ${kernel}. Apt уже поставил headers для ядра ${other_kernel}, но сервер еще не перезагружен в него. Перезагрузите сервер и запустите установщик снова: после reboot текущее ядро должно стать ${other_kernel}, и DKMS-модуль amneziawg загрузится."
+    die_reboot_required_for_kernel "$kernel" "$other_kernel"
   fi
 
-  die "не найдены linux-headers для текущего ядра ${kernel}. DKMS не сможет собрать модуль amneziawg. Проверьте, что в apt есть пакет linux-headers-${kernel}, либо обновите kernel/linux-headers и перезагрузите сервер."
+  die "не найдены linux-headers для текущего ядра ${kernel}. DKMS не сможет собрать модуль amneziawg. Проверьте, что в apt есть пакет linux-headers-${kernel}, либо обновите kernel/linux-headers и перезагрузите сервер. После reboot запускайте так:
+
+  $(resume_command)"
+}
+
+headers_kernel_from_apt_simulation() {
+  local package="$1"
+  apt-get -s install "$package" 2>/dev/null |
+    awk '
+      $1 == "Inst" && $2 ~ /^linux-headers-[0-9]/ {
+        sub(/^linux-headers-/, "", $2)
+        print $2
+      }
+    ' |
+    sort -V |
+    tail -n 1
+}
+
+kernel_headers_reboot_preflight() {
+  local kernel headers_pkg newest_kernel fallback_pkg target_kernel
+
+  kernel="$(uname -r)"
+  headers_pkg="linux-headers-${kernel}"
+
+  kernel_headers_ready && return 0
+  apt_package_has_candidate "$headers_pkg" && return 0
+
+  newest_kernel="$(newest_installed_kernel)"
+  if kernel_is_newer_than_current "$kernel" "$newest_kernel"; then
+    die_reboot_required_for_kernel "$kernel" "$newest_kernel"
+  fi
+
+  for fallback_pkg in linux-headers-amd64 linux-headers-generic; do
+    apt_package_has_candidate "$fallback_pkg" || continue
+    target_kernel="$(headers_kernel_from_apt_simulation "$fallback_pkg")"
+    if [[ -n "$target_kernel" && "$target_kernel" != "$kernel" ]]; then
+      die_reboot_required_for_kernel "$kernel" "$target_kernel"
+    fi
+  done
 }
 
 install_kernel_headers() {
-  local kernel headers_pkg fallback_pkg
+  local kernel headers_pkg fallback_pkg target_kernel
   export DEBIAN_FRONTEND=noninteractive
   kernel="$(uname -r)"
   headers_pkg="linux-headers-${kernel}"
@@ -926,6 +1000,10 @@ install_kernel_headers() {
   if ! kernel_headers_ready; then
     for fallback_pkg in linux-headers-amd64 linux-headers-generic; do
       if apt_package_has_candidate "$fallback_pkg"; then
+        target_kernel="$(headers_kernel_from_apt_simulation "$fallback_pkg")"
+        if [[ -n "$target_kernel" && "$target_kernel" != "$kernel" ]]; then
+          die_reboot_required_for_kernel "$kernel" "$target_kernel"
+        fi
         retry_command "установка заголовков ядра ${fallback_pkg}" apt-get install -y "$fallback_pkg"
         break
       fi
@@ -1410,6 +1488,9 @@ main() {
   echo "  2. Если включаете HTTPS-маскировку, заранее создайте DNS A-запись: <domain> -> IPv4 сервера."
   echo "  3. Убедитесь, что выбранный UDP-порт AmneziaWG доступен из интернета."
   echo "  4. Не закрывайте текущую SSH-сессию, пока не проверите второй вход."
+  echo
+  echo "Проверяю текущее ядро и linux-headers для DKMS..."
+  kernel_headers_reboot_preflight
   echo
   prompt_config
   reset_step_state_if_config_changed

@@ -11,6 +11,7 @@
 - Pinned the legacy Debian/Ubuntu Docker installer to a checked GHCR image digest instead of the mutable `ghcr.io/telemt/telemt:latest` tag.
 - Made `sync_github.sh` explicitly publish `proxy/whatsapp` and all kept VPN directories from the local source tree.
 - Promoted AmneziaWG documentation from experimental/test wording to the supported working VPN installer wording.
+- Made the AmneziaWG installer check kernel/linux-headers reboot requirements at startup, before the long DKMS/PPA install path, and print the exact resume command after reboot.
 - Removed the experimental WireGuard-over-wstunnel tree from the public VPN tree.
 
 ## 2026-06-11
