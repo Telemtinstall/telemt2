@@ -73,14 +73,178 @@ json_number_or_null() {
   [[ "$value" =~ ^[0-9]+$ ]] && printf '%s' "$value" || printf 'null'
 }
 
+ensure_private_dir() {
+  local dir="$1"
+
+  [[ -d "$dir" ]] || install -d -m 0700 "$dir"
+}
+
 base64_one_line() {
   local file="$1"
 
   if base64 --help 2>&1 | grep -q -- '-w'; then
     base64 -w 0 "$file"
+  elif base64 --help 2>&1 | grep -q -- '-i'; then
+    base64 -i "$file" | tr -d '\n'
   else
     base64 "$file" | tr -d '\n'
   fi
+}
+
+base64_url_one_line() {
+  local file="$1"
+
+  base64_one_line "$file" | tr '+/' '-_' | tr -d '='
+}
+
+json_array_from_file_lines() {
+  local file="$1"
+  local first=1
+  local line
+
+  printf '['
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    (( first == 1 )) || printf ','
+    first=0
+    json_escape "$line"
+  done < "$file"
+  printf ']'
+}
+
+emit_u8() {
+  local value="$1"
+
+  printf "\\$(printf '%03o' "$((value & 255))")"
+}
+
+emit_u32_be() {
+  local value="$1"
+
+  emit_u8 "$(((value >> 24) & 255))"
+  emit_u8 "$(((value >> 16) & 255))"
+  emit_u8 "$(((value >> 8) & 255))"
+  emit_u8 "$((value & 255))"
+}
+
+write_amnezia_qr_payload() {
+  local chunk_file="$1"
+  local chunks_count="$2"
+  local chunk_id="$3"
+  local out="$4"
+  local chunk_len
+
+  chunk_len="$(wc -c < "$chunk_file" | tr -d '[:space:]')"
+  {
+    printf '\x07\xC0'
+    emit_u8 "$chunks_count"
+    emit_u8 "$chunk_id"
+    emit_u32_be "$chunk_len"
+    cat "$chunk_file"
+  } > "$out"
+}
+
+make_amnezia_qr_text_chunks() {
+  local conf="$1"
+  local out_dir="$2"
+  local chunk_size="${3:-850}"
+  local chunks_count chunk_id chunk payload text_file
+  local chunks=()
+
+  install -d -m 0700 "$out_dir"
+  split -b "$chunk_size" -d -a 3 "$conf" "$out_dir/chunk-"
+
+  shopt -s nullglob
+  chunks=("$out_dir"/chunk-*)
+  shopt -u nullglob
+  chunks_count="${#chunks[@]}"
+  (( chunks_count > 0 )) || return 1
+  (( chunks_count <= 255 )) || die_with_status 413 payload_too_large "слишком большой конфиг для Amnezia QR: ${chunks_count} частей."
+
+  chunk_id=0
+  for chunk in "${chunks[@]}"; do
+    payload="$out_dir/payload-${chunk_id}.bin"
+    text_file="$out_dir/text-${chunk_id}.txt"
+    write_amnezia_qr_payload "$chunk" "$chunks_count" "$chunk_id" "$payload"
+    base64_url_one_line "$payload" > "$text_file"
+    chunk_id=$((chunk_id + 1))
+  done
+}
+
+amnezia_qr_png_base64_items_json_from_config() {
+  local conf="$1"
+  local tmpdir text_file png_file lines_file ok
+
+  tmpdir="$(mktemp -d)"
+  lines_file="$tmpdir/png-base64-lines.txt"
+  ok=1
+  if ! make_amnezia_qr_text_chunks "$conf" "$tmpdir"; then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+
+  : > "$lines_file"
+  for text_file in "$tmpdir"/text-*.txt; do
+    png_file="${text_file%.txt}.png"
+    if ! qrencode -t PNG -s 10 -m 4 -l L -o "$png_file" < "$text_file"; then
+      ok=0
+      break
+    fi
+    base64_one_line "$png_file" >> "$lines_file"
+    printf '\n' >> "$lines_file"
+  done
+
+  if (( ok != 1 )); then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  json_array_from_file_lines "$lines_file"
+  rm -rf "$tmpdir"
+}
+
+write_amnezia_qr_pngs_from_config() {
+  local conf="$1"
+  local out="$2"
+  local tmpdir paths_file text_file out_path base chunks_count index ok
+  local text_files=()
+
+  tmpdir="$(mktemp -d)"
+  paths_file="$tmpdir/paths.txt"
+  ok=1
+  if ! make_amnezia_qr_text_chunks "$conf" "$tmpdir"; then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+
+  shopt -s nullglob
+  text_files=("$tmpdir"/text-*.txt)
+  shopt -u nullglob
+  chunks_count="${#text_files[@]}"
+  : > "$paths_file"
+  index=1
+  base="${out%.png}"
+
+  for text_file in "${text_files[@]}"; do
+    if (( chunks_count == 1 )); then
+      out_path="$out"
+    else
+      out_path="${base}-${index}of${chunks_count}.png"
+    fi
+    ensure_private_dir "$(dirname "$out_path")"
+    if ! qrencode -t PNG -s 10 -m 4 -l L -o "$out_path" < "$text_file"; then
+      ok=0
+      break
+    fi
+    chmod 0600 "$out_path"
+    printf '%s\n' "$out_path" >> "$paths_file"
+    index=$((index + 1))
+  done
+
+  if (( ok != 1 )); then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  cat "$paths_file"
+  rm -rf "$tmpdir"
 }
 
 qr_png_base64_from_config() {
@@ -100,7 +264,7 @@ write_qr_png_from_config() {
   local conf="$1"
   local out="$2"
 
-  install -d -m 0700 "$(dirname "$out")"
+  ensure_private_dir "$(dirname "$out")"
   qrencode -t PNG -s 10 -m 4 -o "$out" < "$conf"
   chmod 0600 "$out"
 }
@@ -378,7 +542,7 @@ repair_client_config() {
 cmd_add() {
   local name="${1:-}"
   local requested_name auto_incremented=0
-  local private_key public_key psk ip created_at config_text qr_png_base64
+  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
@@ -426,7 +590,8 @@ EOF
   if [[ "$JSON_OUTPUT" == "1" ]]; then
     config_text="$(cat "$CLIENT_OUT_DIR/${name}.conf")"
     qr_png_base64="$(qr_png_base64_from_config "$CLIENT_OUT_DIR/${name}.conf")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
-    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}\n' \
+    amnezia_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$CLIENT_OUT_DIR/${name}.conf")" || die_with_status 500 dependency_error "не удалось создать Amnezia-native PNG QR для клиента ${name}."
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s}\n' \
       "$(json_escape "$requested_name")" \
       "$(json_escape "$name")" \
       "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
@@ -438,7 +603,8 @@ EOF
       "$(json_escape "$CLIENT_DIR/${name}.env")" \
       "$(json_escape "$config_text")" \
       "$(json_escape "$qr_png_base64")" \
-      "$(json_escape "data:image/png;base64,${qr_png_base64}")"
+      "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
+      "$amnezia_qr_png_base64_items"
     return 0
   fi
 
@@ -448,6 +614,7 @@ EOF
   cmd_qr "$name"
   echo >&2
   echo "Текстовый конфиг: awgctl show ${name}" >&2
+  echo "Android Amnezia QR: awgctl amqrpng ${name}" >&2
 }
 
 cmd_delete() {
@@ -596,7 +763,7 @@ cmd_show() {
 
 cmd_qr() {
   local name="${1:-}"
-  local conf config_text qr_text qr_png_base64
+  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
       die_with_status 400 bad_request "укажите клиента для QR: awgctl -j qr <name|number>"
@@ -615,13 +782,15 @@ cmd_qr() {
     config_text="$(cat "$conf")"
     qr_text="$(qrencode -t ANSIUTF8 < "$conf")"
     qr_png_base64="$(qr_png_base64_from_config "$conf")" || die_with_status 500 dependency_error "не удалось создать PNG QR для клиента ${name}."
-    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s}\n' \
+    amnezia_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$conf")" || die_with_status 500 dependency_error "не удалось создать Amnezia-native PNG QR для клиента ${name}."
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$config_text")" \
       "$(json_escape "$qr_text")" \
       "$(json_escape "$qr_png_base64")" \
-      "$(json_escape "data:image/png;base64,${qr_png_base64}")"
+      "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
+      "$amnezia_qr_png_base64_items"
     return 0
   fi
   qrencode -t ANSIUTF8 < "$conf"
@@ -654,6 +823,52 @@ cmd_qrpng() {
     return 0
   fi
   echo "PNG QR: $out"
+}
+
+cmd_amqrpng() {
+  local name="${1:-}"
+  local out="${2:-}"
+  local conf paths_file chunks_total
+
+  if [[ -z "$name" ]]; then
+    if [[ "$JSON_OUTPUT" == "1" ]]; then
+      die_with_status 400 bad_request "укажите клиента для Amnezia-native PNG QR: awgctl -j amqrpng <name|number> [output.png]"
+    fi
+    cmd_list
+    read -r -p "Клиент для сохранения Amnezia-native PNG QR: " name
+  fi
+  [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
+  [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
+  conf="$CLIENT_OUT_DIR/${name}.conf"
+  [[ -r "$conf" ]] || die_with_status 404 not_found "конфиг клиента не найден: $name"
+  repair_client_config "$name"
+  ensure_command qrencode qrencode
+  ensure_command base64 coreutils
+
+  out="${out:-$CLIENT_OUT_DIR/${name}-amnezia.png}"
+  paths_file="$(mktemp)"
+  if ! write_amnezia_qr_pngs_from_config "$conf" "$out" > "$paths_file"; then
+    rm -f "$paths_file"
+    die_with_status 500 dependency_error "не удалось сохранить Amnezia-native PNG QR: $out"
+  fi
+  chunks_total="$(wc -l < "$paths_file" | tr -d '[:space:]')"
+
+  if [[ "$JSON_OUTPUT" == "1" ]]; then
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"amnezia_qr_format":"amnezia_qr_chunks","chunks_total":%s,"amnezia_qr_png_mime":"image/png","amnezia_qr_png_paths":%s}\n' \
+      "$(json_escape "$name")" \
+      "$(json_escape "$conf")" \
+      "$chunks_total" \
+      "$(json_array_from_file_lines "$paths_file")"
+    rm -f "$paths_file"
+    return 0
+  fi
+
+  echo "Amnezia-native PNG QR:"
+  cat "$paths_file"
+  if (( chunks_total > 1 )); then
+    echo "Сканируйте части по порядку 1-${chunks_total} в приложении Amnezia."
+  fi
+  rm -f "$paths_file"
 }
 
 latest_human() {
@@ -736,6 +951,7 @@ Usage:
   awgctl show [name|number] --qr
   awgctl qr [name|number]
   awgctl qrpng [name|number] [output.png]
+  awgctl amqrpng [name|number] [output.png]
   awgctl traffic|stats
 EOF
 }
@@ -772,6 +988,7 @@ main() {
     show|config) cmd_show "$@" ;;
     qr|qrcode) cmd_qr "${1:-}" ;;
     qrpng|png) cmd_qrpng "${1:-}" "${2:-}" ;;
+    amqrpng|amneziaqrpng|amnezia-qrpng) cmd_amqrpng "${1:-}" "${2:-}" ;;
     traffic|stats|stat|trafic) cmd_traffic ;;
     *)
       if [[ "$JSON_OUTPUT" == "1" ]]; then
