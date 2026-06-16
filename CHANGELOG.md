@@ -15,6 +15,7 @@
 - Added bot-safe VPN QR export: `wgctl` now supports JSON mode with `qr_png_base64`/`qr_png_data_uri`, and `wgctl`, `awgctl`, and `vlessctl` now have `qrpng` commands for large PNG QR files.
 - Added Amnezia-native QR export for AmneziaWG: `awgctl -j add/qr` now returns `amnezia_qr_png_base64_items`, and `awgctl amqrpng` saves Android-friendly Amnezia chunk QR PNG files.
 - Added AmneziaVPN `.vpn` QR export for AmneziaWG: `awgctl -j add/qr` now returns `vpn_key` and `vpn_qr_png_base64_items`, and `awgctl vpnkey/vpnqrpng` generate the official-style self-hosted Amnezia payload for Android imports.
+- Added `vpn_qr_chunks_total` to AmneziaWG JSON QR responses and clarified that bots must send every item from `vpn_qr_png_base64_items[]`, not only the first chunk.
 - Removed the experimental WireGuard-over-wstunnel tree from the public VPN tree.
 
 ## 2026-06-11

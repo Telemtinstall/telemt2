@@ -272,7 +272,8 @@ awgctl -j qr <name|number>
   qr_png_mime, qr_png_base64, qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
-  vpn_qr_format, vpn_qr_png_mime, vpn_qr_png_base64_items
+  vpn_qr_format, vpn_qr_chunks_total,
+  vpn_qr_png_mime, vpn_qr_png_base64_items
 
 awgctl -j qrpng <name|number> [output.png]
   status_code: 200
@@ -299,7 +300,8 @@ awgctl -j add [name]
   qr_png_mime, qr_png_base64, qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
-  vpn_qr_format, vpn_qr_png_mime, vpn_qr_png_base64_items
+  vpn_qr_format, vpn_qr_chunks_total,
+  vpn_qr_png_mime, vpn_qr_png_base64_items
 
 awgctl -j delete <name|number>
   status_code: 200
@@ -311,7 +313,7 @@ awgctl -j delete <name|number>
 Как использовать PNG QR:
 
 ```text
-Telegram bot для Amnezia на Android: берите `vpn_qr_png_base64_items[0]`, декодируйте base64 и отправьте bytes как photo/document. Если частей несколько, отправьте все PNG по порядку.
+Telegram bot для Amnezia на Android: пройдите по всему массиву `vpn_qr_png_base64_items[]`, декодируйте каждый base64 и отправьте все PNG по порядку как отдельные photo/document. Количество частей есть в `vpn_qr_chunks_total`; если там `2`, надо отправить QR 1/2 и QR 2/2.
 Telegram bot fallback: можно отправить текстовый `vpn_key` или `.conf` файл.
 Website backend: декодируйте qr_png_base64 и отдайте image/png из своего API.
 Frontend: можно показать <img src="<qr_png_data_uri>">, если этот JSON не попадает в публичные логи.
@@ -611,7 +613,8 @@ awgctl -j qr <name|number>
   qr_png_mime, qr_png_base64, qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
-  vpn_qr_format, vpn_qr_png_mime, vpn_qr_png_base64_items
+  vpn_qr_format, vpn_qr_chunks_total,
+  vpn_qr_png_mime, vpn_qr_png_base64_items
 
 awgctl -j qrpng <name|number> [output.png]
   status_code: 200
@@ -638,7 +641,8 @@ awgctl -j add [name]
   qr_png_mime, qr_png_base64, qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
-  vpn_qr_format, vpn_qr_png_mime, vpn_qr_png_base64_items
+  vpn_qr_format, vpn_qr_chunks_total,
+  vpn_qr_png_mime, vpn_qr_png_base64_items
 
 awgctl -j delete <name|number>
   status_code: 200
@@ -650,7 +654,7 @@ Important: `add`, `show`, and `qr` return `config`, which contains the client pr
 How to use PNG QR:
 
 ```text
-Telegram bot for Amnezia on Android: take `vpn_qr_png_base64_items[0]`, decode base64, and send the bytes as photo/document. If there are multiple chunks, send all PNG files in order.
+Telegram bot for Amnezia on Android: iterate over the full `vpn_qr_png_base64_items[]` array, decode each base64 item, and send every PNG in order as separate photo/document messages. The count is in `vpn_qr_chunks_total`; if it is `2`, send QR 1/2 and QR 2/2.
 Telegram bot fallback: send the text `vpn_key` or the `.conf` file.
 Website backend: decode qr_png_base64 and serve image/png from your own API.
 Frontend: <img src="<qr_png_data_uri>"> works if the JSON is not written to public logs.

@@ -111,6 +111,15 @@ json_array_from_file_lines() {
   printf ']'
 }
 
+chunk_count_for_file() {
+  local file="$1"
+  local chunk_size="${2:-850}"
+  local size
+
+  size="$(wc -c < "$file" | tr -d '[:space:]')"
+  echo $(((size + chunk_size - 1) / chunk_size))
+}
+
 emit_u8() {
   local value="$1"
 
@@ -680,7 +689,7 @@ repair_client_config() {
 cmd_add() {
   local name="${1:-}"
   local requested_name auto_incremented=0
-  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_key_file vpn_payload_dir vpn_key
+  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_key_file vpn_payload_dir vpn_key vpn_qr_chunks_total
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
@@ -737,12 +746,13 @@ EOF
       die_with_status 500 dependency_error "не удалось создать Amnezia .vpn payload для клиента ${name}."
     }
     vpn_key="$(cat "$vpn_key_file")"
+    vpn_qr_chunks_total="$(chunk_count_for_file "$vpn_payload_dir/amnezia-vpn.bin")"
     vpn_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$vpn_payload_dir/amnezia-vpn.bin")" || {
       rm -rf "$vpn_payload_dir"
       die_with_status 500 dependency_error "не удалось создать Amnezia .vpn PNG QR для клиента ${name}."
     }
     rm -rf "$vpn_payload_dir"
-    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
       "$(json_escape "$requested_name")" \
       "$(json_escape "$name")" \
       "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
@@ -757,6 +767,7 @@ EOF
       "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
       "$amnezia_qr_png_base64_items" \
       "$(json_escape "$vpn_key")" \
+      "$vpn_qr_chunks_total" \
       "$vpn_qr_png_base64_items"
     return 0
   fi
@@ -917,7 +928,7 @@ cmd_show() {
 
 cmd_qr() {
   local name="${1:-}"
-  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_payload_dir vpn_key_file vpn_key
+  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_payload_dir vpn_key_file vpn_key vpn_qr_chunks_total
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
       die_with_status 400 bad_request "укажите клиента для QR: awgctl -j qr <name|number>"
@@ -945,12 +956,13 @@ cmd_qr() {
       die_with_status 500 dependency_error "не удалось создать Amnezia .vpn payload для клиента ${name}."
     }
     vpn_key="$(cat "$vpn_key_file")"
+    vpn_qr_chunks_total="$(chunk_count_for_file "$vpn_payload_dir/amnezia-vpn.bin")"
     vpn_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$vpn_payload_dir/amnezia-vpn.bin")" || {
       rm -rf "$vpn_payload_dir"
       die_with_status 500 dependency_error "не удалось создать Amnezia .vpn PNG QR для клиента ${name}."
     }
     rm -rf "$vpn_payload_dir"
-    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$config_text")" \
@@ -959,6 +971,7 @@ cmd_qr() {
       "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
       "$amnezia_qr_png_base64_items" \
       "$(json_escape "$vpn_key")" \
+      "$vpn_qr_chunks_total" \
       "$vpn_qr_png_base64_items"
     return 0
   fi
