@@ -29,12 +29,14 @@ ENV_FILE="$CONFIG_DIR/vless.env"
 USERS_FILE="$CONFIG_DIR/users.json"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 CTL_PATH="/usr/local/sbin/vlessctl"
+CTL_BIN_PATH="/usr/local/bin/vlessctl"
 LOGROTATE_FILE="/etc/logrotate.d/vless-xray"
 NGINX_LOG_FORMAT_FILE="/etc/nginx/conf.d/vless-log-format.conf"
 BACKUP_ROOT="/root/vless-install-backups"
 LINKS_FILE="/root/vless-links.txt"
 STATE_FILE="/root/.install_vless.state"
 RESUME_CONFIG="/root/.install_vless.config"
+CONFIG_HASH_FILE="/root/.install_vless.config.sha256"
 EXISTING_INSTALL=0
 
 step_no=0
@@ -246,13 +248,34 @@ EOF
 
 load_resume_config() {
   if [[ "${RESET_INSTALL_STATE:-0}" == "1" ]]; then
-    rm -f "$STATE_FILE" "$RESUME_CONFIG"
+    rm -f "$STATE_FILE" "$RESUME_CONFIG" "$CONFIG_HASH_FILE"
     return 0
   fi
   if [[ -f "$RESUME_CONFIG" ]]; then
     # shellcheck disable=SC1090
     . "$RESUME_CONFIG"
   fi
+}
+
+file_sha256() {
+  if have sha256sum; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+reset_step_state_if_config_changed() {
+  local current old
+  [[ -f "$RESUME_CONFIG" ]] || return 0
+  current="$(file_sha256 "$RESUME_CONFIG")"
+  old="$(cat "$CONFIG_HASH_FILE" 2>/dev/null || true)"
+  if [[ -f "$STATE_FILE" && ( -z "$old" || "$old" != "$current" ) ]]; then
+    echo "$(tr_text "Сохранённые ответы изменились после прошлого запуска; очищаю список выполненных шагов." "Saved answers changed since previous run; clearing completed-step state.")"
+    rm -f "$STATE_FILE"
+  fi
+  printf '%s\n' "$current" > "$CONFIG_HASH_FILE"
+  chmod 600 "$CONFIG_HASH_FILE"
 }
 
 confirm() {
@@ -1155,6 +1178,7 @@ EOF
 
 install_vlessctl() {
   install -m 0755 "$SCRIPT_DIR/vlessctl.sh" "$CTL_PATH"
+  ln -sf "$CTL_PATH" "$CTL_BIN_PATH"
 }
 
 print_install_qr() {
@@ -1381,12 +1405,14 @@ EOF
   valid_retry_number "$RETRY_DELAY_SECONDS" || die "RETRY_DELAY_SECONDS должен быть числом от 1 до 20."
 
   save_resume_config
+  reset_step_state_if_config_changed
 
   step "$(tr_text "Ранняя DNS-проверка" "Early DNS preflight")"
   early_preflight
   if have ss; then
     preflight
     save_resume_config
+    reset_step_state_if_config_changed
   else
     echo "ПРЕДУПРЕЖДЕНИЕ: ss не найден, проверю занятые порты после подтверждения и установки базовых пакетов."
   fi
@@ -1444,6 +1470,7 @@ EOF
   run_step "base_tools" "$(tr_text "Установка базовых пакетов" "Install base tools")" install_base_tools
   run_step "port_preflight" "$(tr_text "Проверка портов" "Port preflight")" preflight
   save_resume_config
+  reset_step_state_if_config_changed
 
   if [[ "$FRONTEND_MODE" == "mask" ]]; then
     run_step "install_nginx_certbot" "$(tr_text "Установка nginx и certbot" "Install nginx and certbot")" setup_nginx_certbot

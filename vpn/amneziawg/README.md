@@ -377,11 +377,21 @@ error_log /dev/null crit
 
 ### Resume
 
+Установщик сохраняет ответы и историю успешных шагов:
+
+```text
+/root/.install_amneziawg.state
+/root/.install_amneziawg.config
+/root/.install_amneziawg.config.sha256
+```
+
 Если SSH оборвался, запустите установщик снова:
 
 ```bash
 ./install_amneziawg.sh
 ```
+
+Если сохранённые ответы изменились, state выполненных шагов очищается и план установки проходит заново с новыми значениями.
 
 Начать заново:
 
@@ -724,11 +734,21 @@ error_log /dev/null crit
 
 ### Resume
 
+The installer saves entered answers and successful step history:
+
+```text
+/root/.install_amneziawg.state
+/root/.install_amneziawg.config
+/root/.install_amneziawg.config.sha256
+```
+
 If SSH disconnects, run the installer again:
 
 ```bash
 ./install_amneziawg.sh
 ```
+
+If saved answers changed, the completed-step state is cleared and the install plan runs again with the new values.
 
 Start from scratch:
 

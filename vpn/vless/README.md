@@ -265,6 +265,7 @@ ca-certificates
 /usr/local/etc/xray/users.json
 /usr/local/etc/xray/config.json
 /usr/local/sbin/vlessctl
+/usr/local/bin/vlessctl -> /usr/local/sbin/vlessctl
 /etc/nginx/sites-available/vless-<PROXY_DOMAIN>.conf   только режим mask
 /etc/nginx/conf.d/vless-log-format.conf                только режим mask
 /etc/logrotate.d/vless-xray
@@ -272,6 +273,7 @@ ca-certificates
 /root/vless-links.txt
 /root/.install_vless.state
 /root/.install_vless.config
+/root/.install_vless.config.sha256
 ```
 
 Если при установке включить access logs, дополнительно будут использоваться:
@@ -287,7 +289,7 @@ ca-certificates
 
 После установки используйте `vlessctl`.
 
-`vlessctl` устанавливается как системная команда `/usr/local/sbin/vlessctl`, поэтому под root его можно запускать из любого каталога.
+`vlessctl` устанавливается как системная команда в `/usr/local/sbin/vlessctl` и доступен через `/usr/local/bin/vlessctl`, поэтому его можно запускать из любого каталога.
 
 Добавить пользователя:
 
@@ -375,10 +377,12 @@ vlessctl traffic --json
 vlessctl -j add client1
 vlessctl -j show client1
 vlessctl -j qr client1
-vlessctl qrpng client1
+vlessctl -j qrpng client1
+vlessctl -j render
+vlessctl -j restart
 ```
 
-В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `qrpng` сохраняет PNG-файл на сервере; `traffic` и `online` возвращают числовые счетчики байтов. Формат `online` расширяется добавлением новых полей, старые поля не удаляются.
+В JSON-режиме `add`, `show` и `qr` возвращают VLESS-ссылку в поле `link`; `add` и `qr` дополнительно возвращают PNG QR в `qr_png_base64` и `qr_png_data_uri`; `qrpng` сохраняет PNG-файл на сервере; `traffic` и `online` возвращают числовые счетчики байтов; `render` пересобирает `/usr/local/etc/xray/config.json` без рестарта, а `restart` пересобирает config и перезапускает Xray. Формат `online` расширяется добавлением новых полей, старые поля не удаляются.
 
 #### JSON-ответы
 
@@ -455,6 +459,14 @@ vlessctl -j logs status
   status_code: 200
   fields: enabled, retention_days, frontend_mode, xray_access_log, xray_error_log,
           nginx_access_log, logrotate_config, nginx_log_format
+
+vlessctl -j render
+  status_code: 200
+  fields: action, config_file
+
+vlessctl -j restart
+  status_code: 200
+  fields: action
 
 vlessctl -j delete <name|number>
   status_code: 200
@@ -554,6 +566,7 @@ Enable nginx/Xray access logs? yes/no [no]:
 cd /root/telemt2
 git pull
 install -m 0755 /root/telemt2/vpn/vless/vlessctl.sh /usr/local/sbin/vlessctl
+ln -sf /usr/local/sbin/vlessctl /usr/local/bin/vlessctl
 vlessctl logs status
 vlessctl logs on
 vlessctl logs off
@@ -626,6 +639,7 @@ certbot renew --dry-run
 ```text
 /root/.install_vless.state
 /root/.install_vless.config
+/root/.install_vless.config.sha256
 ```
 
 Если SSH-сессия оборвалась или установка упала на середине, зайдите на сервер снова и запустите:
@@ -634,7 +648,7 @@ certbot renew --dry-run
 /root/install_vless.sh
 ```
 
-Скрипт подставит сохранённые значения по умолчанию и пропустит шаги, которые уже завершились успешно. Например, если сертификат уже выпущен, он начнёт со следующего незавершённого этапа.
+Скрипт подставит сохранённые значения по умолчанию и пропустит шаги, которые уже завершились успешно. Например, если сертификат уже выпущен, он начнёт со следующего незавершённого этапа. Если сохранённые ответы изменились между запусками, список выполненных шагов очищается и установка заново проходит план с новыми значениями.
 
 Подтверждение плана установки тоже сохраняется. Если установка оборвалась после `y`, при повторном запуске скрипт не будет спрашивать подтверждение заново и продолжит с первого незавершённого шага.
 
@@ -919,6 +933,7 @@ Created files:
 /usr/local/etc/xray/users.json
 /usr/local/etc/xray/config.json
 /usr/local/sbin/vlessctl
+/usr/local/bin/vlessctl -> /usr/local/sbin/vlessctl
 /etc/nginx/sites-available/vless-<PROXY_DOMAIN>.conf
 /etc/nginx/conf.d/vless-log-format.conf
 /etc/logrotate.d/vless-xray
@@ -926,6 +941,7 @@ Created files:
 /root/vless-links.txt
 /root/.install_vless.state
 /root/.install_vless.config
+/root/.install_vless.config.sha256
 ```
 
 If access logs are enabled during installation, these files are also used:
@@ -941,7 +957,7 @@ If access logs are enabled during installation, these files are also used:
 
 After installation, use `vlessctl`.
 
-`vlessctl` is installed as `/usr/local/sbin/vlessctl`, so root can run it from any directory.
+`vlessctl` is installed as `/usr/local/sbin/vlessctl` and exposed through `/usr/local/bin/vlessctl`, so it can be run from any directory.
 
 Add a user:
 
@@ -1029,10 +1045,12 @@ vlessctl traffic --json
 vlessctl -j add client1
 vlessctl -j show client1
 vlessctl -j qr client1
-vlessctl qrpng client1
+vlessctl -j qrpng client1
+vlessctl -j render
+vlessctl -j restart
 ```
 
-In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `qrpng` saves a PNG file on the server; `traffic` and `online` return numeric byte counters. The `online` response is extended by adding fields; existing fields are not removed.
+In JSON mode, `add`, `show`, and `qr` return the VLESS link in `link`; `add` and `qr` also return PNG QR data in `qr_png_base64` and `qr_png_data_uri`; `qrpng` saves a PNG file on the server; `traffic` and `online` return numeric byte counters; `render` rebuilds `/usr/local/etc/xray/config.json` without restarting, and `restart` rebuilds the config and restarts Xray. The `online` response is extended by adding fields; existing fields are not removed.
 
 #### JSON Responses
 
@@ -1109,6 +1127,14 @@ vlessctl -j logs status
   status_code: 200
   fields: enabled, retention_days, frontend_mode, xray_access_log, xray_error_log,
           nginx_access_log, logrotate_config, nginx_log_format
+
+vlessctl -j render
+  status_code: 200
+  fields: action, config_file
+
+vlessctl -j restart
+  status_code: 200
+  fields: action
 
 vlessctl -j delete <name|number>
   status_code: 200
@@ -1210,6 +1236,7 @@ Enable or disable logs on an already installed server without reinstalling:
 cd /root/telemt2
 git pull
 install -m 0755 /root/telemt2/vpn/vless/vlessctl.sh /usr/local/sbin/vlessctl
+ln -sf /usr/local/sbin/vlessctl /usr/local/bin/vlessctl
 vlessctl logs status
 vlessctl logs on
 vlessctl logs off
@@ -1284,6 +1311,7 @@ The installer saves entered answers and successful step history:
 ```text
 /root/.install_vless.state
 /root/.install_vless.config
+/root/.install_vless.config.sha256
 ```
 
 If the SSH session disconnects or installation fails halfway through, log in again and run:
@@ -1292,7 +1320,7 @@ If the SSH session disconnects or installation fails halfway through, log in aga
 /root/install_vless.sh
 ```
 
-The script will reuse saved values as defaults and skip steps that already finished successfully. For example, if the certificate has already been issued, it will continue from the next unfinished stage.
+The script will reuse saved values as defaults and skip steps that already finished successfully. For example, if the certificate has already been issued, it will continue from the next unfinished stage. If saved answers changed between runs, the completed-step list is cleared and the installer runs the plan again with the new values.
 
 The install-plan confirmation is saved too. If installation stops after you typed `y`, the next run will not ask for confirmation again and will continue from the first unfinished step.
 

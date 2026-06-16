@@ -173,9 +173,10 @@ wgctl -j traffic
 ```text
 /root/.install_wg.state
 /root/.install_wg.config
+/root/.install_wg.config.sha256
 ```
 
-Если SSH оборвался, запустите скрипт снова, он продолжит с нужного шага.
+Если SSH оборвался, запустите скрипт снова, он продолжит с нужного шага. Если сохранённые ответы изменились, state выполненных шагов очищается и план установки проходит заново с новыми значениями.
 
 Начать установку заново:
 
@@ -326,9 +327,10 @@ Installer state:
 ```text
 /root/.install_wg.state
 /root/.install_wg.config
+/root/.install_wg.config.sha256
 ```
 
-If SSH disconnects, run the installer again and it will resume from the correct step.
+If SSH disconnects, run the installer again and it will resume from the correct step. If saved answers changed, the completed-step state is cleared and the install plan runs again with the new values.
 
 Start from scratch:
 

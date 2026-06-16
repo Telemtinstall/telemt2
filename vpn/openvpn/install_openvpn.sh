@@ -35,6 +35,7 @@ AUTH_FILE="$SERVER_DIR/auth"
 AUTH_SCRIPT="$SERVER_DIR/vpn-auth.sh"
 TLS_CRYPT_KEY="$SERVER_DIR/tc.key"
 CTL_PATH="/usr/local/sbin/openvpnctl"
+CTL_BIN_PATH="/usr/local/bin/openvpnctl"
 UDP_STATUS_FILE="/run/openvpn/server-udp.status"
 TCP_STATUS_FILE="/run/openvpn/server-tcp.status"
 STATE_FILE="/root/.install_openvpn.state"
@@ -414,7 +415,7 @@ EOF
 backup_state() {
   BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
   mkdir -p "$BACKUP_DIR"
-  for path in "$SERVER_DIR" "$EASYRSA_DIR" "$CLIENT_DIR" "$CLIENT_OUT_DIR" "$CTL_PATH" \
+  for path in "$SERVER_DIR" "$EASYRSA_DIR" "$CLIENT_DIR" "$CLIENT_OUT_DIR" "$CTL_PATH" "$CTL_BIN_PATH" \
     "$OPENVPN_ETC/server-udp.conf" "$OPENVPN_ETC/server-tcp.conf"; do
     [[ -e "$path" || -L "$path" ]] && cp -a "$path" "$BACKUP_DIR"/
   done
@@ -681,6 +682,7 @@ write_server_configs() {
 install_openvpnctl() {
   [[ -f "$SCRIPT_DIR/openvpnctl.sh" ]] || die "openvpnctl.sh must be next to install_openvpn.sh."
   install -m 0755 "$SCRIPT_DIR/openvpnctl.sh" "$CTL_PATH"
+  ln -sf "$CTL_PATH" "$CTL_BIN_PATH"
 }
 
 mask_root() {

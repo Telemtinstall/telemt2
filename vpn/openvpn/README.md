@@ -125,6 +125,8 @@ nginx error_log /dev/null crit
 
 ### Управление пользователями
 
+`openvpnctl` устанавливается как системная команда в `/usr/local/sbin/openvpnctl` и доступен через `/usr/local/bin/openvpnctl`, поэтому его можно запускать из любого каталога.
+
 ```bash
 openvpnctl add
 openvpnctl delete
@@ -146,6 +148,8 @@ openvpnctl traffic
 openvpnctl delete client1
 ```
 
+Для Telegram-бота сейчас надёжнее отправлять готовые `.ovpn` и `credentials.txt` файлы. Терминальный QR из `openvpnctl qr` предназначен для ручного SSH-вывода; JSON-режим и PNG/base64 QR для OpenVPN пока не реализованы.
+
 Файлы клиента сохраняются в:
 
 ```text
@@ -163,9 +167,10 @@ openvpnctl delete client1
 ```text
 /root/.install_openvpn.state
 /root/.install_openvpn.config
+/root/.install_openvpn.config.sha256
 ```
 
-Если SSH оборвался, запустите скрипт снова, он продолжит с нужного шага.
+Если SSH оборвался, запустите скрипт снова, он продолжит с нужного шага. Если сохранённые ответы изменились, state выполненных шагов очищается и план установки проходит заново с новыми значениями.
 
 Начать установку заново:
 
@@ -268,6 +273,8 @@ These files are not long-term history. Without persistent logs, disconnected cli
 
 ### User management
 
+`openvpnctl` is installed as a system command at `/usr/local/sbin/openvpnctl` and exposed through `/usr/local/bin/openvpnctl`, so it can be run from any directory.
+
 ```bash
 openvpnctl add
 openvpnctl delete
@@ -289,6 +296,8 @@ openvpnctl traffic
 openvpnctl delete client1
 ```
 
+For a Telegram bot, send the ready `.ovpn` and `credentials.txt` files. The terminal QR from `openvpnctl qr` is intended for manual SSH output; JSON mode and PNG/base64 QR are not implemented for OpenVPN yet.
+
 Client files are saved to:
 
 ```text
@@ -306,9 +315,10 @@ Installer state:
 ```text
 /root/.install_openvpn.state
 /root/.install_openvpn.config
+/root/.install_openvpn.config.sha256
 ```
 
-If SSH disconnects, run the installer again and it will resume from the correct step.
+If SSH disconnects, run the installer again and it will resume from the correct step. If saved answers changed, the completed-step state is cleared and the install plan runs again with the new values.
 
 Start from scratch:
 
