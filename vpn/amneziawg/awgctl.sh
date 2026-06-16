@@ -113,7 +113,7 @@ json_array_from_file_lines() {
 
 chunk_count_for_file() {
   local file="$1"
-  local chunk_size="${2:-850}"
+  local chunk_size="${2:-1900}"
   local size
 
   size="$(wc -c < "$file" | tr -d '[:space:]')"
@@ -155,7 +155,7 @@ write_amnezia_qr_payload() {
 make_amnezia_qr_text_chunks() {
   local conf="$1"
   local out_dir="$2"
-  local chunk_size="${3:-850}"
+  local chunk_size="${3:-1900}"
   local chunks_count chunk_id chunk payload text_file
   local chunks=()
 
@@ -208,6 +208,42 @@ amnezia_qr_png_base64_items_json_from_config() {
   fi
   json_array_from_file_lines "$lines_file"
   rm -rf "$tmpdir"
+}
+
+single_qr_png_base64_from_text_file() {
+  local text_file="$1"
+  local tmp
+
+  tmp="$(mktemp)"
+  if ! qrencode -t PNG -s 12 -m 4 -l L -o "$tmp" < "$text_file"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  base64_one_line "$tmp"
+  rm -f "$tmp"
+}
+
+single_vpn_qr_png_base64_from_compressed() {
+  local compressed_file="$1"
+  local tmp_text
+
+  tmp_text="$(mktemp)"
+  base64_url_one_line "$compressed_file" > "$tmp_text"
+  single_qr_png_base64_from_text_file "$tmp_text"
+  rm -f "$tmp_text"
+}
+
+write_single_vpn_qr_png_from_compressed() {
+  local compressed_file="$1"
+  local out="$2"
+  local tmp_text
+
+  tmp_text="$(mktemp)"
+  base64_url_one_line "$compressed_file" > "$tmp_text"
+  ensure_private_dir "$(dirname "$out")"
+  qrencode -t PNG -s 12 -m 4 -l L -o "$out" < "$tmp_text"
+  chmod 0600 "$out"
+  rm -f "$tmp_text"
 }
 
 write_amnezia_qr_pngs_from_config() {
@@ -305,7 +341,6 @@ allowed_ips = [item.strip() for item in re.split(r"\s*,\s*", values.get("Allowed
 dns_values = [item.strip() for item in re.split(r"\s*,\s*", values.get("DNS", "")) if item.strip()]
 
 last_config = {
-    "config": text,
     "hostName": host,
     "port": int(port),
     "client_priv_key": values["PrivateKey"],
@@ -689,7 +724,7 @@ repair_client_config() {
 cmd_add() {
   local name="${1:-}"
   local requested_name auto_incremented=0
-  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_key_file vpn_payload_dir vpn_key vpn_qr_chunks_total
+  local private_key public_key psk ip created_at config_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_key_file vpn_payload_dir vpn_key vpn_qr_chunks_total android_qr_png_base64
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
@@ -747,12 +782,16 @@ EOF
     }
     vpn_key="$(cat "$vpn_key_file")"
     vpn_qr_chunks_total="$(chunk_count_for_file "$vpn_payload_dir/amnezia-vpn.bin")"
+    android_qr_png_base64="$(single_vpn_qr_png_base64_from_compressed "$vpn_payload_dir/amnezia-vpn.bin")" || {
+      rm -rf "$vpn_payload_dir"
+      die_with_status 500 dependency_error "не удалось создать одиночный Android AmneziaVPN QR для клиента ${name}."
+    }
     vpn_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$vpn_payload_dir/amnezia-vpn.bin")" || {
       rm -rf "$vpn_payload_dir"
       die_with_status 500 dependency_error "не удалось создать Amnezia .vpn PNG QR для клиента ${name}."
     }
     rm -rf "$vpn_payload_dir"
-    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
+    printf '{"ok":true,"status_code":201,"status":"created","action":"add","requested_name":%s,"name":%s,"auto_incremented":%s,"ip":%s,"public_key":%s,"interface":%s,"endpoint":%s,"config_path":%s,"env_path":%s,"config":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"ios_qr_format":"amnezia_awg_conf","ios_qr_png_mime":"image/png","ios_qr_png_base64":%s,"android_qr_format":"amnezia_vpn_single_base64url","android_qr_png_mime":"image/png","android_qr_png_base64":%s,"android_qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks_fallback","vpn_qr_chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
       "$(json_escape "$requested_name")" \
       "$(json_escape "$name")" \
       "$([[ "$auto_incremented" == "1" ]] && echo true || echo false)" \
@@ -765,6 +804,9 @@ EOF
       "$(json_escape "$config_text")" \
       "$(json_escape "$qr_png_base64")" \
       "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
+      "$(json_escape "$qr_png_base64")" \
+      "$(json_escape "$android_qr_png_base64")" \
+      "$(json_escape "data:image/png;base64,${android_qr_png_base64}")" \
       "$amnezia_qr_png_base64_items" \
       "$(json_escape "$vpn_key")" \
       "$vpn_qr_chunks_total" \
@@ -928,7 +970,7 @@ cmd_show() {
 
 cmd_qr() {
   local name="${1:-}"
-  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_payload_dir vpn_key_file vpn_key vpn_qr_chunks_total
+  local conf config_text qr_text qr_png_base64 amnezia_qr_png_base64_items vpn_qr_png_base64_items vpn_payload_dir vpn_key_file vpn_key vpn_qr_chunks_total android_qr_png_base64
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
       die_with_status 400 bad_request "укажите клиента для QR: awgctl -j qr <name|number>"
@@ -957,18 +999,25 @@ cmd_qr() {
     }
     vpn_key="$(cat "$vpn_key_file")"
     vpn_qr_chunks_total="$(chunk_count_for_file "$vpn_payload_dir/amnezia-vpn.bin")"
+    android_qr_png_base64="$(single_vpn_qr_png_base64_from_compressed "$vpn_payload_dir/amnezia-vpn.bin")" || {
+      rm -rf "$vpn_payload_dir"
+      die_with_status 500 dependency_error "не удалось создать одиночный Android AmneziaVPN QR для клиента ${name}."
+    }
     vpn_qr_png_base64_items="$(amnezia_qr_png_base64_items_json_from_config "$vpn_payload_dir/amnezia-vpn.bin")" || {
       rm -rf "$vpn_payload_dir"
       die_with_status 500 dependency_error "не удалось создать Amnezia .vpn PNG QR для клиента ${name}."
     }
     rm -rf "$vpn_payload_dir"
-    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","vpn_qr_chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"config":%s,"qr_ansi_utf8":%s,"qr_png_mime":"image/png","qr_png_base64":%s,"qr_png_data_uri":%s,"ios_qr_format":"amnezia_awg_conf","ios_qr_png_mime":"image/png","ios_qr_png_base64":%s,"android_qr_format":"amnezia_vpn_single_base64url","android_qr_png_mime":"image/png","android_qr_png_base64":%s,"android_qr_png_data_uri":%s,"amnezia_qr_format":"amnezia_qr_chunks","amnezia_qr_png_mime":"image/png","amnezia_qr_png_base64_items":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks_fallback","vpn_qr_chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_base64_items":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$config_text")" \
       "$(json_escape "$qr_text")" \
       "$(json_escape "$qr_png_base64")" \
       "$(json_escape "data:image/png;base64,${qr_png_base64}")" \
+      "$(json_escape "$qr_png_base64")" \
+      "$(json_escape "$android_qr_png_base64")" \
+      "$(json_escape "data:image/png;base64,${android_qr_png_base64}")" \
       "$amnezia_qr_png_base64_items" \
       "$(json_escape "$vpn_key")" \
       "$vpn_qr_chunks_total" \
@@ -1095,14 +1144,14 @@ cmd_vpnkey() {
 cmd_vpnqrpng() {
   local name="${1:-}"
   local out="${2:-}"
-  local conf paths_file chunks_total tmpdir compressed_file key_file
+  local conf tmpdir compressed_file key_file
 
   if [[ -z "$name" ]]; then
     if [[ "$JSON_OUTPUT" == "1" ]]; then
-      die_with_status 400 bad_request "укажите клиента для AmneziaVPN .vpn PNG QR: awgctl -j vpnqrpng <name|number> [output.png]"
+      die_with_status 400 bad_request "укажите клиента для Android AmneziaVPN PNG QR: awgctl -j vpnqrpng <name|number> [output.png]"
     fi
     cmd_list
-    read -r -p "Клиент для сохранения AmneziaVPN .vpn PNG QR: " name
+    read -r -p "Клиент для сохранения Android AmneziaVPN PNG QR: " name
   fi
   [[ "$name" =~ ^[0-9]+$ ]] && name="$(client_name_by_number "$name")"
   [[ -n "$name" ]] || die_with_status 400 bad_request "клиент не выбран."
@@ -1122,29 +1171,22 @@ cmd_vpnqrpng() {
   fi
 
   out="${out:-$CLIENT_OUT_DIR/${name}-amnezia-vpn.png}"
-  paths_file="$tmpdir/paths.txt"
-  if ! write_amnezia_qr_pngs_from_config "$compressed_file" "$out" > "$paths_file"; then
+  if ! write_single_vpn_qr_png_from_compressed "$compressed_file" "$out"; then
     rm -rf "$tmpdir"
-    die_with_status 500 dependency_error "не удалось сохранить AmneziaVPN .vpn PNG QR: $out"
+    die_with_status 500 dependency_error "не удалось сохранить Android AmneziaVPN PNG QR: $out"
   fi
-  chunks_total="$(wc -l < "$paths_file" | tr -d '[:space:]')"
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"vpn_key":%s,"vpn_qr_format":"amnezia_vpn_qcompress_chunks","chunks_total":%s,"vpn_qr_png_mime":"image/png","vpn_qr_png_paths":%s}\n' \
+    printf '{"ok":true,"status_code":200,"status":"ok","name":%s,"config_path":%s,"vpn_key":%s,"android_qr_format":"amnezia_vpn_single_base64url","android_qr_png_mime":"image/png","android_qr_png_path":%s}\n' \
       "$(json_escape "$name")" \
       "$(json_escape "$conf")" \
       "$(json_escape "$(cat "$key_file")")" \
-      "$chunks_total" \
-      "$(json_array_from_file_lines "$paths_file")"
+      "$(json_escape "$out")"
     rm -rf "$tmpdir"
     return 0
   fi
 
-  echo "AmneziaVPN .vpn PNG QR:"
-  cat "$paths_file"
-  if (( chunks_total > 1 )); then
-    echo "Сканируйте части по порядку 1-${chunks_total} в приложении Amnezia."
-  fi
+  echo "Android AmneziaVPN PNG QR: $out"
   echo "Текстовый ключ: awgctl vpnkey ${name}"
   rm -rf "$tmpdir"
 }
@@ -1270,7 +1312,7 @@ main() {
     qrpng|png) cmd_qrpng "${1:-}" "${2:-}" ;;
     amqrpng|amneziaqrpng|amnezia-qrpng) cmd_amqrpng "${1:-}" "${2:-}" ;;
     vpnkey|vpn-key|key) cmd_vpnkey "${1:-}" ;;
-    vpnqrpng|vpn-qrpng|vpnqr|nativeqrpng|native-qrpng) cmd_vpnqrpng "${1:-}" "${2:-}" ;;
+    vpnqrpng|vpn-qrpng|vpnqr|nativeqrpng|native-qrpng|androidqrpng|android-qrpng) cmd_vpnqrpng "${1:-}" "${2:-}" ;;
     traffic|stats|stat|trafic) cmd_traffic ;;
     *)
       if [[ "$JSON_OUTPUT" == "1" ]]; then

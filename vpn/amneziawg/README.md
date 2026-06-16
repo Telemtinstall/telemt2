@@ -214,7 +214,7 @@ awgctl vpnkey client1
 awgctl vpnqrpng client1
 ```
 
-В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; `add` и `qr` дополнительно возвращают обычный PNG QR в `qr_png_base64`/`qr_png_data_uri`, QR с сырым AWG-конфигом в Amnezia chunk-обертке в `amnezia_qr_png_base64_items`, и рекомендуемый AmneziaVPN `.vpn` QR в `vpn_qr_png_base64_items`; `qrpng`, `amqrpng` и `vpnqrpng` сохраняют соответствующие PNG-файлы на сервере; `vpnkey` печатает текстовый ключ `vpn://...`; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
+В JSON-режиме `add`, `show` и `qr` возвращают клиентский конфиг в поле `config`; для бота есть два явных одиночных QR: `android_qr_png_base64` для Android Amnezia и `ios_qr_png_base64` для iPhone Amnezia. `vpnkey` печатает текстовый ключ `vpn://...`; `qrpng`, `amqrpng` и `vpnqrpng` сохраняют PNG-файлы на сервере; `traffic` возвращает числовые счетчики `rx_bytes`, `tx_bytes` и время последнего handshake.
 
 #### JSON-ответы
 
@@ -270,6 +270,9 @@ awgctl -j qr <name|number>
   status_code: 200
   name, config_path, config, qr_ansi_utf8,
   qr_png_mime, qr_png_base64, qr_png_data_uri,
+  ios_qr_format, ios_qr_png_mime, ios_qr_png_base64,
+  android_qr_format, android_qr_png_mime,
+  android_qr_png_base64, android_qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
   vpn_qr_format, vpn_qr_chunks_total,
@@ -290,14 +293,17 @@ awgctl -j vpnkey <name|number>
 
 awgctl -j vpnqrpng <name|number> [output.png]
   status_code: 200
-  name, config_path, vpn_key, vpn_qr_format, chunks_total,
-  vpn_qr_png_mime, vpn_qr_png_paths
+  name, config_path, vpn_key, android_qr_format,
+  android_qr_png_mime, android_qr_png_path
 
 awgctl -j add [name]
   status_code: 201
   action=add, requested_name, name, auto_incremented, ip, public_key,
   interface, endpoint, config_path, env_path, config,
   qr_png_mime, qr_png_base64, qr_png_data_uri,
+  ios_qr_format, ios_qr_png_mime, ios_qr_png_base64,
+  android_qr_format, android_qr_png_mime,
+  android_qr_png_base64, android_qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
   vpn_qr_format, vpn_qr_chunks_total,
@@ -308,18 +314,18 @@ awgctl -j delete <name|number>
   action=delete, name, ip, public_key, created_at, config_path, env_path
 ```
 
-Важно: `add`, `show` и `qr` возвращают `config`, а внутри клиентского конфига есть приватный ключ клиента и preshared key. `qr_png_base64`, `qr_png_data_uri`, `amnezia_qr_png_base64_items`, `vpn_key` и `vpn_qr_png_base64_items` кодируют тот же секретный конфиг. Не пишите эти ответы в публичные логи.
+Важно: `add`, `show` и `qr` возвращают `config`, а внутри клиентского конфига есть приватный ключ клиента и preshared key. `android_qr_png_base64`, `ios_qr_png_base64`, `vpn_key` и остальные QR-поля кодируют тот же секретный конфиг. Не пишите эти ответы в публичные логи.
 
 Как использовать PNG QR:
 
 ```text
-Telegram bot для Amnezia на Android: пройдите по всему массиву `vpn_qr_png_base64_items[]`, декодируйте каждый base64 и отправьте все PNG по порядку как отдельные photo/document. Количество частей есть в `vpn_qr_chunks_total`; если там `2`, надо отправить QR 1/2 и QR 2/2.
+Telegram bot для Amnezia: отправляйте платформенные QR как отдельные варианты, а не как части одного импорта. Для Android берите `android_qr_png_base64`, для iPhone берите `ios_qr_png_base64`. Подписывайте их отдельно, например `Android` и `iPhone`; не пишите `QR 1/2`.
 Telegram bot fallback: можно отправить текстовый `vpn_key` или `.conf` файл.
 Website backend: декодируйте qr_png_base64 и отдайте image/png из своего API.
 Frontend: можно показать <img src="<qr_png_data_uri>">, если этот JSON не попадает в публичные логи.
 ```
 
-Для бота не используйте терминальный QR из `awgctl qr` как источник данных. Берите `awgctl -j add/qr` и отправляйте PNG из `vpn_qr_png_base64_items` для Android Amnezia либо текстовый `vpn_key`. Это ближе к официальному self-hosted сценарию Amnezia "For the AmneziaVPN app": внутри QR лежит Qt `qCompress(JSON)` от `.vpn`-конфига, а не многострочный `.conf`. Старые поля `qr_png_base64` и `amnezia_qr_png_base64_items` оставлены для совместимости и диагностики. Обычный WireGuard-клиент не понимает параметры `Jc`, `S1/S2`, `H1-H4`.
+Для бота не используйте терминальный QR из `awgctl qr` как источник данных. Берите `awgctl -j add/qr`: `android_qr_png_base64` для Android Amnezia и `ios_qr_png_base64` для iPhone Amnezia. `vpn_key` можно отправлять как текстовый fallback. `qr_png_base64`, `amnezia_qr_png_base64_items` и `vpn_qr_png_base64_items` оставлены для совместимости и диагностики. Обычный WireGuard-клиент не понимает параметры `Jc`, `S1/S2`, `H1-H4`.
 
 Отдельный HTTP-сервер на VPN-сервере для скачивания QR не нужен и не создается.
 
@@ -555,7 +561,7 @@ awgctl vpnkey client1
 awgctl vpnqrpng client1
 ```
 
-In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; `add` and `qr` also return a regular PNG QR in `qr_png_base64`/`qr_png_data_uri`, a raw AWG config QR wrapped in Amnezia chunks in `amnezia_qr_png_base64_items`, and the recommended AmneziaVPN `.vpn` QR in `vpn_qr_png_base64_items`; `qrpng`, `amqrpng`, and `vpnqrpng` save the corresponding PNG files on the server; `vpnkey` prints the text `vpn://...` key; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
+In JSON mode, `add`, `show`, and `qr` return the client config in the `config` field; bots get two explicit single QR fields: `android_qr_png_base64` for Android Amnezia and `ios_qr_png_base64` for iPhone Amnezia. `vpnkey` prints the text `vpn://...` key; `qrpng`, `amqrpng`, and `vpnqrpng` save PNG files on the server; `traffic` returns numeric `rx_bytes`, `tx_bytes`, and latest handshake fields.
 
 #### JSON Responses
 
@@ -611,6 +617,9 @@ awgctl -j qr <name|number>
   status_code: 200
   name, config_path, config, qr_ansi_utf8,
   qr_png_mime, qr_png_base64, qr_png_data_uri,
+  ios_qr_format, ios_qr_png_mime, ios_qr_png_base64,
+  android_qr_format, android_qr_png_mime,
+  android_qr_png_base64, android_qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
   vpn_qr_format, vpn_qr_chunks_total,
@@ -631,14 +640,17 @@ awgctl -j vpnkey <name|number>
 
 awgctl -j vpnqrpng <name|number> [output.png]
   status_code: 200
-  name, config_path, vpn_key, vpn_qr_format, chunks_total,
-  vpn_qr_png_mime, vpn_qr_png_paths
+  name, config_path, vpn_key, android_qr_format,
+  android_qr_png_mime, android_qr_png_path
 
 awgctl -j add [name]
   status_code: 201
   action=add, requested_name, name, auto_incremented, ip, public_key,
   interface, endpoint, config_path, env_path, config,
   qr_png_mime, qr_png_base64, qr_png_data_uri,
+  ios_qr_format, ios_qr_png_mime, ios_qr_png_base64,
+  android_qr_format, android_qr_png_mime,
+  android_qr_png_base64, android_qr_png_data_uri,
   amnezia_qr_format, amnezia_qr_png_mime,
   amnezia_qr_png_base64_items, vpn_key,
   vpn_qr_format, vpn_qr_chunks_total,
@@ -649,18 +661,18 @@ awgctl -j delete <name|number>
   action=delete, name, ip, public_key, created_at, config_path, env_path
 ```
 
-Important: `add`, `show`, and `qr` return `config`, which contains the client private key and preshared key. `qr_png_base64`, `qr_png_data_uri`, `amnezia_qr_png_base64_items`, `vpn_key`, and `vpn_qr_png_base64_items` encode the same secret config. Do not write these responses to public logs.
+Important: `add`, `show`, and `qr` return `config`, which contains the client private key and preshared key. `android_qr_png_base64`, `ios_qr_png_base64`, `vpn_key`, and the other QR fields encode the same secret config. Do not write these responses to public logs.
 
 How to use PNG QR:
 
 ```text
-Telegram bot for Amnezia on Android: iterate over the full `vpn_qr_png_base64_items[]` array, decode each base64 item, and send every PNG in order as separate photo/document messages. The count is in `vpn_qr_chunks_total`; if it is `2`, send QR 1/2 and QR 2/2.
+Telegram bot for Amnezia: send platform QR codes as separate import options, not as parts of one import. Use `android_qr_png_base64` for Android and `ios_qr_png_base64` for iPhone. Label them separately, for example `Android` and `iPhone`; do not write `QR 1/2`.
 Telegram bot fallback: send the text `vpn_key` or the `.conf` file.
 Website backend: decode qr_png_base64 and serve image/png from your own API.
 Frontend: <img src="<qr_png_data_uri>"> works if the JSON is not written to public logs.
 ```
 
-For bots, do not use the terminal QR from `awgctl qr` as the data source. Use `awgctl -j add/qr` and send the PNG from `vpn_qr_png_base64_items` for Android Amnezia, or send the text `vpn_key`. This is closer to Amnezia's official self-hosted "For the AmneziaVPN app" flow: the QR contains Qt `qCompress(JSON)` for a `.vpn` config, not a multiline `.conf`. The old `qr_png_base64` and `amnezia_qr_png_base64_items` fields remain for compatibility and diagnostics. The regular WireGuard client does not understand `Jc`, `S1/S2`, and `H1-H4`.
+For bots, do not use the terminal QR from `awgctl qr` as the data source. Use `awgctl -j add/qr`: `android_qr_png_base64` for Android Amnezia and `ios_qr_png_base64` for iPhone Amnezia. The `vpn_key` field can be sent as a textual fallback. `qr_png_base64`, `amnezia_qr_png_base64_items`, and `vpn_qr_png_base64_items` remain for compatibility and diagnostics. The regular WireGuard client does not understand `Jc`, `S1/S2`, and `H1-H4`.
 
 No separate HTTP server is created on the VPN server for QR downloads.
 
