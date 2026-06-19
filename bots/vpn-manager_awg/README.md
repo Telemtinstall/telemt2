@@ -74,7 +74,7 @@ BOT_TOKEN=123456:telegram-bot-token
 ADMIN_BOT=123456789,987654321
 AWGCTL=/usr/local/sbin/awgctl
 
-BOT_TITLE=AmneziaWG VPN Bot
+BOT_TITLE=Личный VPN-бот
 PRIVATE_ONLY=1
 ONLINE_WINDOW_SECONDS=180
 POLL_TIMEOUT=45
@@ -102,6 +102,19 @@ LOG_LEVEL=INFO
 Как узнать свой Telegram ID: можно написать любому боту вроде `@userinfobot` или временно посмотреть `from.id` в логах собственного бота.
 
 ## Установка
+
+Автоматическая установка на чистом сервере:
+
+```bash
+apt update
+apt install -y curl ca-certificates
+curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_awg_bot.sh -o /root/install_awg_bot.sh
+bash /root/install_awg_bot.sh
+```
+
+Скрипт спросит Telegram token и Telegram admin ID. Если AmneziaWG/AWG еще не установлен, он предложит поставить наш сервер из `telemt2/vpn/amneziawg`, дождется завершения установщика и продолжит настройку бота.
+
+Ручная установка из уже скачанного репозитория:
 
 ```bash
 mkdir -p /root/vpnbot

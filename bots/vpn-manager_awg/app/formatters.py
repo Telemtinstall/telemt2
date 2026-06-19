@@ -51,7 +51,7 @@ def menu_text(title: str, admin_ids: set[str], stats: dict | None = None) -> str
     lines = [
         f"<b>{h(title)}</b>",
         "",
-        f"Админы TGID: <code>{h(admins)}</code>.",
+        f"Ботом управляют TGID: <code>{h(admins)}</code>.",
     ]
     if stats:
         lines.append(menu_stats_text(stats))
@@ -61,8 +61,8 @@ def menu_text(title: str, admin_ids: set[str], stats: dict | None = None) -> str
 
 def menu_stats_text(stats: dict) -> str:
     return (
-        f"Клиентов: <b>{h(stats.get('users', 0))}</b>. "
-        f"Трафик: <b>{h(stats.get('traffic', '0 B'))}</b>."
+        f"На сервере <b>{h(stats.get('users', 0))}</b> пользователей "
+        f"прокачали <b>{h(stats.get('traffic', '0 B'))}</b> трафика."
     )
 
 
@@ -296,4 +296,3 @@ def human_bytes(value: object) -> str:
     if idx == 0:
         return f"{int(num)} {units[idx]}"
     return f"{num:.1f} {units[idx]}"
-
