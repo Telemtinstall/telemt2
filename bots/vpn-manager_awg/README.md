@@ -43,12 +43,10 @@ awgctl -j traffic
 awgctl -j delete <name|number>
 ```
 
-Для QR нужны поля:
+Для QR используются поля:
 
-- `vpn_qr_png_base64_items[0]` - Android / AmneziaVPN native QR.
-- `qr_png_base64` - iPhone / `.conf` QR для AmneziaWG или ручного импорта.
-
-Это два разных QR для разных приложений, а не части одного QR. Подпись `QR 1/2` не используется. Если `vpn_qr_png_base64_items` содержит больше одного элемента, бот показывает ошибку и не отправляет серию QR, потому что приложение Amnezia не импортирует несколько QR подряд.
+- `vpn_qr_png_base64_items[0]` - используется для Android / AmneziaVPN native QR.
+- `qr_png_base64` - используется для iPhone / `.conf` QR для AmneziaWG или ручного импорта.
 
 ## .env
 
