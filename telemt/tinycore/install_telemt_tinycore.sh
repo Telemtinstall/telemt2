@@ -365,6 +365,40 @@ TELEMT_HOME="$TELEMT_HOME"
 "\$TELEMT_HOME/bin/restart.sh"
 EOF
   chmod 700 "$TELEMT_HOME/bin/start-nginx-if-cert.sh"
+
+  cat > "$TELEMT_HOME/bin/watchdog.sh" <<EOF
+#!/bin/sh
+set -eu
+TELEMT_HOME="$TELEMT_HOME"
+LOCK_DIR="/tmp/telemt-watchdog.lock"
+RENEW_LOCK="/tmp/telemt-renew-cert.lock"
+
+[ -d "\$RENEW_LOCK" ] && exit 0
+
+if ! mkdir "\$LOCK_DIR" 2>/dev/null; then
+  exit 0
+fi
+trap 'rmdir "\$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
+
+pid_alive() {
+  pid_file="\$1"
+  [ -s "\$pid_file" ] || return 1
+  pid="\$(cat "\$pid_file" 2>/dev/null || true)"
+  [ -n "\$pid" ] || return 1
+  kill -0 "\$pid" 2>/dev/null
+}
+
+need_restart=0
+pid_alive "\$TELEMT_HOME/run/telemt.pid" || need_restart=1
+pid_alive "\$TELEMT_HOME/run/nginx.pid" || need_restart=1
+
+if [ "\$need_restart" = "1" ]; then
+  mkdir -p "\$TELEMT_HOME/log"
+  echo "\$(date -u '+%Y-%m-%dT%H:%M:%SZ') watchdog restart: telemt or nginx is not running" >> "\$TELEMT_HOME/log/watchdog.log" 2>/dev/null || true
+  "\$TELEMT_HOME/bin/restart.sh" >/dev/null 2>&1 || true
+fi
+EOF
+  chmod 700 "$TELEMT_HOME/bin/watchdog.sh"
 }
 
 issue_certificate() {
@@ -681,6 +715,12 @@ echo
 echo "=== RUNTIME LOGGING ==="
 echo "nginx access logs: disabled"
 echo "telemt runtime logs: disabled"
+if [ -x "\$TELEMT_HOME/bin/watchdog.sh" ]; then
+  echo "watchdog: installed via crond"
+  echo "watchdog log: \$TELEMT_HOME/log/watchdog.log"
+else
+  echo "watchdog: not installed"
+fi
 EOF
   chmod 700 /usr/local/sbin/telemt-report
 }
@@ -714,9 +754,27 @@ crond 2>/dev/null || true
 EOF
   fi
 
+  if ! grep -Fq "$TELEMT_HOME/bin/watchdog.sh" "$BOOTLOCAL"; then
+    cat >> "$BOOTLOCAL" <<EOF
+
+# Telemt watchdog cron
+mkdir -p /var/spool/cron/crontabs
+touch /var/spool/cron/crontabs/root
+grep -Fq '$TELEMT_HOME/bin/watchdog.sh' /var/spool/cron/crontabs/root 2>/dev/null || echo '* * * * * $TELEMT_HOME/bin/watchdog.sh >/dev/null 2>&1' >> /var/spool/cron/crontabs/root
+crond 2>/dev/null || true
+EOF
+  fi
+
   cat > "$TELEMT_HOME/bin/renew-cert.sh" <<EOF
 #!/bin/sh
 set -eu
+LOCK_DIR="/tmp/telemt-renew-cert.lock"
+
+if ! mkdir "\$LOCK_DIR" 2>/dev/null; then
+  exit 0
+fi
+trap 'rmdir "\$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
+
 "$ACME_HOME/acme.sh" --home "$ACME_HOME" --cron --server letsencrypt
 EOF
   chmod 700 "$TELEMT_HOME/bin/renew-cert.sh"
@@ -725,6 +783,8 @@ EOF
   touch /var/spool/cron/crontabs/root
   grep -Fq "$TELEMT_HOME/bin/renew-cert.sh" /var/spool/cron/crontabs/root 2>/dev/null || \
     echo "17 3 * * * $TELEMT_HOME/bin/renew-cert.sh >/dev/null 2>&1" >> /var/spool/cron/crontabs/root
+  grep -Fq "$TELEMT_HOME/bin/watchdog.sh" /var/spool/cron/crontabs/root 2>/dev/null || \
+    echo "* * * * * $TELEMT_HOME/bin/watchdog.sh >/dev/null 2>&1" >> /var/spool/cron/crontabs/root
   crond 2>/dev/null || true
 
   filetool.sh -b
@@ -932,6 +992,7 @@ Secret: ${TELEMT_HOME}/telemt-secret.env
 Config: ${TELEMT_HOME}/telemt.toml
 Autostart: /opt/bootlocal.sh
 Certificate renewal: ${TELEMT_HOME}/bin/renew-cert.sh via crond
+Watchdog: ${TELEMT_HOME}/bin/watchdog.sh via crond
 EOF
 
 if [ -s /root/telemt-proxy-link.txt ]; then

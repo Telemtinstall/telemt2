@@ -141,6 +141,7 @@ Telemt на Tiny Core запускается без Docker из pinned native bi
 /opt/telemt/telemt-secret.env
 /opt/telemt/bin/restart.sh
 /opt/telemt/bin/renew-cert.sh
+/opt/telemt/bin/watchdog.sh
 ```
 
 Проверка:
@@ -154,6 +155,8 @@ telemt-report 5m
 ```bash
 /opt/telemt/bin/restart.sh
 ```
+
+Автозапуск устроен в два слоя: `/opt/bootlocal.sh` запускает Telemt и nginx один раз после reboot, а `crond` раз в минуту запускает `/opt/telemt/bin/watchdog.sh`. Watchdog проверяет pid-файлы Telemt и nginx; если один из процессов пропал из памяти, выполняется `/opt/telemt/bin/restart.sh`. Во время продления сертификата `/opt/telemt/bin/renew-cert.sh` ставит lock `/tmp/telemt-renew-cert.lock`, поэтому watchdog не мешает `acme.sh`, когда nginx временно останавливается для standalone challenge.
 
 ### Пакетный Режим
 
@@ -363,6 +366,7 @@ After installation:
 /opt/telemt/telemt-secret.env
 /opt/telemt/bin/restart.sh
 /opt/telemt/bin/renew-cert.sh
+/opt/telemt/bin/watchdog.sh
 ```
 
 Health check:
@@ -376,6 +380,8 @@ Manual restart:
 ```bash
 /opt/telemt/bin/restart.sh
 ```
+
+Autostart has two layers: `/opt/bootlocal.sh` starts Telemt and nginx once after reboot, and `crond` runs `/opt/telemt/bin/watchdog.sh` every minute. The watchdog checks Telemt and nginx pid files; if either process disappeared from memory, it runs `/opt/telemt/bin/restart.sh`. During certificate renewal, `/opt/telemt/bin/renew-cert.sh` creates `/tmp/telemt-renew-cert.lock`, so the watchdog does not interfere while `acme.sh` temporarily stops nginx for the standalone challenge.
 
 ### Batch Mode
 
