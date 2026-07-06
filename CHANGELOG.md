@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-07
+
+### Changed
+
+- Added explicit Docker Telemt README commands for updating `3.4.18` to the checked compatible `3.4.22` release from a `telemt2` checkout, with a dry-run plan step and post-update checks.
+- Docker Telemt public IPv4 detection now prefers a DNS A record that matches one of the server's local IPv4 addresses before falling back to external egress-IP services. This keeps update plans correct on servers whose outbound traffic leaves through a different VPN/WireGuard IP.
+
+### Fixed
+
+- Made Docker `telemt-users` user parsing compatible with `mawk` on older Debian systems by avoiding interval regex syntax in the 32-hex secret check.
+
 ## 2026-07-06
 
 ### Changed

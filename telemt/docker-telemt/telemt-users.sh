@@ -102,7 +102,7 @@ users_and_secrets() {
       gsub(/^"|"$/, "", key)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
       gsub(/^"|"$/, "", val)
-      if (key != "" && val ~ /^[A-Fa-f0-9]{32}$/) print key, val
+      if (key != "" && length(val) == 32 && val !~ /[^A-Fa-f0-9]/) print key, val
     }
   ' "$CONFIG_FILE"
 }

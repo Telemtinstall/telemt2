@@ -1107,8 +1107,35 @@ write_file_root() {
   chmod "$mode" "$path"
 }
 
+local_ipv4s() {
+  {
+    ip -o -4 addr show 2>/dev/null | awk '{split($4, a, "/"); print a[1]}'
+    hostname -I 2>/dev/null | tr ' ' '\n'
+  } | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print}' | sort -u
+}
+
+domain_local_ipv4() {
+  local domain="${DOMAIN:-}" ip locals
+  [ -n "$domain" ] || return 1
+  locals="$(local_ipv4s || true)"
+  [ -n "$locals" ] || return 1
+  while IFS= read -r ip; do
+    [ -n "$ip" ] || continue
+    if grep -Fxq "$ip" <<< "$locals"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  done < <(domain_ipv4s "$domain" || true)
+  return 1
+}
+
 public_ipv4() {
   local url ip
+  ip="$(domain_local_ipv4 || true)"
+  if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf '%s\n' "$ip"
+    return 0
+  fi
   for url in \
     https://api.ipify.org \
     https://ifconfig.me \

@@ -179,6 +179,31 @@ chmod +x ./build.sh ./install_docker-telemt.sh
 ./install_docker-telemt.sh --update -lang ru
 ```
 
+Обновить Docker Telemt `3.4.18` до проверенной совместимой версии `3.4.22` из репозитория `telemt2`:
+
+```bash
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
+
+# сначала посмотреть план без изменений
+printf 'n\n' | ./install_docker-telemt.sh --update -lang ru
+
+# если в плане указано 3.4.18 -> 3.4.22, запустить обновление
+./install_docker-telemt.sh --update -lang ru
+```
+
+Проверка после обновления:
+
+```bash
+docker exec telemt /app/telemt --version
+docker ps --filter name=telemt
+curl -fsS http://127.0.0.1:9091/v1/users
+nginx -t
+cat /root/telemt-proxy-links.txt
+```
+
 Починить уже установленный сервер: nginx/Docker/Telemt doctor:
 
 ```bash
@@ -548,6 +573,31 @@ cd /root/docker-telemt
 git pull
 chmod +x ./build.sh ./install_docker-telemt.sh
 ./install_docker-telemt.sh --update -lang ru
+```
+
+Update Docker Telemt `3.4.18` to the checked compatible `3.4.22` release from the `telemt2` repository:
+
+```bash
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
+
+# first print the update plan without changing anything
+printf 'n\n' | ./install_docker-telemt.sh --update -lang ru
+
+# if the plan shows 3.4.18 -> 3.4.22, run the update
+./install_docker-telemt.sh --update -lang ru
+```
+
+Post-update checks:
+
+```bash
+docker exec telemt /app/telemt --version
+docker ps --filter name=telemt
+curl -fsS http://127.0.0.1:9091/v1/users
+nginx -t
+cat /root/telemt-proxy-links.txt
 ```
 
 Repair an existing server: nginx/Docker/Telemt doctor:
