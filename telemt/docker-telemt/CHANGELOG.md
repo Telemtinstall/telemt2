@@ -10,6 +10,7 @@
 ### Fixed
 
 - Made `telemt-users` user parsing compatible with `mawk` on older Debian systems by avoiding interval regex syntax in the 32-hex secret check.
+- Made Docker installer secret parsing compatible with `mawk` too, so link regeneration and existing-secret loading use the same portable 32-hex check without OS-specific branches or notices.
 
 ## 2026-07-06
 

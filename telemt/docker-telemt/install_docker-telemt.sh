@@ -1842,7 +1842,7 @@ load_existing_secret_for_links() {
           gsub(/^"|"$/, "", key)
           gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
           gsub(/^"|"$/, "", val)
-          if (key == user && val ~ /^[A-Fa-f0-9]{32}$/) {
+          if (key == user && length(val) == 32 && val !~ /[^A-Fa-f0-9]/) {
             print val
             exit
           }
@@ -1904,7 +1904,7 @@ write_proxy_links() {
           gsub(/^"|"$/, "", key)
           gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
           gsub(/^"|"$/, "", val)
-          if (key != "" && val ~ /^[A-Fa-f0-9]{32}$/) print key, val
+          if (key != "" && length(val) == 32 && val !~ /[^A-Fa-f0-9]/) print key, val
         }
       ' "$INSTALL_DIR/telemt.toml"
     )
