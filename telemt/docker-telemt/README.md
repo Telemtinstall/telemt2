@@ -341,7 +341,7 @@ CPU/RAM/PID лимиты в compose не задаются. Это сделано
 
 Это закрепляет fallback-трафик с SNI вашего домена за локальным HTTPS mask site. Остальной fallback продолжает работать через обычные `mask_host`/`mask_port`.
 
-Для Telemt `3.4.22` конфиг также получает runtime-кеш в `/run/telemt`, `beobachten`-окно для JA3/JA4 диагностики, `client_mss = "tspu"` и `client_mss_bulk = "1400"` если MSS не отключен, `[access.user_enabled]`, per-upstream `ipv4/ipv6/prefer`, `mask_dynamic = false` для сохранения статической mask-схемы и `synlimit = false`. SYN limiter не включается автоматически в Docker/nginx-stream схеме, потому что для него нужен `CAP_NET_ADMIN`, а внешний `443/tcp` принимает nginx. Если оператор вручную включает `TELEMT_SYNLIMIT=nftables|iptables`, скрипт пишет новые Synlimit V2-поля `synlimit_ios_*` и `synlimit_hashlimit_*`.
+Для Telemt `3.4.22` конфиг также получает runtime-кеш в `/run/telemt`, `beobachten`-окно для JA3/JA4 диагностики, `client_mss = "tspu"` и `client_mss_bulk = "1400"` если MSS не отключен, `[access.user_enabled]`, per-upstream `ipv4/ipv6`, `mask_dynamic = false` для сохранения статической mask-схемы и `synlimit = false`. SYN limiter не включается автоматически в Docker/nginx-stream схеме, потому что для него нужен `CAP_NET_ADMIN`, а внешний `443/tcp` принимает nginx. Если оператор вручную включает `TELEMT_SYNLIMIT=nftables|iptables`, скрипт пишет новые Synlimit V2-поля `synlimit_ios_*` и `synlimit_hashlimit_*`.
 
 ### Публикация
 
@@ -712,7 +712,7 @@ For Telemt `3.4.12+`, new installs and `--update` also add an explicit section:
 
 This pins fallback traffic with your domain SNI to the local HTTPS mask site. Other fallback traffic keeps using normal `mask_host`/`mask_port`.
 
-For Telemt `3.4.22`, the config also gets runtime cache under `/run/telemt`, a `beobachten` window for JA3/JA4 diagnostics, `client_mss = "tspu"` and `client_mss_bulk = "1400"` unless MSS is disabled, `[access.user_enabled]`, per-upstream `ipv4/ipv6/prefer`, `mask_dynamic = false` to preserve the static masking layout, and `synlimit = false`. SYN limiter is not enabled automatically in the Docker/nginx-stream layout because it needs `CAP_NET_ADMIN`, while public `443/tcp` is accepted by nginx. If the operator explicitly sets `TELEMT_SYNLIMIT=nftables|iptables`, the installer writes the newer Synlimit V2 `synlimit_ios_*` and `synlimit_hashlimit_*` fields.
+For Telemt `3.4.22`, the config also gets runtime cache under `/run/telemt`, a `beobachten` window for JA3/JA4 diagnostics, `client_mss = "tspu"` and `client_mss_bulk = "1400"` unless MSS is disabled, `[access.user_enabled]`, per-upstream `ipv4/ipv6`, `mask_dynamic = false` to preserve the static masking layout, and `synlimit = false`. SYN limiter is not enabled automatically in the Docker/nginx-stream layout because it needs `CAP_NET_ADMIN`, while public `443/tcp` is accepted by nginx. If the operator explicitly sets `TELEMT_SYNLIMIT=nftables|iptables`, the installer writes the newer Synlimit V2 `synlimit_ios_*` and `synlimit_hashlimit_*` fields.
 
 ### Publishing
 

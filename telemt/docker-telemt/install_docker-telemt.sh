@@ -2680,7 +2680,6 @@ enabled = true
 weight = 10
 ipv4 = true
 ipv6 = false
-prefer = 4
 EOF
   } > "$INSTALL_DIR/telemt.toml"
   chown 65532:65532 "$INSTALL_DIR/telemt.toml"
@@ -3703,7 +3702,6 @@ upstreams = find_arrays("upstreams")
 if upstreams:
     checks.append(("upstreams.ipv4", all(has_key(start, end, "ipv4") for start, end in upstreams)))
     checks.append(("upstreams.ipv6", all(has_key(start, end, "ipv6") for start, end in upstreams)))
-    checks.append(("upstreams.prefer", all(has_key(start, end, "prefer") for start, end in upstreams)))
 else:
     checks.append(("upstreams", False))
 
@@ -3876,6 +3874,13 @@ def set_key(start, end, key, value_line):
     lines.insert(end, value_line)
     changed = True
 
+def remove_key_in_range(start, end, key):
+    global changed
+    for i in range(end - 1, start, -1):
+        if raw_key(lines[i]) == key:
+            del lines[i]
+            changed = True
+
 def ensure_section(name, insert_before_arrays=True):
     global changed
     start, end = find_section(name)
@@ -3982,14 +3987,14 @@ if support_user_enabled:
 
 upstreams = find_arrays("upstreams")
 if not upstreams:
-    block = '\n[[upstreams]]\ntype = "direct"\nenabled = true\nweight = 10\nipv4 = true\nipv6 = false\nprefer = 4\n'
+    block = '\n[[upstreams]]\ntype = "direct"\nenabled = true\nweight = 10\nipv4 = true\nipv6 = false\n'
     lines.append(block)
     changed = True
 else:
     for start, end in upstreams:
         ensure_key_in_range(start, end, "ipv4", "ipv4 = true\n")
         ensure_key_in_range(start, end, "ipv6", "ipv6 = false\n")
-        ensure_key_in_range(start, end, "prefer", "prefer = 4\n")
+        remove_key_in_range(start, end, "prefer")
 
 if changed:
     path.write_text("".join(lines))

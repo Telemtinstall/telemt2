@@ -1220,7 +1220,6 @@ enabled = true
 weight = 10
 ipv4 = true
 ipv6 = false
-prefer = 4
 EOF
   } > "$CANONICAL_CONFIG_FILE"
   chown 65532:65532 "$CANONICAL_CONFIG_FILE" || die "Cannot chown $CANONICAL_CONFIG_FILE to 65532:65532."
@@ -1474,7 +1473,6 @@ upstreams = find_arrays("upstreams")
 if upstreams:
     checks.append(("upstreams.ipv4", all(has_key(start, end, "ipv4") for start, end in upstreams)))
     checks.append(("upstreams.ipv6", all(has_key(start, end, "ipv6") for start, end in upstreams)))
-    checks.append(("upstreams.prefer", all(has_key(start, end, "prefer") for start, end in upstreams)))
 else:
     checks.append(("upstreams", False))
 missing = [name for name, ok in checks if not ok]
@@ -1578,6 +1576,13 @@ def set_key(start, end, key, value_line):
             return
     lines.insert(end, value_line)
     changed = True
+
+def remove_key_in_range(start, end, key):
+    global changed
+    for i in range(end - 1, start, -1):
+        if raw_key(lines[i]) == key:
+            del lines[i]
+            changed = True
 
 def ensure_section(name, insert_before_arrays=True):
     global changed
@@ -1686,13 +1691,13 @@ if support_user_enabled:
             en_start, en_end = find_section("access.user_enabled")
 upstreams = find_arrays("upstreams")
 if not upstreams:
-    lines.append('\n[[upstreams]]\ntype = "direct"\nenabled = true\nweight = 10\nipv4 = true\nipv6 = false\nprefer = 4\n')
+    lines.append('\n[[upstreams]]\ntype = "direct"\nenabled = true\nweight = 10\nipv4 = true\nipv6 = false\n')
     changed = True
 else:
     for start, end in upstreams:
         ensure_key_in_range(start, end, "ipv4", "ipv4 = true\n")
         ensure_key_in_range(start, end, "ipv6", "ipv6 = false\n")
-        ensure_key_in_range(start, end, "prefer", "prefer = 4\n")
+        remove_key_in_range(start, end, "prefer")
 if changed:
     path.write_text("".join(lines))
 PY

@@ -904,7 +904,6 @@ enabled = true
 weight = 10
 ipv4 = true
 ipv6 = false
-prefer = 4
 EOF
   chmod 600 "$TELEMT_HOME/telemt.toml"
 }

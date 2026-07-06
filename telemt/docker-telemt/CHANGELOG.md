@@ -9,6 +9,10 @@
 - `--update` now reports missing `server.client_mss_bulk` and patches existing `telemt.toml` without overwriting manual values.
 - Synlimit V2 fields are written when `TELEMT_SYNLIMIT=nftables|iptables`; SYN limiter remains disabled by default in the Docker/nginx-stream layout.
 
+### Fixed
+
+- `--update` now removes invalid `prefer` keys from `[[upstreams]]`; Telemt `3.4.22` rejects `upstreams[].prefer` under `general.config_strict=true`.
+
 ## 2026-06-12
 
 ### Changed

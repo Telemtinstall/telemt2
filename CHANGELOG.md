@@ -11,6 +11,10 @@
 - Aligned Tiny Core Telemt config logic with Docker/systemd: generated links now use the selected user list, and Tiny Core supports multiple users, optional `ad_tag`, and optional middle proxy.
 - Added Tiny Core `--update` mode: it backs up the existing binary/config, downloads the exact pinned Telemt release, rewrites compatible config keys, restarts services, and persists changes through `filetool.sh -b`.
 
+### Fixed
+
+- Removed invalid `prefer` keys from `[[upstreams]]` in generated and update-patched Telemt configs; Telemt `3.4.22` rejects `upstreams[].prefer` when `general.config_strict=true`.
+
 ## 2026-06-12
 
 ### Changed
