@@ -1,6 +1,6 @@
 services:
   telemt:
-    image: telemt-local:3.4.18
+    image: telemt-local:3.4.22
     container_name: telemt
     restart: unless-stopped
     network_mode: host

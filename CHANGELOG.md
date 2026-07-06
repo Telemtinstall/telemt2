@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-06
+
+### Changed
+
+- Updated Docker, Debian/Ubuntu systemd, and Tiny Core Telemt installers to the checked compatible upstream release `3.4.22`.
+- Added `client_mss_bulk = "1400"` support for Telemt `3.4.19+` in fresh installs and update-mode compatibility patching.
+- Extended update-mode config analysis to detect missing `server.client_mss_bulk` and patch existing configs without a separate migration mode.
+- Added Synlimit V2 fields for explicit `TELEMT_SYNLIMIT=nftables|iptables` use while keeping SYN limiter disabled by default in nginx-fronted installs.
+- Aligned Tiny Core Telemt config logic with Docker/systemd: generated links now use the selected user list, and Tiny Core supports multiple users, optional `ad_tag`, and optional middle proxy.
+- Added Tiny Core `--update` mode: it backs up the existing binary/config, downloads the exact pinned Telemt release, rewrites compatible config keys, restarts services, and persists changes through `filetool.sh -b`.
+
 ## 2026-06-12
 
 ### Changed

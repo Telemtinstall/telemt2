@@ -17,9 +17,24 @@ SSH_USER="${SSH_USER:-root}"
 CONNECT_SSH_PORT="${CONNECT_SSH_PORT:-22}"
 TARGET_SSH_PORT="${TARGET_SSH_PORT:-22}"
 TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-5000}"
-TELEMT_RELEASE="${TELEMT_RELEASE:-3.4.18}"
+TELEMT_LATEST_COMPATIBLE_RELEASE="${TELEMT_LATEST_COMPATIBLE_RELEASE:-3.4.22}"
+TELEMT_RELEASE="${TELEMT_RELEASE:-$TELEMT_LATEST_COMPATIBLE_RELEASE}"
+TELEMT_USER="${TELEMT_USER:-default}"
+TELEMT_USERS="${TELEMT_USERS:-}"
+TELEMT_LINK_COUNT="${TELEMT_LINK_COUNT:-}"
 TELEMT_CLIENT_MSS="${TELEMT_CLIENT_MSS:-tspu}"
+TELEMT_CLIENT_MSS_BULK="${TELEMT_CLIENT_MSS_BULK:-1400}"
 TELEMT_SYNLIMIT="${TELEMT_SYNLIMIT:-false}"
+TELEMT_SYNLIMIT_SECONDS="${TELEMT_SYNLIMIT_SECONDS:-60}"
+TELEMT_SYNLIMIT_HITCOUNT="${TELEMT_SYNLIMIT_HITCOUNT:-48}"
+TELEMT_SYNLIMIT_BURST="${TELEMT_SYNLIMIT_BURST:-1}"
+TELEMT_SYNLIMIT_IOS_SECONDS="${TELEMT_SYNLIMIT_IOS_SECONDS:-1}"
+TELEMT_SYNLIMIT_IOS_HITCOUNT="${TELEMT_SYNLIMIT_IOS_HITCOUNT:-12}"
+TELEMT_SYNLIMIT_IOS_BURST="${TELEMT_SYNLIMIT_IOS_BURST:-24}"
+TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS="${TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS:-60000}"
+TELEMT_SYNLIMIT_HASHLIMIT_SIZE="${TELEMT_SYNLIMIT_HASHLIMIT_SIZE:-32768}"
+AD_TAG="${AD_TAG:-}"
+USE_MIDDLE_PROXY="${USE_MIDDLE_PROXY:-}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 KEY_PATH="${KEY_PATH:-${HOME}/.ssh/id_ed25519}"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-15}"
@@ -89,6 +104,10 @@ valid_limit() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 && "$1" <= 1000000 ))
 }
 
+valid_user_name() {
+  [[ "$1" =~ ^[A-Za-z0-9_.-]{1,64}$ ]]
+}
+
 valid_telemt_release() {
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
@@ -117,6 +136,56 @@ normalize_synlimit() {
     iptables|nftables) printf '%s' "$value" ;;
     *) return 1 ;;
   esac
+}
+
+normalize_yes_no() {
+  local value
+  value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    yes|y|true|1|да|д) printf '%s' "yes" ;;
+    no|n|false|0|нет|н|'') printf '%s' "no" ;;
+    *) return 1 ;;
+  esac
+}
+
+valid_synlimit_number() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( "$1" >= 1 ))
+}
+
+append_telemt_user() {
+  local user="$1"
+  [[ -n "$user" ]] || return 0
+  valid_user_name "$user" || die "Bad Telemt user name: $user"
+  if [[ -z "$TELEMT_USERS" ]]; then
+    TELEMT_USERS="$user"
+  elif ! printf '%s\n' "$TELEMT_USERS" | tr ',' '\n' | grep -Fxq "$user"; then
+    TELEMT_USERS="${TELEMT_USERS},${user}"
+  fi
+}
+
+normalize_telemt_users() {
+  local user normalized=""
+  [[ -n "$TELEMT_USER" ]] || TELEMT_USER="default"
+  TELEMT_USERS="${TELEMT_USERS:-$TELEMT_USER}"
+  while IFS= read -r user; do
+    user="$(printf '%s' "$user" | xargs)"
+    [[ -n "$user" ]] || continue
+    valid_user_name "$user" || die "Bad Telemt user name: $user"
+    if [[ -z "$normalized" ]]; then
+      normalized="$user"
+    elif ! printf '%s\n' "$normalized" | tr ',' '\n' | grep -Fxq "$user"; then
+      normalized="${normalized},${user}"
+    fi
+  done < <(printf '%s\n' "$TELEMT_USERS" | tr ',' '\n')
+  [[ -n "$normalized" ]] || normalized="$TELEMT_USER"
+  TELEMT_USERS="$normalized"
+  TELEMT_USER="$(printf '%s\n' "$TELEMT_USERS" | tr ',' '\n' | sed -n '1p')"
+  TELEMT_LINK_COUNT="$(printf '%s\n' "$TELEMT_USERS" | tr ',' '\n' | grep -c .)"
+}
+
+telemt_user_at() {
+  local wanted="$1"
+  printf '%s\n' "$TELEMT_USERS" | tr ',' '\n' | sed -n "${wanted}p"
 }
 
 shell_quote() {
@@ -438,8 +507,22 @@ run_remote_installer() {
   remote_cmd+="SSH_PORT=$(shell_quote "$TARGET_SSH_PORT") "
   remote_cmd+="TELEMT_MAX_TCP_CONNS=$(shell_quote "$TELEMT_MAX_TCP_CONNS") "
   remote_cmd+="TELEMT_RELEASE=$(shell_quote "$TELEMT_RELEASE") "
+  remote_cmd+="TELEMT_USER=$(shell_quote "$TELEMT_USER") "
+  remote_cmd+="TELEMT_USERS=$(shell_quote "$TELEMT_USERS") "
+  remote_cmd+="TELEMT_LINK_COUNT=$(shell_quote "$TELEMT_LINK_COUNT") "
   remote_cmd+="TELEMT_CLIENT_MSS=$(shell_quote "$TELEMT_CLIENT_MSS") "
+  remote_cmd+="TELEMT_CLIENT_MSS_BULK=$(shell_quote "$TELEMT_CLIENT_MSS_BULK") "
   remote_cmd+="TELEMT_SYNLIMIT=$(shell_quote "$TELEMT_SYNLIMIT") "
+  remote_cmd+="TELEMT_SYNLIMIT_SECONDS=$(shell_quote "$TELEMT_SYNLIMIT_SECONDS") "
+  remote_cmd+="TELEMT_SYNLIMIT_HITCOUNT=$(shell_quote "$TELEMT_SYNLIMIT_HITCOUNT") "
+  remote_cmd+="TELEMT_SYNLIMIT_BURST=$(shell_quote "$TELEMT_SYNLIMIT_BURST") "
+  remote_cmd+="TELEMT_SYNLIMIT_IOS_SECONDS=$(shell_quote "$TELEMT_SYNLIMIT_IOS_SECONDS") "
+  remote_cmd+="TELEMT_SYNLIMIT_IOS_HITCOUNT=$(shell_quote "$TELEMT_SYNLIMIT_IOS_HITCOUNT") "
+  remote_cmd+="TELEMT_SYNLIMIT_IOS_BURST=$(shell_quote "$TELEMT_SYNLIMIT_IOS_BURST") "
+  remote_cmd+="TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS=$(shell_quote "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS") "
+  remote_cmd+="TELEMT_SYNLIMIT_HASHLIMIT_SIZE=$(shell_quote "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE") "
+  remote_cmd+="AD_TAG=$(shell_quote "$AD_TAG") "
+  remote_cmd+="USE_MIDDLE_PROXY=$(shell_quote "$USE_MIDDLE_PROXY") "
   remote_cmd+="ASSUME_YES=1 /root/${REMOTE_INSTALLER_NAME}"
   ssh "${SSH_OPTS[@]}" "$target" "$remote_cmd"
 }
@@ -504,8 +587,12 @@ show_plan() {
   echo "  target SSH port:     $TARGET_SSH_PORT"
   echo "  Telemt limit:        $TELEMT_MAX_TCP_CONNS"
   echo "  Telemt release:      $TELEMT_RELEASE"
+  echo "  Telemt users:        $TELEMT_USERS"
   echo "  Telemt client_mss:   $TELEMT_CLIENT_MSS"
+  echo "  Telemt bulk MSS:     $TELEMT_CLIENT_MSS_BULK"
   echo "  Telemt synlimit:     $TELEMT_SYNLIMIT"
+  echo "  MTProxy ad_tag:      $([[ -n "$AD_TAG" ]] && echo yes || echo no)"
+  echo "  middle proxy:        $USE_MIDDLE_PROXY"
   if [[ -n "$LETSENCRYPT_EMAIL" ]]; then
     echo "  Let's Encrypt email: $LETSENCRYPT_EMAIL"
   else
@@ -541,16 +628,56 @@ EOF
   prompt_default TARGET_SSH_PORT "SSH port after install, Tiny Core installer does not change SSH config" "$TARGET_SSH_PORT"
   prompt_default TELEMT_MAX_TCP_CONNS "Telemt max TCP connections" "$TELEMT_MAX_TCP_CONNS"
   prompt_default TELEMT_RELEASE "Telemt release version" "$TELEMT_RELEASE"
+  prompt_default TELEMT_USER "Telemt first user name" "$TELEMT_USER"
+  valid_user_name "$TELEMT_USER" || die "Bad Telemt user name: $TELEMT_USER"
+  TELEMT_USERS="${TELEMT_USERS:-$TELEMT_USER}"
+  append_telemt_user "$TELEMT_USER"
+  if [[ -z "$TELEMT_LINK_COUNT" ]]; then
+    TELEMT_LINK_COUNT="$(printf '%s\n' "$TELEMT_USERS" | tr ',' '\n' | grep -c .)"
+  fi
+  prompt_default TELEMT_LINK_COUNT "How many proxy links/users to create now" "$TELEMT_LINK_COUNT"
+  [[ "$TELEMT_LINK_COUNT" =~ ^[0-9]+$ ]] && (( TELEMT_LINK_COUNT >= 1 && TELEMT_LINK_COUNT <= 100 )) ||
+    die "Telemt link count must be between 1 and 100."
+  for ((i=2; i<=TELEMT_LINK_COUNT; i++)); do
+    current_user="$(telemt_user_at "$i")"
+    [[ -n "$current_user" ]] || current_user="user${i}"
+    prompt_default current_user "Telemt user name #$i" "$current_user"
+    append_telemt_user "$current_user"
+  done
   prompt_default TELEMT_CLIENT_MSS "Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS"
+  prompt_default TELEMT_CLIENT_MSS_BULK "Telemt bulk-phase TCP MSS after handshake: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS_BULK"
   prompt_default TELEMT_SYNLIMIT "Telemt listener SYN limiter: false/iptables/nftables" "$TELEMT_SYNLIMIT"
+  prompt_default AD_TAG "MTProxy ad_tag, Enter = skip" "$AD_TAG"
+  if [[ -z "$USE_MIDDLE_PROXY" ]]; then
+    if [[ -n "$AD_TAG" ]]; then
+      USE_MIDDLE_PROXY="yes"
+    else
+      USE_MIDDLE_PROXY="no"
+    fi
+  fi
+  prompt_default USE_MIDDLE_PROXY "Use Telegram middle proxy: yes/no" "$USE_MIDDLE_PROXY"
   prompt_default LETSENCRYPT_EMAIL "Common Let's Encrypt email, empty = admin@domain" "$LETSENCRYPT_EMAIL"
 
   valid_port "$CONNECT_SSH_PORT" || die "Current SSH port must be a number from 1 to 65535."
   valid_port "$TARGET_SSH_PORT" || die "Target SSH port must be a number from 1 to 65535."
   valid_limit "$TELEMT_MAX_TCP_CONNS" || die "Telemt limit must be a number from 1 to 1000000."
-  valid_telemt_release "$TELEMT_RELEASE" || die "Telemt release must be an exact tag like 3.4.18; latest is not allowed."
+  valid_telemt_release "$TELEMT_RELEASE" || die "Telemt release must be an exact tag like $TELEMT_LATEST_COMPATIBLE_RELEASE; latest is not allowed."
+  normalize_telemt_users
   TELEMT_CLIENT_MSS="$(normalize_client_mss "$TELEMT_CLIENT_MSS")" || die "Bad Telemt client_mss."
+  TELEMT_CLIENT_MSS_BULK="$(normalize_client_mss "$TELEMT_CLIENT_MSS_BULK")" || die "Bad Telemt bulk MSS."
   TELEMT_SYNLIMIT="$(normalize_synlimit "$TELEMT_SYNLIMIT")" || die "Bad Telemt synlimit."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_SECONDS" || die "Bad TELEMT_SYNLIMIT_SECONDS."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_HITCOUNT" || die "Bad TELEMT_SYNLIMIT_HITCOUNT."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_BURST" || die "Bad TELEMT_SYNLIMIT_BURST."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_IOS_SECONDS" || die "Bad TELEMT_SYNLIMIT_IOS_SECONDS."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_IOS_HITCOUNT" || die "Bad TELEMT_SYNLIMIT_IOS_HITCOUNT."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_IOS_BURST" || die "Bad TELEMT_SYNLIMIT_IOS_BURST."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS" || die "Bad TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS."
+  valid_synlimit_number "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE" || die "Bad TELEMT_SYNLIMIT_HASHLIMIT_SIZE."
+  if [[ -n "$AD_TAG" ]] && ! [[ "$AD_TAG" =~ ^[A-Fa-f0-9]{32}$ ]]; then
+    die "ad_tag must be 32 hex chars."
+  fi
+  USE_MIDDLE_PROXY="$(normalize_yes_no "$USE_MIDDLE_PROXY")" || die "Bad middle proxy value."
 
   collect_domains
 

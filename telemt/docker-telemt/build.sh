@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 TELEMT_REPOSITORY="${TELEMT_REPOSITORY:-telemt/telemt}"
-TELEMT_VERSION="${TELEMT_VERSION:-3.4.18}"
+TELEMT_VERSION="${TELEMT_VERSION:-3.4.22}"
 IMAGE="${IMAGE:-telemt-local}"
 IMAGE_TAG="${IMAGE_TAG:-}"
 TARGET="${TARGET:-prod}"
@@ -43,7 +43,7 @@ Examples:
 
 Variables:
   TELEMT_REPOSITORY  GitHub repo with releases. Default: telemt/telemt
-  TELEMT_VERSION     Exact upstream release tag. Default: 3.4.18
+  TELEMT_VERSION     Exact upstream release tag. Default: 3.4.22
   IMAGE              Local or remote image name. Default: telemt-local
   IMAGE_TAG          Docker image tag. Default: TELEMT_VERSION
   TARGET             Dockerfile target: prod or debug. Default: prod
@@ -69,7 +69,7 @@ main() {
   esac
 
   if [ "${TELEMT_VERSION#refs/tags/}" = "latest" ] && [ "$ALLOW_TELEMT_LATEST" != "1" ]; then
-    printf 'ERROR: TELEMT_VERSION=latest is disabled for reproducible builds. Use an exact release tag such as 3.4.18, or set ALLOW_TELEMT_LATEST=1 intentionally.\n' >&2
+    printf 'ERROR: TELEMT_VERSION=latest is disabled for reproducible builds. Use an exact release tag such as 3.4.22, or set ALLOW_TELEMT_LATEST=1 intentionally.\n' >&2
     exit 1
   fi
 

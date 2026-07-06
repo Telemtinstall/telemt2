@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-06
+
+### Changed
+
+- Updated the checked compatible Telemt target to `3.4.22`.
+- Fresh installs and `--update` now add `client_mss_bulk = "1400"` for Telemt `3.4.19+` when MSS is enabled.
+- `--update` now reports missing `server.client_mss_bulk` and patches existing `telemt.toml` without overwriting manual values.
+- Synlimit V2 fields are written when `TELEMT_SYNLIMIT=nftables|iptables`; SYN limiter remains disabled by default in the Docker/nginx-stream layout.
+
 ## 2026-06-12
 
 ### Changed

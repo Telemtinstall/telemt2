@@ -127,7 +127,7 @@ TARGET=debug ./build.sh
 Проверить версию:
 
 ```bash
-docker run --rm --entrypoint /app/telemt telemt-local:3.4.18 --version
+docker run --rm --entrypoint /app/telemt telemt-local:3.4.22 --version
 ```
 
 ### Установка сервера
@@ -146,7 +146,7 @@ docker run --rm --entrypoint /app/telemt telemt-local:3.4.18 --version
 - Docker hardening и healthcheck с отдельным вопросом;
 - отключение runtime-логов по умолчанию;
 - опционально `ad_tag`, `middle_proxy`, high-load tuning;
-- Telemt `3.4.18`-совместимые настройки: `/run/telemt` runtime cache, `client_mss`, `user_enabled`, upstream IPv4 policy и явно выключенный `synlimit`.
+- Telemt `3.4.22`-совместимые настройки: `/run/telemt` runtime cache, `client_mss`, `client_mss_bulk`, `user_enabled`, upstream IPv4 policy, Synlimit V2-поля и явно выключенный `synlimit`.
 
 В этой схеме обычный сканер или браузер без MTProxy-ключа получает HTTPS-сайт-заглушку с настоящим сертификатом вашего домена. Telemt не подменяет TLS и не делает MITM: он оставляет валидных MTProxy-клиентов внутри Telemt, а остальные TLS-соединения передаёт на mask site как TCP-поток.
 
@@ -232,7 +232,7 @@ chmod +x ./install_docker-telemt.sh
 
 `RESET_INSTALL_STATE=1` означает именно новую установку: старый сохраненный ввод, старый Telemt secret, старый `telemt.toml`, compose, контейнер и ссылки удаляются до вопросов. Установщик заново спросит домен, email, пользователя и остальные параметры. Старые nginx-файлы Telemt удаляются только если выглядят созданными этим установщиком; чужие nginx-сайты не трогаются. Новая заглушка пишется в отдельный nginx-файл `telemt-mask-<domain>.conf`, чтобы не затирать vhost с именем домена.
 
-Режим `--update` сначала анализирует существующую установку: читает домен и пользователя из `telemt.toml`, image из compose, пытается определить текущую версию Telemt по контейнеру/image/tag и выводит список отсутствующих совместимых ключей. После подтверждения он делает бэкап `/opt/telemt-docker/telemt.toml`, `docker-compose.yml`, секретов, ссылок и nginx-конфигов, переключает compose image на точный tag проверенной совместимой версии (`telemt-local:3.4.18` по умолчанию), пересобирает/скачивает именно этот release tag, дополняет текущий `telemt.toml`/compose только отсутствующими безопасными ключами, пересоздает контейнер и заново выполняет API/active-probing проверку. Ручные значения не перезаписываются; `TELEMT_VERSION=latest` в `--update` не используется и заменяется на pinned compatible version.
+Режим `--update` сначала анализирует существующую установку: читает домен и пользователя из `telemt.toml`, image из compose, пытается определить текущую версию Telemt по контейнеру/image/tag и выводит список отсутствующих совместимых ключей. После подтверждения он делает бэкап `/opt/telemt-docker/telemt.toml`, `docker-compose.yml`, секретов, ссылок и nginx-конфигов, переключает compose image на точный tag проверенной совместимой версии (`telemt-local:3.4.22` по умолчанию), пересобирает/скачивает именно этот release tag, дополняет текущий `telemt.toml`/compose только отсутствующими безопасными ключами, пересоздает контейнер и заново выполняет API/active-probing проверку. Ручные значения не перезаписываются; `TELEMT_VERSION=latest` в `--update` не используется и заменяется на pinned compatible version.
 
 Домены можно вводить как обычные ASCII-домены, как punycode (`xn--...`) или кириллицей. Установщик переводит IDN в punycode/ASCII перед DNS, Let's Encrypt, nginx и MTProxy-ссылками. Если введен некорректный punycode, установка останавливается до изменения системы.
 
@@ -253,7 +253,7 @@ fi
 Если image находится в registry:
 
 ```bash
-TELEMT_IMAGE=ghcr.io/Telemtinstall/telemt:3.4.18 ./install_docker-telemt.sh
+TELEMT_IMAGE=ghcr.io/Telemtinstall/telemt:3.4.22 ./install_docker-telemt.sh
 ```
 
 ### Вопросы установщика
@@ -264,7 +264,7 @@ TELEMT_IMAGE=ghcr.io/Telemtinstall/telemt:3.4.18 ./install_docker-telemt.sh
 | --- | --- | --- | --- |
 | `Домен прокси` | Домен, который будет в MTProxy-ссылке, TLS SNI, nginx и Let's Encrypt. DNS A-запись должна указывать на IPv4 сервера. | Нет дефолта, кроме сохраненного значения или hostname в `--auto`. | Указать настоящий домен прокси, например `proxy.example.com`. |
 | `Email для Let's Encrypt` | Email для выпуска и продления TLS-сертификата. | `admin@<domain>`. | Можно оставить дефолт или указать свой рабочий email. |
-| `Docker image Telemt` | Имя Docker image, который будет запускаться в compose. | `telemt-local:3.4.18`. | Оставить дефолт. Для registry указать точный tag, например `ghcr.io/Telemtinstall/telemt:3.4.18`. |
+| `Docker image Telemt` | Имя Docker image, который будет запускаться в compose. | `telemt-local:3.4.22`. | Оставить дефолт. Для registry указать точный tag, например `ghcr.io/Telemtinstall/telemt:3.4.22`. |
 | `Маскировочная страница` | Что покажет обычный браузер без MTProxy secret. `fancy` дает простую красивую заглушку, `empty` отдает пустой HTML с `200 OK`. | `fancy`. | Обычно `fancy`; если нужна максимально пустая маска, выбрать `empty`. |
 | `Имя пользователя Telemt` | Имя первой ссылки/пользователя в `[access.users]`. Secret генерируется автоматически. | `default`. | Для одного владельца можно оставить `default`; для учета клиентов лучше задать имя, например `user1` или `client1`. |
 | `Сколько ссылок/пользователей создать сразу` | Сколько отдельных пользователей и proxy-ссылок создать при установке. | `1`. | Обычно `1`; если сразу нужны разные ссылки для разных людей, указать нужное число. |
@@ -330,7 +330,7 @@ Docker healthcheck
 
 CPU/RAM/PID лимиты в compose не задаются. Это сделано специально, чтобы Telemt не упирался в искусственные ограничения при большом числе клиентов и загрузке медиа.
 
-Если Docker hardening отключен, контейнер запускается проще: без `read_only`, `cap_drop`, `no-new-privileges`, `/tmp` tmpfs и без compose healthcheck. Runtime tmpfs `/run/telemt` остается включенным, потому что Telemt `3.4.18` пишет туда cache/state.
+Если Docker hardening отключен, контейнер запускается проще: без `read_only`, `cap_drop`, `no-new-privileges`, `/tmp` tmpfs и без compose healthcheck. Runtime tmpfs `/run/telemt` остается включенным, потому что Telemt `3.4.22` пишет туда cache/state.
 
 Для Telemt `3.4.12+` новые установки и `--update` также добавляют явную секцию:
 
@@ -341,7 +341,7 @@ CPU/RAM/PID лимиты в compose не задаются. Это сделано
 
 Это закрепляет fallback-трафик с SNI вашего домена за локальным HTTPS mask site. Остальной fallback продолжает работать через обычные `mask_host`/`mask_port`.
 
-Для Telemt `3.4.18` конфиг также получает runtime-кеш в `/run/telemt`, `beobachten`-окно для JA3/JA4 диагностики, `client_mss = "tspu"` если MSS не отключен, `[access.user_enabled]`, per-upstream `ipv4/ipv6/prefer`, `mask_dynamic = false` для сохранения статической mask-схемы и `synlimit = false`. SYN limiter не включается автоматически в Docker/nginx-stream схеме, потому что для него нужен `CAP_NET_ADMIN`, а внешний `443/tcp` принимает nginx.
+Для Telemt `3.4.22` конфиг также получает runtime-кеш в `/run/telemt`, `beobachten`-окно для JA3/JA4 диагностики, `client_mss = "tspu"` и `client_mss_bulk = "1400"` если MSS не отключен, `[access.user_enabled]`, per-upstream `ipv4/ipv6/prefer`, `mask_dynamic = false` для сохранения статической mask-схемы и `synlimit = false`. SYN limiter не включается автоматически в Docker/nginx-stream схеме, потому что для него нужен `CAP_NET_ADMIN`, а внешний `443/tcp` принимает nginx. Если оператор вручную включает `TELEMT_SYNLIMIT=nftables|iptables`, скрипт пишет новые Synlimit V2-поля `synlimit_ios_*` и `synlimit_hashlimit_*`.
 
 ### Публикация
 
@@ -361,14 +361,16 @@ docker login ghcr.io
 
 ```text
 TELEMT_REPOSITORY  GitHub repo с release assets. Default: telemt/telemt
-TELEMT_VERSION     Точный release tag. Default: 3.4.18
+TELEMT_VERSION     Точный release tag. Default: 3.4.22
 TELEMT_LATEST_COMPATIBLE_VERSION
-                  Проверенная целевая версия для --update. Default: 3.4.18
+                  Проверенная целевая версия для --update. Default: 3.4.22
 IMAGE              Имя image. Default: telemt-local
 IMAGE_TAG          Docker tag. Default: TELEMT_VERSION
 AUTO_BUILD_IMAGE   yes автоматически собирает image, если его нет. Default: yes
 MASK_SITE_MODE     fancy или empty. Default: fancy
 TELEMT_CLIENT_MSS  off, tspu, 2in8, extreme-low или 88..4096. Default: tspu
+TELEMT_CLIENT_MSS_BULK
+                  off, tspu, 2in8, extreme-low или 88..4096. Default: 1400
 TELEMT_SYNLIMIT    false, iptables или nftables. Default: false
 TARGET             prod или debug. Default: prod
 PLATFORM           linux/amd64 или linux/arm64, опционально
@@ -496,7 +498,7 @@ TARGET=debug ./build.sh
 Check version:
 
 ```bash
-docker run --rm --entrypoint /app/telemt telemt-local:3.4.18 --version
+docker run --rm --entrypoint /app/telemt telemt-local:3.4.22 --version
 ```
 
 ### Server Install
@@ -515,7 +517,7 @@ docker run --rm --entrypoint /app/telemt telemt-local:3.4.18 --version
 - Docker hardening and healthcheck with a dedicated prompt;
 - runtime logs disabled by default;
 - optional `ad_tag`, `middle_proxy`, and high-load tuning;
-- Telemt `3.4.18` compatibility settings: `/run/telemt` runtime cache, `client_mss`, `user_enabled`, upstream IPv4 policy, and explicit disabled `synlimit`.
+- Telemt `3.4.22` compatibility settings: `/run/telemt` runtime cache, `client_mss`, `client_mss_bulk`, `user_enabled`, upstream IPv4 policy, Synlimit V2 fields, and explicit disabled `synlimit`.
 
 In this architecture, a normal scanner or browser without the MTProxy key receives the HTTPS mask site with a real certificate for your domain. Telemt does not replace TLS and does not perform MITM: valid MTProxy clients stay inside Telemt, while other TLS connections are relayed to the mask site as a TCP stream.
 
@@ -601,7 +603,7 @@ If the installer finds an existing installation under `/opt/telemt-docker`, norm
 
 `RESET_INSTALL_STATE=1` means a real fresh install: old saved input, the old Telemt secret, old `telemt.toml`, compose, container, and proxy links are removed before prompts. The installer asks for the domain, email, user, and other settings again. Old Telemt nginx files are removed only when they look installer-managed; unrelated nginx sites are not touched. The new mask site is written to a dedicated nginx file named `telemt-mask-<domain>.conf`, so a vhost named after the domain is not overwritten.
 
-The `--update` mode first analyzes the existing installation: it reads the domain and user from `telemt.toml`, the image from compose, tries to detect the current Telemt version from the container/image/tag, and prints missing compatible config keys. After confirmation it backs up `/opt/telemt-docker/telemt.toml`, `docker-compose.yml`, secrets, links, and nginx configs, switches compose to the exact checked compatible tag (`telemt-local:3.4.18` by default), rebuilds/pulls that exact release tag, extends the current `telemt.toml`/compose only with missing safe keys, recreates the container, and runs API/active-probing validation again. Manual values are not overwritten; `TELEMT_VERSION=latest` in `--update` is ignored and replaced with the pinned compatible version.
+The `--update` mode first analyzes the existing installation: it reads the domain and user from `telemt.toml`, the image from compose, tries to detect the current Telemt version from the container/image/tag, and prints missing compatible config keys. After confirmation it backs up `/opt/telemt-docker/telemt.toml`, `docker-compose.yml`, secrets, links, and nginx configs, switches compose to the exact checked compatible tag (`telemt-local:3.4.22` by default), rebuilds/pulls that exact release tag, extends the current `telemt.toml`/compose only with missing safe keys, recreates the container, and runs API/active-probing validation again. Manual values are not overwritten; `TELEMT_VERSION=latest` in `--update` is ignored and replaced with the pinned compatible version.
 
 Domains may be entered as regular ASCII domains, punycode (`xn--...`), or Cyrillic/IDN names. The installer converts IDN names to punycode/ASCII before DNS checks, Let's Encrypt, nginx, and MTProxy link generation. Invalid punycode is rejected before system changes.
 
@@ -622,7 +624,7 @@ If `telemt-local:<tag>` is not built yet, the installer runs `build.sh` from the
 If the image is in a registry:
 
 ```bash
-TELEMT_IMAGE=ghcr.io/Telemtinstall/telemt:3.4.18 ./install_docker-telemt.sh
+TELEMT_IMAGE=ghcr.io/Telemtinstall/telemt:3.4.22 ./install_docker-telemt.sh
 ```
 
 ### Installer Prompts
@@ -633,7 +635,7 @@ For a normal install, pressing `Enter` on every prompt except the domain is usua
 | --- | --- | --- | --- |
 | `Proxy domain` | Domain used in MTProxy links, TLS SNI, nginx, and Let's Encrypt. Its DNS A record must point to the server IPv4. | No default, except saved config or hostname in `--auto`. | Enter the real proxy domain, for example `proxy.example.com`. |
 | `Let's Encrypt email` | Email for certificate issuance and renewal notices. | `admin@<domain>`. | Keep the default or enter your real admin email. |
-| `Telemt Docker image` | Docker image used by compose. | `telemt-local:3.4.18`. | Keep the default. For a registry image, use an exact tag such as `ghcr.io/Telemtinstall/telemt:3.4.18`. |
+| `Telemt Docker image` | Docker image used by compose. | `telemt-local:3.4.22`. | Keep the default. For a registry image, use an exact tag such as `ghcr.io/Telemtinstall/telemt:3.4.22`. |
 | `Mask site page` | What a regular browser sees without the MTProxy secret. `fancy` serves a simple placeholder, `empty` serves blank HTML with `200 OK`. | `fancy`. | Usually `fancy`; use `empty` when you want a blank camouflage page. |
 | `Telemt user name` | First user/link name in `[access.users]`. The secret is generated automatically. | `default`. | Keep `default` for one owner, or use names such as `user1`/`client1` for tracking. |
 | `How many proxy links/users to create now` | Number of separate users and proxy links created during install. | `1`. | Usually `1`; use more if different people need separate links immediately. |
@@ -699,7 +701,7 @@ Docker healthcheck
 
 Compose does not set CPU/RAM/PID limits. This is intentional, so Telemt does not hit artificial limits when many clients load media.
 
-When Docker hardening is disabled, the container runs in a simpler mode without `read_only`, `cap_drop`, `no-new-privileges`, `/tmp` tmpfs, and compose healthcheck. The runtime tmpfs `/run/telemt` stays enabled because Telemt `3.4.18` writes cache/state there.
+When Docker hardening is disabled, the container runs in a simpler mode without `read_only`, `cap_drop`, `no-new-privileges`, `/tmp` tmpfs, and compose healthcheck. The runtime tmpfs `/run/telemt` stays enabled because Telemt `3.4.22` writes cache/state there.
 
 For Telemt `3.4.12+`, new installs and `--update` also add an explicit section:
 
@@ -710,7 +712,7 @@ For Telemt `3.4.12+`, new installs and `--update` also add an explicit section:
 
 This pins fallback traffic with your domain SNI to the local HTTPS mask site. Other fallback traffic keeps using normal `mask_host`/`mask_port`.
 
-For Telemt `3.4.18`, the config also gets runtime cache under `/run/telemt`, a `beobachten` window for JA3/JA4 diagnostics, `client_mss = "tspu"` unless MSS is disabled, `[access.user_enabled]`, per-upstream `ipv4/ipv6/prefer`, `mask_dynamic = false` to preserve the static masking layout, and `synlimit = false`. SYN limiter is not enabled automatically in the Docker/nginx-stream layout because it needs `CAP_NET_ADMIN`, while public `443/tcp` is accepted by nginx.
+For Telemt `3.4.22`, the config also gets runtime cache under `/run/telemt`, a `beobachten` window for JA3/JA4 diagnostics, `client_mss = "tspu"` and `client_mss_bulk = "1400"` unless MSS is disabled, `[access.user_enabled]`, per-upstream `ipv4/ipv6/prefer`, `mask_dynamic = false` to preserve the static masking layout, and `synlimit = false`. SYN limiter is not enabled automatically in the Docker/nginx-stream layout because it needs `CAP_NET_ADMIN`, while public `443/tcp` is accepted by nginx. If the operator explicitly sets `TELEMT_SYNLIMIT=nftables|iptables`, the installer writes the newer Synlimit V2 `synlimit_ios_*` and `synlimit_hashlimit_*` fields.
 
 ### Publishing
 
@@ -730,14 +732,16 @@ docker login ghcr.io
 
 ```text
 TELEMT_REPOSITORY  GitHub repo with release assets. Default: telemt/telemt
-TELEMT_VERSION     Exact release tag. Default: 3.4.18
+TELEMT_VERSION     Exact release tag. Default: 3.4.22
 TELEMT_LATEST_COMPATIBLE_VERSION
-                  Checked target version for --update. Default: 3.4.18
+                  Checked target version for --update. Default: 3.4.22
 IMAGE              Image name. Default: telemt-local
 IMAGE_TAG          Docker tag. Default: TELEMT_VERSION
 AUTO_BUILD_IMAGE   yes builds the image automatically when missing. Default: yes
 MASK_SITE_MODE     fancy or empty. Default: fancy
 TELEMT_CLIENT_MSS  off, tspu, 2in8, extreme-low, or 88..4096. Default: tspu
+TELEMT_CLIENT_MSS_BULK
+                  off, tspu, 2in8, extreme-low, or 88..4096. Default: 1400
 TELEMT_SYNLIMIT    false, iptables, or nftables. Default: false
 TARGET             prod or debug. Default: prod
 PLATFORM           linux/amd64 or linux/arm64, optional

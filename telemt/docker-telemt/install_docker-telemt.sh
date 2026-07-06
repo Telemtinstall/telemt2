@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_VERSION="2026-06-12"
+SCRIPT_VERSION="2026-07-06"
 INSTALL_DIR="${INSTALL_DIR:-/opt/telemt-docker}"
 STATE_FILE="${STATE_FILE:-/root/.install_docker_telemt.state}"
 SAVED_CONFIG="${SAVED_CONFIG:-/root/.install_docker_telemt.config}"
@@ -14,7 +14,7 @@ if [ -n "${TELEMT_VERSION+x}" ]; then
   TELEMT_VERSION_ENV_VALUE="$TELEMT_VERSION"
 fi
 # Bump only after checking the installer/config compatibility for that Telemt release.
-TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.18}"
+TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.22}"
 TELEMT_DEFAULT_VERSION="${TELEMT_DEFAULT_VERSION:-$TELEMT_LATEST_COMPATIBLE_VERSION}"
 
 DOMAIN="${DOMAIN:-}"
@@ -26,10 +26,16 @@ TELEMT_USERS="${TELEMT_USERS:-}"
 TELEMT_LINK_COUNT="${TELEMT_LINK_COUNT:-}"
 TELEMT_MAX_TCP_CONNS="${TELEMT_MAX_TCP_CONNS:-5000}"
 TELEMT_CLIENT_MSS="${TELEMT_CLIENT_MSS:-tspu}"
+TELEMT_CLIENT_MSS_BULK="${TELEMT_CLIENT_MSS_BULK:-1400}"
 TELEMT_SYNLIMIT="${TELEMT_SYNLIMIT:-false}"
 TELEMT_SYNLIMIT_SECONDS="${TELEMT_SYNLIMIT_SECONDS:-60}"
-TELEMT_SYNLIMIT_HITCOUNT="${TELEMT_SYNLIMIT_HITCOUNT:-60}"
-TELEMT_SYNLIMIT_BURST="${TELEMT_SYNLIMIT_BURST:-120}"
+TELEMT_SYNLIMIT_HITCOUNT="${TELEMT_SYNLIMIT_HITCOUNT:-48}"
+TELEMT_SYNLIMIT_BURST="${TELEMT_SYNLIMIT_BURST:-1}"
+TELEMT_SYNLIMIT_IOS_SECONDS="${TELEMT_SYNLIMIT_IOS_SECONDS:-1}"
+TELEMT_SYNLIMIT_IOS_HITCOUNT="${TELEMT_SYNLIMIT_IOS_HITCOUNT:-12}"
+TELEMT_SYNLIMIT_IOS_BURST="${TELEMT_SYNLIMIT_IOS_BURST:-24}"
+TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS="${TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS:-60000}"
+TELEMT_SYNLIMIT_HASHLIMIT_SIZE="${TELEMT_SYNLIMIT_HASHLIMIT_SIZE:-32768}"
 AD_TAG="${AD_TAG:-}"
 USE_MIDDLE_PROXY="${USE_MIDDLE_PROXY:-}"
 ENABLE_LOGS="${ENABLE_LOGS:-no}"
@@ -864,10 +870,16 @@ validate_inputs() {
   [ "$TELEMT_LINK_COUNT" -ge 1 ] && [ "$TELEMT_LINK_COUNT" -le 100 ] || die "Telemt link count must be between 1 and 100."
   [[ "$TELEMT_MAX_TCP_CONNS" =~ ^[0-9]+$ ]] || die "Bad connection limit: $TELEMT_MAX_TCP_CONNS"
   normalize_client_mss "$TELEMT_CLIENT_MSS" >/dev/null || die "Bad TELEMT_CLIENT_MSS: use off, tspu, 2in8, extreme-low, or 88..4096."
+  normalize_client_mss "$TELEMT_CLIENT_MSS_BULK" >/dev/null || die "Bad TELEMT_CLIENT_MSS_BULK: use off, tspu, 2in8, extreme-low, or 88..4096."
   normalize_synlimit "$TELEMT_SYNLIMIT" >/dev/null || die "Bad TELEMT_SYNLIMIT: use false, iptables, or nftables."
   validate_synlimit_number TELEMT_SYNLIMIT_SECONDS "$TELEMT_SYNLIMIT_SECONDS"
   validate_synlimit_number TELEMT_SYNLIMIT_HITCOUNT "$TELEMT_SYNLIMIT_HITCOUNT"
   validate_synlimit_number TELEMT_SYNLIMIT_BURST "$TELEMT_SYNLIMIT_BURST"
+  validate_synlimit_number TELEMT_SYNLIMIT_IOS_SECONDS "$TELEMT_SYNLIMIT_IOS_SECONDS"
+  validate_synlimit_number TELEMT_SYNLIMIT_IOS_HITCOUNT "$TELEMT_SYNLIMIT_IOS_HITCOUNT"
+  validate_synlimit_number TELEMT_SYNLIMIT_IOS_BURST "$TELEMT_SYNLIMIT_IOS_BURST"
+  validate_synlimit_number TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS"
+  validate_synlimit_number TELEMT_SYNLIMIT_HASHLIMIT_SIZE "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE"
   [[ "$TELEMT_IMAGE" =~ ^[A-Za-z0-9._/:@+-]+$ ]] || die "Bad Docker image: $TELEMT_IMAGE"
   [[ "$TELEMT_VERSION" =~ ^[A-Za-z0-9._/@:+-]+$ ]] || die "Bad Telemt version: $TELEMT_VERSION"
   if [ -n "$AD_TAG" ]; then
@@ -887,6 +899,7 @@ validate_inputs() {
   AUTO_BUILD_IMAGE="$(normalize_yes_no "$AUTO_BUILD_IMAGE")"
   MASK_SITE_MODE="$(normalize_mask_site_mode "$MASK_SITE_MODE")"
   TELEMT_CLIENT_MSS="$(normalize_client_mss "$TELEMT_CLIENT_MSS")"
+  TELEMT_CLIENT_MSS_BULK="$(normalize_client_mss "$TELEMT_CLIENT_MSS_BULK")"
   TELEMT_SYNLIMIT="$(normalize_synlimit "$TELEMT_SYNLIMIT")"
   SCRIPT_LANG="$(normalize_script_lang "$SCRIPT_LANG")"
 }
@@ -903,10 +916,16 @@ TELEMT_USERS=$(printf '%q' "$TELEMT_USERS")
 TELEMT_LINK_COUNT=$(printf '%q' "$TELEMT_LINK_COUNT")
 TELEMT_MAX_TCP_CONNS=$(printf '%q' "$TELEMT_MAX_TCP_CONNS")
 TELEMT_CLIENT_MSS=$(printf '%q' "$TELEMT_CLIENT_MSS")
+TELEMT_CLIENT_MSS_BULK=$(printf '%q' "$TELEMT_CLIENT_MSS_BULK")
 TELEMT_SYNLIMIT=$(printf '%q' "$TELEMT_SYNLIMIT")
 TELEMT_SYNLIMIT_SECONDS=$(printf '%q' "$TELEMT_SYNLIMIT_SECONDS")
 TELEMT_SYNLIMIT_HITCOUNT=$(printf '%q' "$TELEMT_SYNLIMIT_HITCOUNT")
 TELEMT_SYNLIMIT_BURST=$(printf '%q' "$TELEMT_SYNLIMIT_BURST")
+TELEMT_SYNLIMIT_IOS_SECONDS=$(printf '%q' "$TELEMT_SYNLIMIT_IOS_SECONDS")
+TELEMT_SYNLIMIT_IOS_HITCOUNT=$(printf '%q' "$TELEMT_SYNLIMIT_IOS_HITCOUNT")
+TELEMT_SYNLIMIT_IOS_BURST=$(printf '%q' "$TELEMT_SYNLIMIT_IOS_BURST")
+TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS=$(printf '%q' "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS")
+TELEMT_SYNLIMIT_HASHLIMIT_SIZE=$(printf '%q' "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE")
 AD_TAG=$(printf '%q' "$AD_TAG")
 USE_MIDDLE_PROXY=$(printf '%q' "$USE_MIDDLE_PROXY")
 ENABLE_LOGS=$(printf '%q' "$ENABLE_LOGS")
@@ -1962,6 +1981,10 @@ telemt_version_supports_client_mss() {
   telemt_version_at_least 3 4 15
 }
 
+telemt_version_supports_client_mss_bulk() {
+  telemt_version_at_least 3 4 19
+}
+
 telemt_version_supports_synlimit() {
   telemt_version_at_least 3 4 18
 }
@@ -2507,11 +2530,12 @@ write_telemt_config() {
   install -d -m 0777 "$INSTALL_DIR/runtime"
 
   local middle_bool="false"
-  local users_array user secret client_mss synlimit_value
+  local users_array user secret client_mss client_mss_bulk synlimit_value
   [ "$USE_MIDDLE_PROXY" = "yes" ] && middle_bool="true"
   normalize_telemt_users
   users_array="$(telemt_users_toml_array)"
   client_mss="$(normalize_client_mss "$TELEMT_CLIENT_MSS")"
+  client_mss_bulk="$(normalize_client_mss "$TELEMT_CLIENT_MSS_BULK")"
   synlimit_value="$(normalize_synlimit "$TELEMT_SYNLIMIT")"
 
   {
@@ -2561,6 +2585,9 @@ EOF
     if telemt_version_supports_client_mss && [ "$client_mss" != "off" ]; then
       printf 'client_mss = "%s"\n' "$client_mss"
     fi
+    if telemt_version_supports_client_mss_bulk && [ "$client_mss" != "off" ] && [ "$client_mss_bulk" != "off" ]; then
+      printf 'client_mss_bulk = "%s"\n' "$client_mss_bulk"
+    fi
     cat <<EOF
 [server.api]
 enabled = true
@@ -2586,6 +2613,11 @@ EOF
         printf 'synlimit_seconds = %s\n' "$TELEMT_SYNLIMIT_SECONDS"
         printf 'synlimit_hitcount = %s\n' "$TELEMT_SYNLIMIT_HITCOUNT"
         printf 'synlimit_burst = %s\n' "$TELEMT_SYNLIMIT_BURST"
+        printf 'synlimit_ios_seconds = %s\n' "$TELEMT_SYNLIMIT_IOS_SECONDS"
+        printf 'synlimit_ios_hitcount = %s\n' "$TELEMT_SYNLIMIT_IOS_HITCOUNT"
+        printf 'synlimit_ios_burst = %s\n' "$TELEMT_SYNLIMIT_IOS_BURST"
+        printf 'synlimit_hashlimit_expire_ms = %s\n' "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS"
+        printf 'synlimit_hashlimit_size = %s\n' "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE"
       fi
     fi
     cat <<EOF
@@ -3080,11 +3112,53 @@ EOF
   die "Active probing failed. See diagnostics above."
 }
 
+print_telemt_container_diagnostics() {
+  say
+  if is_ru; then
+    say "Диагностика Docker/Telemt:"
+  else
+    say "Docker/Telemt diagnostics:"
+  fi
+
+  docker ps -a --filter "name=telemt" 2>&1 || true
+
+  if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+    say
+    say "$INSTALL_DIR/docker-compose.yml:"
+    sed -n '1,220p' "$INSTALL_DIR/docker-compose.yml" 2>&1 || true
+  fi
+
+  say
+  say "telemt logs:"
+  if docker compose version >/dev/null 2>&1; then
+    (cd "$INSTALL_DIR" && docker compose logs --no-color --tail=120 telemt) 2>&1 || docker logs --tail 120 telemt 2>&1 || true
+  elif have docker-compose; then
+    (cd "$INSTALL_DIR" && docker-compose logs --tail=120 telemt) 2>&1 || docker logs --tail 120 telemt 2>&1 || true
+  else
+    docker logs --tail 120 telemt 2>&1 || true
+  fi
+}
+
 validate_install() {
   sleep 8
   ss -lntp | grep -E ':(80|443|8443|1443|9090|9091)\b' || true
-  curl -fsS "http://127.0.0.1:9091/v1/users" | tee /tmp/telemt-users.json >/dev/null
-  grep -q '"ok":true' /tmp/telemt-users.json
+  if ! curl -fsS "http://127.0.0.1:9091/v1/users" | tee /tmp/telemt-users.json >/dev/null; then
+    print_telemt_container_diagnostics
+    if is_ru; then
+      die "Telemt API не отвечает на 127.0.0.1:9091. Смотри диагностику контейнера выше."
+    else
+      die "Telemt API does not respond on 127.0.0.1:9091. See container diagnostics above."
+    fi
+  fi
+  if ! grep -q '"ok":true' /tmp/telemt-users.json; then
+    cat /tmp/telemt-users.json >&2 || true
+    print_telemt_container_diagnostics
+    if is_ru; then
+      die "Telemt API ответил, но формат ответа неожиданный."
+    else
+      die "Telemt API responded, but the response format was unexpected."
+    fi
+  fi
   write_proxy_links /tmp/telemt-users.json
 
   local probe_log="/root/telemt-active-probing-check.txt"
@@ -3128,6 +3202,7 @@ print_plan() {
   ссылок MTProxy:     $TELEMT_LINK_COUNT
   лимит подключений:  $TELEMT_MAX_TCP_CONNS
   client_mss:         $TELEMT_CLIENT_MSS
+  client_mss_bulk:    $TELEMT_CLIENT_MSS_BULK
   synlimit:           $TELEMT_SYNLIMIT
   ad_tag:             $([ -n "$AD_TAG" ] && printf yes || printf no)
   middle_proxy:       $USE_MIDDLE_PROXY
@@ -3201,6 +3276,7 @@ Install plan:
   MTProxy links:      $TELEMT_LINK_COUNT
   connection limit:   $TELEMT_MAX_TCP_CONNS
   client_mss:         $TELEMT_CLIENT_MSS
+  client_mss_bulk:    $TELEMT_CLIENT_MSS_BULK
   synlimit:           $TELEMT_SYNLIMIT
   ad_tag:             $([ -n "$AD_TAG" ] && printf yes || printf no)
   middle_proxy:       $USE_MIDDLE_PROXY
@@ -3318,6 +3394,7 @@ EOF
 	    done
 	    ask_default TELEMT_MAX_TCP_CONNS "Максимум подключений Telemt" "$TELEMT_MAX_TCP_CONNS"
 	    ask_default TELEMT_CLIENT_MSS "TCP MSS для Telemt listener: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS"
+	    ask_default TELEMT_CLIENT_MSS_BULK "TCP MSS для bulk-фазы после handshake: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS_BULK"
 	    ask_default TELEMT_SYNLIMIT "SYN limiter Telemt listener: false/iptables/nftables" "$TELEMT_SYNLIMIT"
 	    ask_default AD_TAG "MTProxy ad_tag, Enter = пропустить" "$AD_TAG"
   else
@@ -3355,6 +3432,7 @@ EOF
 	    done
 	    ask_default TELEMT_MAX_TCP_CONNS "Max Telemt connections" "$TELEMT_MAX_TCP_CONNS"
 	    ask_default TELEMT_CLIENT_MSS "Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS"
+	    ask_default TELEMT_CLIENT_MSS_BULK "Telemt bulk-phase TCP MSS after handshake: off/tspu/2in8/extreme-low/88..4096" "$TELEMT_CLIENT_MSS_BULK"
 	    ask_default TELEMT_SYNLIMIT "Telemt listener SYN limiter: false/iptables/nftables" "$TELEMT_SYNLIMIT"
 	    ask_default AD_TAG "MTProxy ad_tag, Enter = skip" "$AD_TAG"
   fi
@@ -3477,7 +3555,7 @@ PY
 build_update_config_gap_report() {
   local config_file="$INSTALL_DIR/telemt.toml"
   local compose_file="$INSTALL_DIR/docker-compose.yml"
-  local support_exclusive_mask=0 support_user_enabled=0 support_client_mss=0 support_synlimit=0
+  local client_mss client_mss_bulk support_exclusive_mask=0 support_user_enabled=0 support_client_mss=0 support_client_mss_bulk=0 support_synlimit=0
 
   [ -f "$config_file" ] || return 0
   if ! have python3; then
@@ -3488,10 +3566,13 @@ build_update_config_gap_report() {
   telemt_version_supports_exclusive_mask && support_exclusive_mask=1
   telemt_version_supports_user_enabled && support_user_enabled=1
   telemt_version_supports_client_mss && support_client_mss=1
+  telemt_version_supports_client_mss_bulk && support_client_mss_bulk=1
   telemt_version_supports_synlimit && support_synlimit=1
+  client_mss="$(normalize_client_mss "$TELEMT_CLIENT_MSS")"
+  client_mss_bulk="$(normalize_client_mss "$TELEMT_CLIENT_MSS_BULK")"
 
-  python3 - "$config_file" "$compose_file" "$DOMAIN" \
-    "$support_exclusive_mask" "$support_user_enabled" "$support_client_mss" "$support_synlimit" <<'PY'
+  python3 - "$config_file" "$compose_file" "$DOMAIN" "$client_mss" "$client_mss_bulk" \
+    "$support_exclusive_mask" "$support_user_enabled" "$support_client_mss" "$support_client_mss_bulk" "$support_synlimit" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -3499,10 +3580,13 @@ from pathlib import Path
 config_path = Path(sys.argv[1])
 compose_path = Path(sys.argv[2])
 domain = sys.argv[3]
-support_exclusive_mask = sys.argv[4] == "1"
-support_user_enabled = sys.argv[5] == "1"
-support_client_mss = sys.argv[6] == "1"
-support_synlimit = sys.argv[7] == "1"
+client_mss = sys.argv[4]
+client_mss_bulk = sys.argv[5]
+support_exclusive_mask = sys.argv[6] == "1"
+support_user_enabled = sys.argv[7] == "1"
+support_client_mss = sys.argv[8] == "1"
+support_client_mss_bulk = sys.argv[9] == "1"
+support_synlimit = sys.argv[10] == "1"
 
 lines = config_path.read_text().splitlines(True)
 section_re = re.compile(r'^\s*\[([A-Za-z0-9_.-]+)\]\s*(?:#.*)?$')
@@ -3601,9 +3685,11 @@ checks = [
     ("censorship.mask_dynamic", section_has("censorship", "mask_dynamic")),
 ]
 
-if support_client_mss:
+if support_client_mss and client_mss != "off":
     checks.append(("server.client_mss", section_has("server", "client_mss")))
     checks.append(("server.listeners.client_mss", arrays_have("server.listeners", "client_mss")))
+if support_client_mss_bulk and client_mss != "off" and client_mss_bulk != "off":
+    checks.append(("server.client_mss_bulk", section_has("server", "client_mss_bulk")))
 if support_synlimit:
     checks.append(("server.listeners.synlimit", arrays_have_non_true("server.listeners", "synlimit")))
 if support_exclusive_mask and domain:
@@ -3624,6 +3710,10 @@ else:
 if compose_path.exists():
     compose_text = compose_path.read_text()
     checks.append(("compose.tmpfs./run/telemt", "/run/telemt:" in compose_text))
+    compose_host = bool(re.search(r'(?m)^\s{4}network_mode:\s*"?host"?\s*$', compose_text))
+    checks.append(("compose.network_mode.host", compose_host))
+    if compose_host:
+        checks.append(("compose.no_ports_with_host", not bool(re.search(r'(?m)^\s{4}ports:\s*$', compose_text))))
 
 missing = [name for name, ok in checks if not ok]
 if missing:
@@ -3687,31 +3777,38 @@ backup_update_state() {
 
 apply_telemt_config_compat_updates() {
   local config_file="$INSTALL_DIR/telemt.toml"
-  local client_mss synlimit_value support_exclusive_mask=0 support_user_enabled=0 support_client_mss=0 support_synlimit=0
+  local client_mss client_mss_bulk synlimit_value support_exclusive_mask=0 support_user_enabled=0 support_client_mss=0 support_client_mss_bulk=0 support_synlimit=0
 
   [ -f "$config_file" ] || return 0
   client_mss="$(normalize_client_mss "$TELEMT_CLIENT_MSS")"
+  client_mss_bulk="$(normalize_client_mss "$TELEMT_CLIENT_MSS_BULK")"
   synlimit_value="$(normalize_synlimit "$TELEMT_SYNLIMIT")"
   telemt_version_supports_exclusive_mask && support_exclusive_mask=1
   telemt_version_supports_user_enabled && support_user_enabled=1
   telemt_version_supports_client_mss && support_client_mss=1
+  telemt_version_supports_client_mss_bulk && support_client_mss_bulk=1
   telemt_version_supports_synlimit && support_synlimit=1
 
-  python3 - "$config_file" "$DOMAIN" "$PUBLIC_IP" "$client_mss" "$synlimit_value" \
+  python3 - "$config_file" "$DOMAIN" "$PUBLIC_IP" "$client_mss" "$client_mss_bulk" "$synlimit_value" \
     "$TELEMT_SYNLIMIT_SECONDS" "$TELEMT_SYNLIMIT_HITCOUNT" "$TELEMT_SYNLIMIT_BURST" \
-    "$support_exclusive_mask" "$support_user_enabled" "$support_client_mss" "$support_synlimit" <<'PY'
+    "$TELEMT_SYNLIMIT_IOS_SECONDS" "$TELEMT_SYNLIMIT_IOS_HITCOUNT" "$TELEMT_SYNLIMIT_IOS_BURST" \
+    "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS" "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE" \
+    "$support_exclusive_mask" "$support_user_enabled" "$support_client_mss" "$support_client_mss_bulk" "$support_synlimit" <<'PY'
 import json
 import re
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
-domain, public_ip, client_mss, synlimit = sys.argv[2:6]
-syn_seconds, syn_hitcount, syn_burst = sys.argv[6:9]
-support_exclusive_mask = sys.argv[9] == "1"
-support_user_enabled = sys.argv[10] == "1"
-support_client_mss = sys.argv[11] == "1"
-support_synlimit = sys.argv[12] == "1"
+domain, public_ip, client_mss, client_mss_bulk, synlimit = sys.argv[2:7]
+syn_seconds, syn_hitcount, syn_burst = sys.argv[7:10]
+syn_ios_seconds, syn_ios_hitcount, syn_ios_burst = sys.argv[10:13]
+syn_hashlimit_expire_ms, syn_hashlimit_size = sys.argv[13:15]
+support_exclusive_mask = sys.argv[15] == "1"
+support_user_enabled = sys.argv[16] == "1"
+support_client_mss = sys.argv[17] == "1"
+support_client_mss_bulk = sys.argv[18] == "1"
+support_synlimit = sys.argv[19] == "1"
 
 lines = path.read_text().splitlines(True)
 changed = False
@@ -3836,6 +3933,8 @@ ensure_section_key("server.api", "minimal_runtime_cache_ttl_ms", "minimal_runtim
 
 if support_client_mss and client_mss != "off":
     ensure_section_key("server", "client_mss", f'client_mss = "{client_mss}"\n')
+    if support_client_mss_bulk and client_mss_bulk != "off":
+        ensure_section_key("server", "client_mss_bulk", f'client_mss_bulk = "{client_mss_bulk}"\n')
 
 server_start, server_end = find_section("server")
 if server_start is not None:
@@ -3861,6 +3960,11 @@ for start, end in find_arrays("server.listeners"):
             ensure_key_in_range(start, end, "synlimit_seconds", f"synlimit_seconds = {syn_seconds}\n")
             ensure_key_in_range(start, end, "synlimit_hitcount", f"synlimit_hitcount = {syn_hitcount}\n")
             ensure_key_in_range(start, end, "synlimit_burst", f"synlimit_burst = {syn_burst}\n")
+            ensure_key_in_range(start, end, "synlimit_ios_seconds", f"synlimit_ios_seconds = {syn_ios_seconds}\n")
+            ensure_key_in_range(start, end, "synlimit_ios_hitcount", f"synlimit_ios_hitcount = {syn_ios_hitcount}\n")
+            ensure_key_in_range(start, end, "synlimit_ios_burst", f"synlimit_ios_burst = {syn_ios_burst}\n")
+            ensure_key_in_range(start, end, "synlimit_hashlimit_expire_ms", f"synlimit_hashlimit_expire_ms = {syn_hashlimit_expire_ms}\n")
+            ensure_key_in_range(start, end, "synlimit_hashlimit_size", f"synlimit_hashlimit_size = {syn_hashlimit_size}\n")
 
 ensure_section_key("censorship", "mask_dynamic", "mask_dynamic = false\n")
 if support_exclusive_mask and domain:
@@ -3903,49 +4007,114 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 lines = path.read_text().splitlines(True)
-if any("/run/telemt:" in line for line in lines):
-    sys.exit(0)
-
 changed = False
-tmpfs_idx = None
-for i, line in enumerate(lines):
-    if re.match(r'^\s{4}tmpfs:\s*$', line):
-        tmpfs_idx = i
-        break
 
-if tmpfs_idx is not None:
-    insert_at = tmpfs_idx + 1
-    while insert_at < len(lines) and re.match(r'^\s{6}-\s+', lines[insert_at]):
-        insert_at += 1
-    lines.insert(insert_at, "      - /run/telemt:rw,nosuid,nodev,noexec,size=32m\n")
-    changed = True
-else:
+def telemt_bounds():
+    start = None
     for i, line in enumerate(lines):
-        if re.match(r'^\s{4}read_only:\s*true\s*$', line):
-            lines[i + 1:i + 1] = [
-                "    tmpfs:\n",
-                "      - /run/telemt:rw,nosuid,nodev,noexec,size=32m\n",
-            ]
-            changed = True
+        if re.match(r'^\s{2}telemt:\s*$', line):
+            start = i
             break
-    if not changed:
-        for i, line in enumerate(lines):
-            if re.match(r'^\s{4}command:\s*', line):
-                lines[i + 1:i + 1] = [
+    if start is None:
+        return None, None
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if re.match(r'^\s{2}[A-Za-z0-9_.-]+:\s*$', lines[i]):
+            end = i
+            break
+    return start, end
+
+def service_key_pattern(key):
+    return re.compile(rf'^\s{{4}}{re.escape(key)}:\s*')
+
+def service_block_end(i, end):
+    j = i + 1
+    while j < end and not re.match(r'^\s{4}[A-Za-z0-9_.-]+:\s*', lines[j]):
+        j += 1
+    return j
+
+def remove_service_block(key):
+    global changed
+    start, end = telemt_bounds()
+    if start is None:
+        return
+    pattern = service_key_pattern(key)
+    i = start + 1
+    while i < end:
+        if pattern.match(lines[i]):
+            del lines[i:service_block_end(i, end)]
+            changed = True
+            return
+        i += 1
+
+def set_service_scalar(key, value, anchors):
+    global changed
+    start, end = telemt_bounds()
+    if start is None:
+        return
+    pattern = service_key_pattern(key)
+    wanted = f"    {key}: {value}\n"
+    for i in range(start + 1, end):
+        if pattern.match(lines[i]):
+            if lines[i] != wanted:
+                lines[i] = wanted
+                changed = True
+            return
+
+    insert_at = start + 1
+    for anchor in anchors:
+        anchor_pattern = service_key_pattern(anchor)
+        found = None
+        for i in range(start + 1, end):
+            if anchor_pattern.match(lines[i]):
+                found = service_block_end(i, end)
+                break
+        if found is not None:
+            insert_at = found
+            break
+    lines.insert(insert_at, wanted)
+    changed = True
+
+def ensure_tmpfs_run_telemt():
+    global changed
+    start, end = telemt_bounds()
+    if start is None:
+        return
+    if any("/run/telemt:" in line for line in lines[start:end]):
+        return
+
+    tmpfs_idx = None
+    for i in range(start + 1, end):
+        if re.match(r'^\s{4}tmpfs:\s*$', lines[i]):
+            tmpfs_idx = i
+            break
+
+    if tmpfs_idx is not None:
+        insert_at = tmpfs_idx + 1
+        while insert_at < end and re.match(r'^\s{6}-\s+', lines[insert_at]):
+            insert_at += 1
+        lines.insert(insert_at, "      - /run/telemt:rw,nosuid,nodev,noexec,size=32m\n")
+        changed = True
+        return
+
+    for anchor in ("read_only", "command", "network_mode", "restart"):
+        anchor_pattern = service_key_pattern(anchor)
+        start, end = telemt_bounds()
+        for i in range(start + 1, end):
+            if anchor_pattern.match(lines[i]):
+                insert_at = service_block_end(i, end)
+                lines[insert_at:insert_at] = [
                     "    tmpfs:\n",
                     "      - /run/telemt:rw,nosuid,nodev,noexec,size=32m\n",
                 ]
                 changed = True
-                break
-    if not changed:
-        for i, line in enumerate(lines):
-            if re.match(r'^\s{4}restart:\s*', line):
-                lines[i + 1:i + 1] = [
-                    "    tmpfs:\n",
-                    "      - /run/telemt:rw,nosuid,nodev,noexec,size=32m\n",
-                ]
-                changed = True
-                break
+                return
+
+set_service_scalar("container_name", "telemt", ("image",))
+set_service_scalar("restart", "unless-stopped", ("container_name", "image"))
+set_service_scalar("network_mode", "host", ("restart", "container_name", "image"))
+remove_service_block("ports")
+ensure_tmpfs_run_telemt()
 
 if changed:
     path.write_text("".join(lines))
@@ -3984,10 +4153,16 @@ run_update_mode() {
   fi
 
   TELEMT_CLIENT_MSS="$(normalize_client_mss "$TELEMT_CLIENT_MSS")"
+  TELEMT_CLIENT_MSS_BULK="$(normalize_client_mss "$TELEMT_CLIENT_MSS_BULK")"
   TELEMT_SYNLIMIT="$(normalize_synlimit "$TELEMT_SYNLIMIT")"
   validate_synlimit_number TELEMT_SYNLIMIT_SECONDS "$TELEMT_SYNLIMIT_SECONDS"
   validate_synlimit_number TELEMT_SYNLIMIT_HITCOUNT "$TELEMT_SYNLIMIT_HITCOUNT"
   validate_synlimit_number TELEMT_SYNLIMIT_BURST "$TELEMT_SYNLIMIT_BURST"
+  validate_synlimit_number TELEMT_SYNLIMIT_IOS_SECONDS "$TELEMT_SYNLIMIT_IOS_SECONDS"
+  validate_synlimit_number TELEMT_SYNLIMIT_IOS_HITCOUNT "$TELEMT_SYNLIMIT_IOS_HITCOUNT"
+  validate_synlimit_number TELEMT_SYNLIMIT_IOS_BURST "$TELEMT_SYNLIMIT_IOS_BURST"
+  validate_synlimit_number TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS "$TELEMT_SYNLIMIT_HASHLIMIT_EXPIRE_MS"
+  validate_synlimit_number TELEMT_SYNLIMIT_HASHLIMIT_SIZE "$TELEMT_SYNLIMIT_HASHLIMIT_SIZE"
 
   detect_current_telemt_version || true
   resolve_update_target_version
@@ -4010,8 +4185,9 @@ run_update_mode() {
   каталог:          $INSTALL_DIR
   конфиг Telemt:    будет сохранен, затем дополнен только отсутствующими безопасными ключами
   не хватает:       $TELEMT_UPDATE_CONFIG_MISSING
-  compose:          будет сохранен, затем дополнен tmpfs /run/telemt при необходимости
+  compose:          будет сохранен, затем приведен к текущей Docker-схеме: network_mode host + tmpfs /run/telemt
   client_mss:       $TELEMT_CLIENT_MSS
+  client_mss_bulk:  $TELEMT_CLIENT_MSS_BULK
   synlimit:         $TELEMT_SYNLIMIT
   секреты/ссылки:   будут сохранены, ссылки будут пересобраны из текущего секрета
 
@@ -4029,8 +4205,9 @@ Update plan:
   directory:        $INSTALL_DIR
   Telemt config:    preserved, then extended only with missing safe keys
   missing keys:     $TELEMT_UPDATE_CONFIG_MISSING
-  compose:          preserved, then extended with /run/telemt tmpfs when needed
+  compose:          preserved, then aligned to the current Docker layout: host networking + /run/telemt tmpfs
   client_mss:       $TELEMT_CLIENT_MSS
+  client_mss_bulk:  $TELEMT_CLIENT_MSS_BULK
   synlimit:         $TELEMT_SYNLIMIT
   secrets/links:    preserved; links regenerated from the existing secret
 

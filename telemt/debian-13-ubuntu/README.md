@@ -9,7 +9,7 @@
 Для новых установок предпочтительны:
 
 - `install_telemt_systemd.sh`, если Telemt нужен без Docker;
-- `../docker-telemt/install_docker-telemt.sh`, если нужен Docker с локальной сборкой точного release `3.4.18`.
+- `../docker-telemt/install_docker-telemt.sh`, если нужен Docker с локальной сборкой точного release `3.4.22`.
 
 `install_telemt.sh` оставлен как совместимый legacy Docker-путь для старых инструкций. Он больше не использует плавающий `latest`: Docker image закреплён по digest.
 
@@ -90,17 +90,19 @@ chmod +x /root/install_telemt_systemd.sh
 
 1. Читает текущий домен и первого пользователя из `telemt.toml`.
 2. Определяет текущую версию через `/usr/local/bin/telemt --version`.
-3. Выбирает целевую версию не по `latest`, а по точному совместимому release tag. По умолчанию это `3.4.18`.
+3. Выбирает целевую версию не по `latest`, а по точному совместимому release tag. По умолчанию это `3.4.22`.
 4. Показывает, каких совместимых ключей не хватает в текущем конфиге.
 5. После подтверждения делает бэкап бинарника, конфига, systemd unit, nginx-конфигов, секретов и ссылок.
 6. Скачивает с GitHub именно выбранный release asset и matching `.sha256`, проверяет checksum и только потом заменяет бинарник.
 7. Дополняет `telemt.toml` только отсутствующими безопасными ключами, не перезаписывая секреты и ручные значения.
 8. Перезапускает `telemt.service`, проверяет локальный API и делает active probing через `openssl`/`curl`.
 
+Для целевой версии `3.4.22` новая установка и `--update` добавляют `client_mss_bulk = "1400"` после handshake, а при ручном включении `TELEMT_SYNLIMIT=nftables|iptables` также пишут Synlimit V2-поля `synlimit_ios_*` и `synlimit_hashlimit_*`. По умолчанию SYN limiter остаётся выключен, потому что внешний `443/tcp` принимает nginx, а Telemt слушает локальный backend.
+
 Если нужно обновиться не на default-версию, укажите точный tag:
 
 ```bash
-TELEMT_VERSION=3.4.18 /root/install_telemt_systemd.sh --update -lang ru
+TELEMT_VERSION=3.4.22 /root/install_telemt_systemd.sh --update -lang ru
 ```
 
 `TELEMT_VERSION=latest` в update-режиме намеренно не используется: скрипт заменит его на проверенную совместимую версию, чтобы будущий upstream `latest` не сломал установку.
@@ -115,12 +117,13 @@ TELEMT_VERSION=3.4.18 /root/install_telemt_systemd.sh --update -lang ru
 | `Disable SSH password login...` | `no` | Отключает вход по паролю для root и оставляет вход только по ключу. | `no` для первой установки; `yes` только если ключ уже проверен. |
 | `Enable fail2ban for SSH` | `no` | Ставит fail2ban и банит перебор SSH. | `yes` на публичном сервере с открытым SSH; `no`, если доступ закрыт firewall-ом. |
 | `Add 1G swap if missing` | `no` | Добавляет `/swapfile`, если swap отсутствует. | `yes` на маленьком VPS с 512M/1G RAM; иначе `no`. |
-| `Telemt release version` | `3.4.18` | Точный upstream release tag для скачивания с GitHub. | Нажать Enter и оставить проверенную версию. |
+| `Telemt release version` | `3.4.22` | Точный upstream release tag для скачивания с GitHub. | Нажать Enter и оставить проверенную версию. |
 | `Telemt first user name` | `default` | Имя первого пользователя/ссылки в `[access.users]`. | `default` или понятное имя клиента, например `main`. |
 | `How many proxy links/users` | `1` | Сколько отдельных пользователей и ссылок создать сразу. | `1`, если нужна одна ссылка; больше, если хотите разделять клиентов. |
 | `Telemt user name #N` | `userN` | Имя дополнительного пользователя. | Короткое понятное имя без пробелов. |
 | `Max Telemt connections` | `5000` | Лимит TCP-подключений на пользователя. | Оставить `5000`, если нет строгого лимита. |
 | `Telemt listener TCP MSS` | `tspu` | MSS-настройка для устойчивости соединений в плохих сетях. | Оставить `tspu`. |
+| `Telemt bulk-phase TCP MSS after handshake` | `1400` | MSS для bulk-фазы после TLS/MTProxy handshake; уменьшает лишние пакеты после установления соединения. | Оставить `1400`; `off` только для диагностики. |
 | `Telemt listener SYN limiter` | `false` | Включает SYN limiter Telemt (`iptables` или `nftables`). | Оставить `false`; включать только при реальной атаке/нагрузке. |
 | `MTProxy ad_tag` | пусто | Telegram MTProxy promoted channel tag. | Оставить пустым, если нет официального tag. |
 | `Use Telegram middle proxy` | `no`, но `yes` если задан `ad_tag` | Включает middle proxy режим. | `no` без `ad_tag`; с `ad_tag` обычно `yes`. |
