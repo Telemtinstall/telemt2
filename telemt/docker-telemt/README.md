@@ -54,10 +54,16 @@ compose.example.yml       Пример hardened compose для ручной ин
 ```bash
 apt update
 apt install -y git ca-certificates
-cd /root
-git clone https://github.com/Telemtinstall/telemt.git docker-telemt
-cd /root/docker-telemt
-chmod +x ./build.sh ./install_docker-telemt.sh
+if [ -d /root/telemt2/.git ]; then
+  cd /root/telemt2
+  git pull --ff-only
+else
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /root/telemt2
+  cd /root/telemt2
+  git sparse-checkout set telemt/docker-telemt
+fi
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh -lang ru
 ```
 
@@ -80,12 +86,12 @@ DOMAIN=proxy.example.com ./install_docker-telemt.sh --auto -lang ru
 ```bash
 apt update
 apt install -y ca-certificates wget
-mkdir -p /root/docker-telemt
-cd /root/docker-telemt
-wget -O Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt/main/Dockerfile
-wget -O build.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/build.sh
-wget -O install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/install_docker-telemt.sh
-wget -O telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/telemt-users.sh
+mkdir -p /root/telemt2/telemt/docker-telemt
+cd /root/telemt2/telemt/docker-telemt
+wget -O Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/Dockerfile
+wget -O build.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/build.sh
+wget -O install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/install_docker-telemt.sh
+wget -O telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/telemt-users.sh
 chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh -lang ru
 ```
@@ -95,12 +101,12 @@ chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ```bash
 apt update
 apt install -y ca-certificates curl
-mkdir -p /root/docker-telemt
-cd /root/docker-telemt
-curl -fsSLo Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt/main/Dockerfile
-curl -fsSLo build.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/build.sh
-curl -fsSLo install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/install_docker-telemt.sh
-curl -fsSLo telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/telemt-users.sh
+mkdir -p /root/telemt2/telemt/docker-telemt
+cd /root/telemt2/telemt/docker-telemt
+curl -fsSLo Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/Dockerfile
+curl -fsSLo build.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/build.sh
+curl -fsSLo install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/install_docker-telemt.sh
+curl -fsSLo telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/telemt-users.sh
 chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh -lang ru
 ```
@@ -163,19 +169,26 @@ docker run --rm --entrypoint /app/telemt telemt-local:3.4.22 --version
 ```bash
 apt update
 apt install -y git ca-certificates
-cd /root
-git clone https://github.com/Telemtinstall/telemt.git docker-telemt
-cd /root/docker-telemt
-chmod +x ./build.sh ./install_docker-telemt.sh
+if [ -d /root/telemt2/.git ]; then
+  cd /root/telemt2
+  git pull --ff-only
+else
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /root/telemt2
+  cd /root/telemt2
+  git sparse-checkout set telemt/docker-telemt
+fi
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh -lang ru
 ```
 
 Обновить уже установленный Telemt без сброса настроек:
 
 ```bash
-cd /root/docker-telemt
-git pull
-chmod +x ./build.sh ./install_docker-telemt.sh
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh --update -lang ru
 ```
 
@@ -207,18 +220,20 @@ cat /root/telemt-proxy-links.txt
 Починить уже установленный сервер: nginx/Docker/Telemt doctor:
 
 ```bash
-cd /root/docker-telemt
-git pull
-chmod +x ./build.sh ./install_docker-telemt.sh
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh --fix-nginx -lang ru
 ```
 
 Полная переустановка на уже установленном сервере:
 
 ```bash
-cd /root/docker-telemt
-git pull
-chmod +x ./build.sh ./install_docker-telemt.sh
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 RESET_INSTALL_STATE=1 ./install_docker-telemt.sh -lang ru
 ```
 
@@ -450,10 +465,16 @@ Download the repository with Git and run the installer:
 ```bash
 apt update
 apt install -y git ca-certificates
-cd /root
-git clone https://github.com/Telemtinstall/telemt.git docker-telemt
-cd /root/docker-telemt
-chmod +x ./build.sh ./install_docker-telemt.sh
+if [ -d /root/telemt2/.git ]; then
+  cd /root/telemt2
+  git pull --ff-only
+else
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /root/telemt2
+  cd /root/telemt2
+  git sparse-checkout set telemt/docker-telemt
+fi
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh
 ```
 
@@ -476,12 +497,12 @@ Download only the required files with `wget`:
 ```bash
 apt update
 apt install -y ca-certificates wget
-mkdir -p /root/docker-telemt
-cd /root/docker-telemt
-wget -O Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt/main/Dockerfile
-wget -O build.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/build.sh
-wget -O install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/install_docker-telemt.sh
-wget -O telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/telemt-users.sh
+mkdir -p /root/telemt2/telemt/docker-telemt
+cd /root/telemt2/telemt/docker-telemt
+wget -O Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/Dockerfile
+wget -O build.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/build.sh
+wget -O install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/install_docker-telemt.sh
+wget -O telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/telemt-users.sh
 chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh
 ```
@@ -491,12 +512,12 @@ Download only the required files with `curl`:
 ```bash
 apt update
 apt install -y ca-certificates curl
-mkdir -p /root/docker-telemt
-cd /root/docker-telemt
-curl -fsSLo Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt/main/Dockerfile
-curl -fsSLo build.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/build.sh
-curl -fsSLo install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/install_docker-telemt.sh
-curl -fsSLo telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt/main/telemt-users.sh
+mkdir -p /root/telemt2/telemt/docker-telemt
+cd /root/telemt2/telemt/docker-telemt
+curl -fsSLo Dockerfile https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/Dockerfile
+curl -fsSLo build.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/build.sh
+curl -fsSLo install_docker-telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/install_docker-telemt.sh
+curl -fsSLo telemt-users.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/docker-telemt/telemt-users.sh
 chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh
 ```
@@ -559,19 +580,26 @@ Fresh install on a clean server:
 ```bash
 apt update
 apt install -y git ca-certificates
-cd /root
-git clone https://github.com/Telemtinstall/telemt.git docker-telemt
-cd /root/docker-telemt
-chmod +x ./build.sh ./install_docker-telemt.sh
+if [ -d /root/telemt2/.git ]; then
+  cd /root/telemt2
+  git pull --ff-only
+else
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /root/telemt2
+  cd /root/telemt2
+  git sparse-checkout set telemt/docker-telemt
+fi
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh
 ```
 
 Update an existing Telemt installation without resetting settings:
 
 ```bash
-cd /root/docker-telemt
-git pull
-chmod +x ./build.sh ./install_docker-telemt.sh
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh --update -lang ru
 ```
 
@@ -603,18 +631,20 @@ cat /root/telemt-proxy-links.txt
 Repair an existing server: nginx/Docker/Telemt doctor:
 
 ```bash
-cd /root/docker-telemt
-git pull
-chmod +x ./build.sh ./install_docker-telemt.sh
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh --fix-nginx -lang ru
 ```
 
 Full reinstall on an already installed server:
 
 ```bash
-cd /root/docker-telemt
-git pull
-chmod +x ./build.sh ./install_docker-telemt.sh
+cd /root/telemt2
+git pull --ff-only
+cd telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 RESET_INSTALL_STATE=1 ./install_docker-telemt.sh -lang ru
 ```
 

@@ -1,8 +1,8 @@
-# install_telemt.sh
+# Telemt Debian 13 / Ubuntu Installers
 
 ## Русское описание
 
-`install_telemt.sh` автоматически поднимает Telemt MTProto proxy на новом сервере.
+Этот каталог содержит current systemd/no-Docker установщик и legacy Docker-установщик для старых инструкций.
 
 Актуальная ветка предназначена для Debian 13. Старый отдельный установщик Debian 11 удалён из репозитория.
 
@@ -11,7 +11,7 @@
 - `install_telemt_systemd.sh`, если Telemt нужен без Docker;
 - `../docker-telemt/install_docker-telemt.sh`, если нужен Docker с локальной сборкой точного release `3.4.22`.
 
-`install_telemt.sh` оставлен как совместимый legacy Docker-путь для старых инструкций. Он больше не использует плавающий `latest`: Docker image закреплён по digest.
+`install_telemt.sh` автоматически поднимает старую Docker-схему Telemt и оставлен как совместимый legacy-путь. Он больше не использует плавающий `latest`: Docker image закреплён по digest.
 
 Целевая схема после установки:
 
@@ -146,9 +146,11 @@ RESET_INSTALL_STATE=1 /root/install_telemt_systemd.sh -lang ru
 
 Перед перезаписью скрипт всё равно делает бэкап в `/root/telemt-systemd-install-backups/<date>`.
 
-### Как скачать файл на сервер
+### Legacy Docker install_telemt.sh
 
-Если файл уже есть на вашем компьютере, скопируйте его через `scp`:
+Этот блок нужен только для старых серверов/инструкций, которые всё ещё используют `install_telemt.sh`. Для новых установок выше используйте `install_telemt_systemd.sh` или `../docker-telemt/install_docker-telemt.sh`.
+
+Если legacy-файл уже есть на вашем компьютере, скопируйте его через `scp`:
 
 ```bash
 scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/
@@ -609,9 +611,16 @@ CONNECT_SSH_PORT=22 TARGET_SSH_PORT=22 ENABLE_FAIL2BAN=no ADD_SWAP=no TELEMT_MAX
 
 ## English Description
 
-`install_telemt.sh` automatically installs a Telemt MTProto proxy on a new server.
+This directory contains the current systemd/no-Docker installer and a legacy Docker installer kept for old instructions.
 
 The current branch is intended for Debian 13. The old separate Debian 11 installer has been removed from the repository.
+
+For new installs, prefer:
+
+- `install_telemt_systemd.sh` when Telemt should run without Docker;
+- `../docker-telemt/install_docker-telemt.sh` when you want Docker with a local build of the exact `3.4.22` release.
+
+`install_telemt.sh` still installs the older Docker-style Telemt layout and remains available only as a compatible legacy path. It no longer uses a moving `latest` tag: the Docker image is pinned by digest.
 
 Target architecture after installation:
 
@@ -649,9 +658,37 @@ External ports `80/tcp` and `443/tcp` are exposed: `80/tcp` only redirects HTTP 
 
 Use a new VPS/server without existing websites, control panels, or network services. The installer configures nginx, firewall, SSH-port, Docker/Telemt, and certificates; it needs free `80/tcp` and `443/tcp`, plus local `8443`, `1443`, and `9091`. Fail2ban is enabled only if you choose `yes`. If nginx/apache/caddy/traefik, mail, VPN, hosting panels, or other proxies already run on the server, port and config conflicts are possible. Use a separate machine or integrate Telemt manually.
 
-### How To Download The File To The Server
+### No-Docker systemd Install
 
-If the file is already on your computer, copy it with `scp`:
+For servers where Telemt should run without Docker, use:
+
+```text
+install_telemt_systemd.sh
+```
+
+It installs the official Telemt binary to `/usr/local/bin/telemt`, runs it through `systemd` as `telemt.service`, stores the canonical config in `/opt/telemt-config/telemt.toml`, and keeps `/etc/telemt/telemt.toml` as a compatible path. Docker is not installed or used.
+
+Download and run it directly on the server:
+
+```bash
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang en
+```
+
+Update an existing no-Docker Telemt install:
+
+```bash
+/root/install_telemt_systemd.sh --update -lang en
+```
+
+`--update` does not migrate Docker installs. If it detects a Docker/Compose Telemt install, it stops and asks you to use the Docker updater instead.
+
+### Legacy Docker install_telemt.sh
+
+This block is only for old servers/instructions that still use `install_telemt.sh`. For new installs, use `install_telemt_systemd.sh` or `../docker-telemt/install_docker-telemt.sh` above.
+
+If the legacy file is already on your computer, copy it with `scp`:
 
 ```bash
 scp install_telemt.sh root@<SERVER_PUBLIC_IP>:/root/

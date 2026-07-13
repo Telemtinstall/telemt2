@@ -100,48 +100,68 @@ Each service directory has its own `README.md` with Russian and English instruct
 
 ## Download From GitHub / Скачать С GitHub
 
-RU: Если нужен один установщик, его можно скачать прямо на сервер через `wget` или `curl`:
+RU: Для новой установки Telemt без Docker скачивайте актуальный systemd-установщик:
 
 ```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
-chmod +x /root/install_telemt.sh
+wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang ru
 ```
 
 ```bash
-curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
-chmod +x /root/install_telemt.sh
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang ru
 ```
 
-RU: Если нужен `git`, скачайте только нужный каталог:
+RU: Для Docker Telemt скачайте только каталог Docker-установщика:
 
 ```bash
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
-cd /tmp/telemt
-git sparse-checkout set telemt/debian-13-ubuntu
-cp telemt/debian-13-ubuntu/install_telemt.sh /root/
-chmod +x /root/install_telemt.sh
+apt update
+apt install -y git ca-certificates
+if [ -d /root/telemt2/.git ]; then
+  cd /root/telemt2
+  git pull --ff-only
+else
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /root/telemt2
+  cd /root/telemt2
+  git sparse-checkout set telemt/docker-telemt
+fi
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
+./install_docker-telemt.sh -lang ru
 ```
 
-EN: To download a single installer directly on the server, use `wget` or `curl`:
+EN: For a new no-Docker Telemt install, download the current systemd installer:
 
 ```bash
-wget -O /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
-chmod +x /root/install_telemt.sh
+wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang en
 ```
 
 ```bash
-curl -fsSL -o /root/install_telemt.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt.sh
-chmod +x /root/install_telemt.sh
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang en
 ```
 
-EN: If you want to use `git`, download only the needed directory:
+EN: For Docker Telemt, download only the Docker installer directory:
 
 ```bash
-git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /tmp/telemt
-cd /tmp/telemt
-git sparse-checkout set telemt/debian-13-ubuntu
-cp telemt/debian-13-ubuntu/install_telemt.sh /root/
-chmod +x /root/install_telemt.sh
+apt update
+apt install -y git ca-certificates
+if [ -d /root/telemt2/.git ]; then
+  cd /root/telemt2
+  git pull --ff-only
+else
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/Telemtinstall/telemt2.git /root/telemt2
+  cd /root/telemt2
+  git sparse-checkout set telemt/docker-telemt
+fi
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
+./install_docker-telemt.sh -lang en
 ```
 
 ## Batch Mode

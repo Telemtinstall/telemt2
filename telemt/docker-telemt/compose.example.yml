@@ -8,7 +8,7 @@ services:
     environment:
       RUST_LOG: "warn"
     volumes:
-      - /opt/telemt-config/telemt.toml:/etc/telemt/telemt.toml:ro
+      - /opt/telemt-docker/telemt.toml:/etc/telemt/telemt.toml:ro
     command: ["/etc/telemt/telemt.toml"]
     healthcheck:
       test: [ "CMD", "/app/telemt", "healthcheck", "/etc/telemt/telemt.toml", "--mode", "liveness" ]

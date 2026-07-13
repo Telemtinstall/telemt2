@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-13
+
+### Fixed
+
+- Replaced stale Docker Telemt documentation paths that still pointed to the old `Telemtinstall/telemt` repository with the current `Telemtinstall/telemt2` sparse-checkout and raw-file paths under `telemt/docker-telemt/`.
+- Updated the root README download section so new no-Docker installs use `install_telemt_systemd.sh`, while Docker installs use `telemt/docker-telemt/`.
+- Marked `install_telemt.sh` in the Debian/Ubuntu README as a legacy Docker-compatible path instead of the primary new-install path.
+- Aligned `docker-telemt/compose.example.yml` with the installer layout by using `/opt/telemt-docker/telemt.toml`.
+
 ## 2026-07-07
 
 ### Changed
