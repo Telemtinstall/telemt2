@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-14
+
+### Added
+
+- Added a standalone Docker Telemt compatibility wrapper for manually upgraded OpenSSL builds that no longer use the operating system CA bundle by default. It is check-only by default, can explicitly pass `SSL_CERT_FILE`/`CURL_CA_BUNDLE` to the existing updater, and refuses a possible Telemt version downgrade without changing the official installer.
+
 ## 2026-07-13
 
 ### Fixed

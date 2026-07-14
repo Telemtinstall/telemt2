@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-14
+
+### Added
+
+- Added `update-with-system-ca.sh`, a separate compatibility wrapper for Docker Telemt servers with a manually installed OpenSSL whose compiled default trust path does not use the operating system CA bundle.
+- The wrapper compares default and explicit-CA TLS verification and refuses to hide real certificate-chain failures. It is check-only by default; `--run-update` explicitly invokes the existing updater with `SSL_CERT_FILE`/`CURL_CA_BUNDLE` after refusing a possible Telemt version downgrade.
+- The official Docker installer is unchanged. The wrapper itself does not edit certificates, nginx configuration, Telemt configuration, users, or secrets; after validation it invokes the normal documented `--update` behavior.
+
 ## 2026-07-07
 
 ### Changed

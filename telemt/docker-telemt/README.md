@@ -331,6 +331,18 @@ curl -4 -I --resolve <domain>:443:<server_ipv4> https://<domain>/
 
 Результат сохраняется в `/root/telemt-active-probing-check.txt`. Если обычный HTTPS-запрос через IP сервера не получает корректный ответ, установка останавливается с ошибкой, потому что маскировочный слой работает неправильно. При ошибке скрипт сам печатает диагностику: DNS A/AAAA, слушающие порты, `nginx -t`, наличие stream-конфига, `docker ps`, последние логи Telemt и состояние firewall. Если в выводе есть `BIO_connect:connect error`, чаще всего `443/tcp` закрыт firewall-ом/панелью хостера или nginx stream не слушает публичный `443`.
 
+Если после ручного обновления OpenSSL проверка падает с `unable to get local issuer certificate`, но сайт открывается и внешняя SNI/TLS-проверка проходит, используйте отдельный compatibility wrapper. Он сравнит стандартный trust path OpenSSL с системным CA-bundle, а с явным `--run-update` запустит штатный updater с `SSL_CERT_FILE`/`CURL_CA_BUNDLE`. Сам wrapper не меняет сертификат, nginx, Telemt-конфиг или секреты; после проверки действует обычная логика `--update`. Wrapper не устанавливает и не рекомендует стороннюю сборку OpenSSL/nginx; на Debian 13 следует использовать штатные обновляемые пакеты ОС:
+
+```bash
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./update-with-system-ca.sh
+./update-with-system-ca.sh -lang ru
+# Только после проверки показанных current/target версий:
+./update-with-system-ca.sh --run-update -lang ru
+```
+
+По умолчанию wrapper ничего не обновляет. С `--run-update` он дополнительно откажется запускаться, если работающая версия Telemt новее совместимого target в официальном updater, чтобы не сделать скрытый downgrade. Если проверка с явным системным CA-bundle тоже не проходит, надо исправлять реальный сертификат или его цепочку. Полный результат сохраняется в `/root/telemt-openssl-ca-check.txt`.
+
 По умолчанию используется красивая заглушка. Если выбрать `empty`, nginx будет отдавать пустой `index.html` с `200 OK`, без видимого текста. Логи доступа выключены. Docker hardening включен по умолчанию, но его можно отключить. High-load tuning включен по умолчанию, но его можно отключить ответом `no`. Дефолтный лимит Telemt поднят до `5000` подключений.
 
 В конце скрипт сам собирает корректные ссылки для TLS MTProxy:
@@ -741,6 +753,18 @@ curl -4 -I --resolve <domain>:443:<server_ipv4> https://<domain>/
 ```
 
 The result is saved to `/root/telemt-active-probing-check.txt`. If a normal HTTPS request through the server IP does not return a valid response, the installer stops with an error because the masking layer is not working correctly. On failure, the script prints diagnostics automatically: DNS A/AAAA, listening ports, `nginx -t`, stream config presence, `docker ps`, recent Telemt logs, and firewall state. If the output contains `BIO_connect:connect error`, TCP `443` is usually blocked by the server/provider firewall or nginx stream is not listening on the public `443`.
+
+If a manually upgraded OpenSSL fails with `unable to get local issuer certificate` while the site and external SNI/TLS checks work, use the separate compatibility wrapper. It compares OpenSSL's default trust path with the operating system CA bundle and, with an explicit `--run-update`, starts the regular updater with `SSL_CERT_FILE`/`CURL_CA_BUNDLE` set. The wrapper itself does not modify the certificate, nginx, Telemt configuration, or secrets; after validation, the regular `--update` behavior applies. The wrapper neither installs nor recommends a third-party OpenSSL/nginx build; Debian 13 servers should use the maintained operating-system packages:
+
+```bash
+cd /root/telemt2/telemt/docker-telemt
+chmod +x ./update-with-system-ca.sh
+./update-with-system-ca.sh -lang en
+# Only after reviewing the reported current/target versions:
+./update-with-system-ca.sh --run-update -lang en
+```
+
+The wrapper does not update anything by default. With `--run-update`, it also refuses to continue when the running Telemt version is newer than the official updater's compatible target, preventing a hidden downgrade. If verification also fails with the explicit system CA bundle, the certificate or its chain needs a real repair. The complete result is written to `/root/telemt-openssl-ca-check.txt`.
 
 The playful placeholder is used by default. If `empty` is selected, nginx serves an empty `index.html` with `200 OK` and no visible text. Access logs are disabled by default. Docker hardening is enabled by default, but can be disabled. High-load tuning is enabled by default, but can be disabled by answering `no`. The default Telemt connection limit is now `5000`.
 
