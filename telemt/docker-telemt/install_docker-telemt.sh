@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_VERSION="2026-07-06"
+SCRIPT_VERSION="2026-07-14"
 INSTALL_DIR="${INSTALL_DIR:-/opt/telemt-docker}"
 STATE_FILE="${STATE_FILE:-/root/.install_docker_telemt.state}"
 SAVED_CONFIG="${SAVED_CONFIG:-/root/.install_docker_telemt.config}"
@@ -14,7 +14,8 @@ if [ -n "${TELEMT_VERSION+x}" ]; then
   TELEMT_VERSION_ENV_VALUE="$TELEMT_VERSION"
 fi
 # Bump only after checking the installer/config compatibility for that Telemt release.
-TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.22}"
+TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.23}"
+OS_RELEASE_FILE="${OS_RELEASE_FILE:-/etc/os-release}"
 TELEMT_DEFAULT_VERSION="${TELEMT_DEFAULT_VERSION:-$TELEMT_LATEST_COMPATIBLE_VERSION}"
 
 DOMAIN="${DOMAIN:-}"
@@ -233,9 +234,9 @@ need_root() {
 require_supported_os() {
   local os_id version_id pretty major
 
-  [ -r /etc/os-release ] || die "Cannot detect OS: /etc/os-release not found."
+  [ -r "$OS_RELEASE_FILE" ] || die "Cannot detect OS: $OS_RELEASE_FILE not found."
   # shellcheck disable=SC1091
-  source /etc/os-release
+  source "$OS_RELEASE_FILE"
   os_id="$(lower "${ID:-}")"
   version_id="${VERSION_ID:-}"
   pretty="${PRETTY_NAME:-$os_id $version_id}"
@@ -245,16 +246,16 @@ require_supported_os() {
       major="${version_id%%.*}"
       if ! [[ "$major" =~ ^[0-9]+$ ]]; then
         if is_ru; then
-          die "Не удалось определить версию Debian ($pretty). Используйте Debian 13.x или новее."
+          die "Не удалось определить версию Debian ($pretty). Используйте Debian 13.x."
         else
-          die "Cannot detect Debian version ($pretty). Use Debian 13.x or newer."
+          die "Cannot detect Debian version ($pretty). Use Debian 13.x."
         fi
       fi
-      if [ "$major" -lt 13 ]; then
+      if [ "$major" != "13" ]; then
         if is_ru; then
-          die "Неподдерживаемая ОС: $pretty. Docker-установщик Telemt поддерживает Debian 13.x или новее. Обновите сервер до Debian 13.x+ и запустите установщик заново."
+          die "Неподдерживаемая ОС: $pretty. Docker-установщик Telemt поддерживает только Debian 13.x."
         else
-          die "Unsupported OS: $pretty. The Telemt Docker installer supports Debian 13.x or newer. Upgrade the server to Debian 13.x+ and run the installer again."
+          die "Unsupported OS: $pretty. The Telemt Docker installer supports Debian 13.x only."
         fi
       fi
       ;;
@@ -262,24 +263,24 @@ require_supported_os() {
       major="${version_id%%.*}"
       if ! [[ "$major" =~ ^[0-9]+$ ]]; then
         if is_ru; then
-          die "Не удалось определить версию Ubuntu ($pretty). Используйте Ubuntu 24.x или новее."
+          die "Не удалось определить версию Ubuntu ($pretty). Используйте Ubuntu 24.x-26.x."
         else
-          die "Cannot detect Ubuntu version ($pretty). Use Ubuntu 24.x or newer."
+          die "Cannot detect Ubuntu version ($pretty). Use Ubuntu 24.x-26.x."
         fi
       fi
-      if [ "$major" -lt 24 ]; then
+      if [ "$major" -lt 24 ] || [ "$major" -gt 26 ]; then
         if is_ru; then
-          die "Неподдерживаемая ОС: $pretty. Docker-установщик Telemt поддерживает Ubuntu 24.x или новее. Обновите сервер до Ubuntu 24.x+ и запустите установщик заново."
+          die "Неподдерживаемая ОС: $pretty. Docker-установщик Telemt поддерживает Ubuntu 24.x-26.x."
         else
-          die "Unsupported OS: $pretty. The Telemt Docker installer supports Ubuntu 24.x or newer. Upgrade the server to Ubuntu 24.x+ and run the installer again."
+          die "Unsupported OS: $pretty. The Telemt Docker installer supports Ubuntu 24.x-26.x."
         fi
       fi
       ;;
     *)
       if is_ru; then
-        die "Неподдерживаемая ОС: $pretty. Используйте Debian 13.x+ или Ubuntu 24.x+."
+        die "Неподдерживаемая ОС: $pretty. Используйте Debian 13.x или Ubuntu 24.x-26.x."
       else
-        die "Unsupported OS: $pretty. Use Debian 13.x+ or Ubuntu 24.x+."
+        die "Unsupported OS: $pretty. Use Debian 13.x or Ubuntu 24.x-26.x."
       fi
       ;;
   esac

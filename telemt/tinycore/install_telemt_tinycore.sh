@@ -9,8 +9,17 @@ TELEMT_HOME="${TELEMT_HOME:-/opt/telemt}"
 ACME_HOME="${ACME_HOME:-/opt/acme.sh}"
 STATE_FILE="${STATE_FILE:-$TELEMT_HOME/.install_tinycore.state}"
 RESUME_CONFIG="${RESUME_CONFIG:-$TELEMT_HOME/install.conf}"
-TELEMT_LATEST_COMPATIBLE_RELEASE="${TELEMT_LATEST_COMPATIBLE_RELEASE:-3.4.22}"
+TELEMT_RELEASE_ENV_SET=0
+TELEMT_RELEASE_ENV_VALUE=""
+if [ -n "${TELEMT_RELEASE+x}" ]; then
+  TELEMT_RELEASE_ENV_SET=1
+  TELEMT_RELEASE_ENV_VALUE="$TELEMT_RELEASE"
+fi
+TELEMT_LATEST_COMPATIBLE_RELEASE="${TELEMT_LATEST_COMPATIBLE_RELEASE:-3.4.23}"
 TELEMT_RELEASE="${TELEMT_RELEASE:-$TELEMT_LATEST_COMPATIBLE_RELEASE}"
+TELEMT_UPDATE_TARGET_RELEASE=""
+TELEMT_DETECTED_RELEASE=""
+ALLOW_TELEMT_DOWNGRADE="${ALLOW_TELEMT_DOWNGRADE:-0}"
 TELEMT_CLIENT_MSS="${TELEMT_CLIENT_MSS:-tspu}"
 TELEMT_CLIENT_MSS_BULK="${TELEMT_CLIENT_MSS_BULK:-1400}"
 TELEMT_SYNLIMIT="${TELEMT_SYNLIMIT:-false}"
@@ -49,7 +58,7 @@ Usage:
   $0 --update
 
 Options:
-  --update, -update, update   Update existing Tiny Core Telemt install to TELEMT_RELEASE.
+  --update, -update, update   Update to the exact project target or an explicit exact TELEMT_RELEASE.
 EOF
 }
 
@@ -151,6 +160,67 @@ valid_telemt_release() {
       ;;
   esac
   printf '%s\n' "$release" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+}
+
+detect_installed_telemt_release() {
+  [ -x "$TELEMT_HOME/bin/telemt" ] || return 1
+  "$TELEMT_HOME/bin/telemt" --version 2>/dev/null |
+    sed -n 's/^telemt[[:space:]]\+v\{0,1\}\([0-9][0-9.]*\).*/\1/p' |
+    sed -n '1p'
+}
+
+version_gt() {
+  local left="$1" right="$2" l_major l_minor l_patch r_major r_minor r_patch
+  IFS=. read -r l_major l_minor l_patch <<EOF
+$left
+EOF
+  IFS=. read -r r_major r_minor r_patch <<EOF
+$right
+EOF
+  l_minor="${l_minor:-0}"
+  l_patch="${l_patch:-0}"
+  r_minor="${r_minor:-0}"
+  r_patch="${r_patch:-0}"
+  [ "$l_major" -gt "$r_major" ] && return 0
+  [ "$l_major" -lt "$r_major" ] && return 1
+  [ "$l_minor" -gt "$r_minor" ] && return 0
+  [ "$l_minor" -lt "$r_minor" ] && return 1
+  [ "$l_patch" -gt "$r_patch" ]
+}
+
+resolve_update_release() {
+  local requested=""
+  if [ "$TELEMT_RELEASE_ENV_SET" = "1" ]; then
+    requested="$TELEMT_RELEASE_ENV_VALUE"
+  fi
+  case "$requested" in
+    latest|LATEST|Latest)
+      echo "WARN: TELEMT_RELEASE=latest is ignored in --update; using $TELEMT_LATEST_COMPATIBLE_RELEASE."
+      TELEMT_UPDATE_TARGET_RELEASE="$TELEMT_LATEST_COMPATIBLE_RELEASE"
+      ;;
+    '')
+      TELEMT_UPDATE_TARGET_RELEASE="$TELEMT_LATEST_COMPATIBLE_RELEASE"
+      ;;
+    *)
+      valid_telemt_release "$requested" || die "TELEMT_RELEASE must be an exact tag like $TELEMT_LATEST_COMPATIBLE_RELEASE, not '$requested'."
+      TELEMT_UPDATE_TARGET_RELEASE="$requested"
+      ;;
+  esac
+  TELEMT_RELEASE="$TELEMT_UPDATE_TARGET_RELEASE"
+}
+
+confirm_update_plan() {
+  local confirm=""
+  if [ "$ASSUME_YES" = "1" ]; then
+    echo "ASSUME_YES=1, continuing."
+    return 0
+  fi
+  printf 'Type y or yes to continue: '
+  read -r confirm
+  case "$confirm" in
+    y|yes|Y|YES) ;;
+    *) die "Cancelled." ;;
+  esac
 }
 
 telemt_release_at_least() {
@@ -1037,7 +1107,14 @@ run_update_mode() {
   [ -f "$RESUME_CONFIG" ] || die "Resume config not found: $RESUME_CONFIG. Run the installer normally once before --update."
   [ -n "$PUBLIC_HOST" ] || die "PUBLIC_HOST is empty in $RESUME_CONFIG."
   valid_domain "$PUBLIC_HOST" || die "Bad PUBLIC_HOST in $RESUME_CONFIG: $PUBLIC_HOST"
+  resolve_update_release
   valid_telemt_release "$TELEMT_RELEASE" || die "Telemt release must be an exact tag like $TELEMT_LATEST_COMPATIBLE_RELEASE; latest is not allowed."
+  TELEMT_DETECTED_RELEASE="$(detect_installed_telemt_release || true)"
+  if [ "$ALLOW_TELEMT_DOWNGRADE" != "1" ] &&
+     [ -n "$TELEMT_DETECTED_RELEASE" ] &&
+     version_gt "$TELEMT_DETECTED_RELEASE" "$TELEMT_UPDATE_TARGET_RELEASE"; then
+    die "Refusing Telemt downgrade ${TELEMT_DETECTED_RELEASE} -> ${TELEMT_UPDATE_TARGET_RELEASE}. Set ALLOW_TELEMT_DOWNGRADE=1 only for an intentional rollback."
+  fi
 
   if [ -z "$TELEMT_SECRET" ] && [ -f "$TELEMT_HOME/telemt-secret.env" ]; then
     # shellcheck disable=SC1090
@@ -1068,23 +1145,26 @@ run_update_mode() {
 
   detect_public_ip
   backup_dir="$TELEMT_HOME/update-backups/$(date +%Y%m%d-%H%M%S)"
-  mkdir -p "$backup_dir"
-  [ -f "$TELEMT_HOME/telemt.toml" ] && cp "$TELEMT_HOME/telemt.toml" "$backup_dir/"
-  [ -f "$TELEMT_HOME/bin/telemt" ] && cp "$TELEMT_HOME/bin/telemt" "$backup_dir/"
-  chmod -R go-rwx "$backup_dir" 2>/dev/null || true
 
   cat <<EOF
 
 Tiny Core Telemt update plan:
   domain:       ${PUBLIC_HOST}
   public IPv4:  ${PUBLIC_IP}
-  release:      ${TELEMT_RELEASE}
+  current:      ${TELEMT_DETECTED_RELEASE:-unknown}
+  target:       ${TELEMT_UPDATE_TARGET_RELEASE} (exact compatible release)
   users:        ${TELEMT_USERS}
   client_mss:   ${TELEMT_CLIENT_MSS}
   client_mss_bulk: ${TELEMT_CLIENT_MSS_BULK}
   synlimit:     ${TELEMT_SYNLIMIT}
   backup:       ${backup_dir}
 EOF
+  confirm_update_plan
+
+  mkdir -p "$backup_dir"
+  [ -f "$TELEMT_HOME/telemt.toml" ] && cp "$TELEMT_HOME/telemt.toml" "$backup_dir/"
+  [ -f "$TELEMT_HOME/bin/telemt" ] && cp "$TELEMT_HOME/bin/telemt" "$backup_dir/"
+  chmod -R go-rwx "$backup_dir" 2>/dev/null || true
 
   step "Download checked Telemt release"
   download_telemt

@@ -5,6 +5,15 @@
 ### Added
 
 - Added a standalone Docker Telemt compatibility wrapper for manually upgraded OpenSSL builds that no longer use the operating system CA bundle by default. It is check-only by default, can explicitly pass `SSL_CERT_FILE`/`CURL_CA_BUNDLE` to the existing updater, and refuses a possible Telemt version downgrade without changing the official installer.
+- Split the native installer into `telemt/debian-13/` and `telemt/ubuntu-24-26/`. Each installer now rejects the wrong OS/version before package installation.
+- Added Ubuntu nginx/OpenSSL preflight and isolated fallback build: OpenSSL `3.5.2` is recognized as the PQ feature floor, while nginx older than security target `3.5.7` is replaced with isolated nginx `1.31.2` built against OpenSSL `3.5.7` without replacing system OpenSSL libraries.
+
+### Changed
+
+- Updated Docker, Debian 13 systemd, Ubuntu 24-26 systemd, and Tiny Core targets to the exact checked Telemt `3.4.23` release.
+- Native systemd update mode now refuses an accidental Telemt downgrade by default.
+- Fixed Tiny Core `--update` so an old `TELEMT_RELEASE` saved in `install.conf` cannot override the current project target; it now detects current/target, asks for confirmation, and blocks accidental downgrades.
+- Ubuntu native installs and updates explicitly use the operating system CA bundle, so an existing side-by-side `/opt/openssl-3.5` does not break release or certificate checks.
 
 ## 2026-07-13
 

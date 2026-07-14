@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Telemt systemd installer for Debian/Ubuntu servers.
+# Telemt systemd installer for Ubuntu 24.x through 26.x servers.
 # No Docker is installed or required. The updater uses an exact tested Telemt
 # release tag, never a moving "latest" tag.
 
-SCRIPT_VERSION="2026-07-06-systemd"
+SCRIPT_VERSION="2026-07-14-ubuntu24-26-openssl35-systemd"
+OS_RELEASE_FILE="${OS_RELEASE_FILE:-/etc/os-release}"
+SYSTEM_CA_FILE="${SYSTEM_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/telemt-config}"
 ETC_DIR="${ETC_DIR:-/etc/telemt}"
 CONFIG_FILE="${CONFIG_FILE:-$ETC_DIR/telemt.toml}"
@@ -27,9 +29,20 @@ if [ -n "${TELEMT_VERSION+x}" ]; then
 fi
 
 TELEMT_REPOSITORY="${TELEMT_REPOSITORY:-telemt/telemt}"
-TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.22}"
+TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.23}"
 TELEMT_DEFAULT_VERSION="${TELEMT_DEFAULT_VERSION:-$TELEMT_LATEST_COMPATIBLE_VERSION}"
 TELEMT_VERSION="${TELEMT_VERSION:-$TELEMT_DEFAULT_VERSION}"
+
+TELEMT_OPENSSL_MIN_VERSION="${TELEMT_OPENSSL_MIN_VERSION:-3.5.2}"
+TELEMT_OPENSSL_BUILD_VERSION="${TELEMT_OPENSSL_BUILD_VERSION:-3.5.7}"
+TELEMT_OPENSSL_BUILD_SHA256="${TELEMT_OPENSSL_BUILD_SHA256:-a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8}"
+TELEMT_NGINX_BUILD_VERSION="${TELEMT_NGINX_BUILD_VERSION:-1.31.2}"
+TELEMT_NGINX_BUILD_SHA256="${TELEMT_NGINX_BUILD_SHA256:-af2a957c41da636ddc4f883e4523c6d140b4784dbce42000c364ae5092aa473c}"
+TELEMT_NGINX_OPENSSL_MODE="${TELEMT_NGINX_OPENSSL_MODE:-auto}"
+TELEMT_NGINX_PREFIX="${TELEMT_NGINX_PREFIX:-/opt/telemt-nginx-openssl35}"
+TELEMT_NGINX_BIN="${TELEMT_NGINX_BIN:-/usr/local/sbin/nginx-telemt-openssl35}"
+TELEMT_NGINX_CONF="${TELEMT_NGINX_CONF:-$TELEMT_NGINX_PREFIX/nginx.conf}"
+TELEMT_NGINX_DROPIN="${TELEMT_NGINX_DROPIN:-/etc/systemd/system/nginx.service.d/90-telemt-openssl35.conf}"
 
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
@@ -65,6 +78,7 @@ UPDATE_MODE="${UPDATE_MODE:-0}"
 SCRIPT_LANG="${SCRIPT_LANG:-en}"
 SCRIPT_LANG_FROM_CLI="0"
 RESET_INSTALL_STATE="${RESET_INSTALL_STATE:-0}"
+ALLOW_TELEMT_DOWNGRADE="${ALLOW_TELEMT_DOWNGRADE:-0}"
 
 TELEMT_DETECTED_VERSION=""
 TELEMT_DETECTED_VERSION_SOURCE=""
@@ -112,6 +126,8 @@ usage() {
 
 Важные переменные:
   TELEMT_VERSION=<version>  Точный release tag. Default: $TELEMT_DEFAULT_VERSION
+  TELEMT_NGINX_OPENSSL_MODE=auto|required|off
+                            Проверка/сборка nginx с OpenSSL >= $TELEMT_OPENSSL_MIN_VERSION.
   RESET_INSTALL_STATE=1     Разрешить повторную установку поверх systemd-install.
 EOF
   else
@@ -127,6 +143,8 @@ Options:
 
 Important variables:
   TELEMT_VERSION=<version>  Exact release tag. Default: $TELEMT_DEFAULT_VERSION
+  TELEMT_NGINX_OPENSSL_MODE=auto|required|off
+                            Validate/build nginx with OpenSSL >= $TELEMT_OPENSSL_MIN_VERSION.
   RESET_INSTALL_STATE=1     Allow reinstall over a systemd install.
 EOF
   fi
@@ -176,21 +194,25 @@ need_root() {
 
 require_apt_systemd() {
   [ "$(uname -s)" = "Linux" ] || die "Run this installer on the target Linux server."
-  have apt-get || die "This installer supports Debian/Ubuntu with apt-get."
+  have apt-get || die "This installer supports Ubuntu 24.x through 26.x with apt-get."
   have systemctl || die "systemd is required."
 }
 
-require_debian_ubuntu() {
-  local os_id pretty
-  [ -r /etc/os-release ] || die "Cannot detect OS: /etc/os-release is missing."
+require_supported_os() {
+  local os_id pretty version_id major
+  [ -r "$OS_RELEASE_FILE" ] || die "Cannot detect OS: $OS_RELEASE_FILE is missing."
   # shellcheck disable=SC1091
-  source /etc/os-release
+  source "$OS_RELEASE_FILE"
   os_id="$(lower "${ID:-}")"
   pretty="${PRETTY_NAME:-$os_id}"
-  case "$os_id" in
-    debian|ubuntu) ;;
-    *) die "Unsupported OS: $pretty. Use Debian or Ubuntu." ;;
-  esac
+  version_id="${VERSION_ID:-}"
+  major="${version_id%%.*}"
+  if [ "$os_id" != "ubuntu" ] || ! [[ "$major" =~ ^[0-9]+$ ]] || [ "$major" -lt 24 ] || [ "$major" -gt 26 ]; then
+    if is_ru; then
+      die "Неподдерживаемая ОС: $pretty. Этот установщик предназначен только для Ubuntu 24.x-26.x. Для Debian 13 используйте каталог telemt/debian-13."
+    fi
+    die "Unsupported OS: $pretty. This installer is only for Ubuntu 24.x-26.x. Use telemt/debian-13 for Debian 13."
+  fi
 }
 
 write_file_root() {
@@ -356,6 +378,11 @@ normalize_exact_telemt_version() {
   version="${version#v}"
   is_exact_telemt_version "$version" || return 1
   printf '%s' "$version"
+}
+
+version_gt() {
+  local left="$1" right="$2"
+  [ "$left" != "$right" ] && [ "$(printf '%s\n%s\n' "$left" "$right" | sort -V | tail -n 1)" = "$left" ]
 }
 
 validate_telemt_version() {
@@ -632,7 +659,7 @@ ensure_secret() {
     source "$SECRET_FILE"
   fi
   if [ -z "${TELEMT_SECRET:-}" ]; then
-    TELEMT_SECRET="$(openssl rand -hex 16)"
+    TELEMT_SECRET="$(system_openssl rand -hex 16)"
   fi
   TELEMT_SECRET="$(printf '%s' "$TELEMT_SECRET" | tr 'A-F' 'a-f')"
   [[ "$TELEMT_SECRET" =~ ^[a-f0-9]{32}$ ]] || die "Telemt secret must be exactly 32 hex chars."
@@ -648,7 +675,7 @@ secret_for_user() {
   if [ "$user" = "$TELEMT_USER" ]; then
     printf '%s' "$TELEMT_SECRET"
   else
-    openssl rand -hex 16
+    system_openssl rand -hex 16
   fi
 }
 
@@ -658,6 +685,251 @@ install_packages() {
   apt-get install -y \
     ca-certificates curl openssl iproute2 nftables nginx libnginx-mod-stream \
     certbot jq python3 tar coreutils procps dnsutils
+}
+
+configure_system_ca_environment() {
+  [ -s "$SYSTEM_CA_FILE" ] || die "System CA bundle is missing: $SYSTEM_CA_FILE"
+  export SSL_CERT_FILE="$SYSTEM_CA_FILE"
+  export CURL_CA_BUNDLE="$SYSTEM_CA_FILE"
+  [ -d /etc/ssl/certs ] && export SSL_CERT_DIR=/etc/ssl/certs
+}
+
+system_openssl() {
+  local openssl_bin=/usr/bin/openssl
+  [ -x "$openssl_bin" ] || openssl_bin="$(command -v openssl 2>/dev/null || true)"
+  [ -n "$openssl_bin" ] || die "System OpenSSL executable was not found."
+  LD_LIBRARY_PATH= SSL_CERT_FILE="$SYSTEM_CA_FILE" SSL_CERT_DIR=/etc/ssl/certs "$openssl_bin" "$@"
+}
+
+version_ge() {
+  local current="$1" required="$2"
+  [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n 1)" = "$required" ]
+}
+
+nginx_openssl_versions() {
+  local nginx_bin="${1:-$(command -v nginx 2>/dev/null || true)}"
+  [ -n "$nginx_bin" ] || return 1
+  "$nginx_bin" -V 2>&1 | grep -oE 'OpenSSL [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | sort -Vu
+}
+
+nginx_service_binary() {
+  local service_exec
+  service_exec="$(systemctl show nginx.service -p ExecStart --value 2>/dev/null || true)"
+  printf '%s\n' "$service_exec" | grep -oE '/[^ ;]*nginx[^ ;]*' | head -n 1
+}
+
+nginx_stack_versions_at_least() {
+  local required="$1" command_bin service_bin bin versions version
+  command_bin="$(command -v nginx 2>/dev/null || true)"
+  service_bin="$(nginx_service_binary || true)"
+  [ -n "$command_bin" ] || return 1
+  for bin in "$command_bin" "$service_bin"; do
+    [ -n "$bin" ] || continue
+    [ -x "$bin" ] || return 1
+    versions="$(nginx_openssl_versions "$bin" || true)"
+    [ -n "$versions" ] || return 1
+    while IFS= read -r version; do
+      [ -n "$version" ] || continue
+      version_ge "$version" "$required" || return 1
+    done <<< "$versions"
+  done
+}
+
+nginx_has_compatible_openssl() {
+  local nginx_bin="${1:-$(command -v nginx 2>/dev/null || true)}" output versions version service_bin
+  [ -n "$nginx_bin" ] && [ -x "$nginx_bin" ] || return 1
+  output="$("$nginx_bin" -V 2>&1 || true)"
+  printf '%s\n' "$output" | grep -q -- '--with-stream' || return 1
+  printf '%s\n' "$output" | grep -q -- '--with-stream_ssl_preread_module' || return 1
+  versions="$(nginx_openssl_versions "$nginx_bin" || true)"
+  [ -n "$versions" ] || return 1
+  while IFS= read -r version; do
+    [ -n "$version" ] || continue
+    version_ge "$version" "$TELEMT_OPENSSL_MIN_VERSION" || return 1
+  done <<< "$versions"
+
+  service_bin="$(nginx_service_binary || true)"
+  if [ -n "$service_bin" ] && [ "$service_bin" != "$nginx_bin" ]; then
+    [ -x "$service_bin" ] || return 1
+    versions="$(nginx_openssl_versions "$service_bin" || true)"
+    [ -n "$versions" ] || return 1
+    while IFS= read -r version; do
+      [ -n "$version" ] || continue
+      version_ge "$version" "$TELEMT_OPENSSL_MIN_VERSION" || return 1
+    done <<< "$versions"
+  fi
+}
+
+write_custom_nginx_config() {
+  install -d -m 0755 "$TELEMT_NGINX_PREFIX" /var/log/nginx /var/lib/nginx /etc/nginx/conf.d /etc/nginx/sites-enabled /etc/nginx/modules-enabled
+  write_file_root "$TELEMT_NGINX_CONF" 0644 root:root <<'EOF'
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log;
+worker_rlimit_nofile 65535;
+
+events {
+    worker_connections 8192;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    server_tokens off;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    access_log /var/log/nginx/access.log;
+    gzip on;
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+
+include /etc/nginx/modules-enabled/*telemt-stream-sni.conf;
+EOF
+}
+
+normalize_custom_nginx_stream_include() {
+  local canonical old_stream
+  canonical="$(nginx_stream_canonical_path)"
+  install -d -m 0755 /etc/nginx/modules-enabled
+
+  if [ ! -f "$canonical" ]; then
+    for old_stream in /etc/nginx/modules-enabled/60-stream-sni.conf /etc/nginx/modules-enabled/90-stream-sni.conf; do
+      if stream_config_managed "$old_stream"; then
+        backup_path_to_dir "$old_stream" "$BACKUP_DIR"
+        cp -a "$old_stream" "$canonical"
+        break
+      fi
+    done
+  fi
+
+  for old_stream in /etc/nginx/modules-enabled/60-stream-sni.conf /etc/nginx/modules-enabled/90-stream-sni.conf; do
+    if [ "$old_stream" != "$canonical" ] && stream_config_managed "$old_stream"; then
+      backup_path_to_dir "$old_stream" "$BACKUP_DIR"
+      rm -f "$old_stream"
+    fi
+  done
+}
+
+install_custom_nginx_openssl35() {
+  local build_dir openssl_archive nginx_archive openssl_src nginx_src build_jobs=1
+  build_dir="$(mktemp -d /tmp/telemt-nginx-openssl35.XXXXXX)"
+  openssl_archive="$build_dir/openssl-${TELEMT_OPENSSL_BUILD_VERSION}.tar.gz"
+  nginx_archive="$build_dir/nginx-${TELEMT_NGINX_BUILD_VERSION}.tar.gz"
+  openssl_src="$build_dir/openssl-${TELEMT_OPENSSL_BUILD_VERSION}"
+  nginx_src="$build_dir/nginx-${TELEMT_NGINX_BUILD_VERSION}"
+
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y build-essential perl zlib1g-dev libpcre2-dev
+
+  if [ -r /proc/meminfo ] && [ "$(awk '/MemTotal/{print $2}' /proc/meminfo)" -ge 1800000 ]; then
+    build_jobs=2
+  fi
+
+  (
+    trap 'rm -rf "$build_dir"' EXIT
+    curl -fL --retry 3 --connect-timeout 20 \
+      "https://github.com/openssl/openssl/releases/download/openssl-${TELEMT_OPENSSL_BUILD_VERSION}/openssl-${TELEMT_OPENSSL_BUILD_VERSION}.tar.gz" \
+      -o "$openssl_archive"
+    printf '%s  %s\n' "$TELEMT_OPENSSL_BUILD_SHA256" "$openssl_archive" | sha256sum -c -
+
+    curl -fL --retry 3 --connect-timeout 20 \
+      "https://nginx.org/download/nginx-${TELEMT_NGINX_BUILD_VERSION}.tar.gz" \
+      -o "$nginx_archive"
+    printf '%s  %s\n' "$TELEMT_NGINX_BUILD_SHA256" "$nginx_archive" | sha256sum -c -
+
+    tar -xzf "$openssl_archive" -C "$build_dir"
+    tar -xzf "$nginx_archive" -C "$build_dir"
+    cd "$nginx_src"
+    ./configure \
+      --prefix="$TELEMT_NGINX_PREFIX" \
+      --sbin-path="$TELEMT_NGINX_BIN" \
+      --conf-path="$TELEMT_NGINX_CONF" \
+      --pid-path=/run/nginx.pid \
+      --lock-path=/run/lock/nginx.lock \
+      --error-log-path=/var/log/nginx/error.log \
+      --http-log-path=/var/log/nginx/access.log \
+      --http-client-body-temp-path=/var/lib/nginx/body \
+      --http-proxy-temp-path=/var/lib/nginx/proxy \
+      --http-fastcgi-temp-path=/var/lib/nginx/fastcgi \
+      --user=www-data \
+      --group=www-data \
+      --with-compat \
+      --with-threads \
+      --with-http_ssl_module \
+      --with-http_v2_module \
+      --with-http_realip_module \
+      --with-http_gzip_static_module \
+      --with-http_stub_status_module \
+      --with-stream \
+      --with-stream_ssl_preread_module \
+      --with-pcre-jit \
+      --with-openssl="$openssl_src" \
+      --with-openssl-opt="no-shared no-tests --openssldir=$TELEMT_NGINX_PREFIX/ssl"
+    make -j"$build_jobs"
+    make install
+  )
+
+  normalize_custom_nginx_stream_include
+  write_custom_nginx_config
+  install -d -m 0755 /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi "$(dirname "$TELEMT_NGINX_DROPIN")"
+  backup_path_to_dir "$TELEMT_NGINX_DROPIN" "$BACKUP_DIR"
+  backup_path_to_dir /usr/local/sbin/nginx "$BACKUP_DIR"
+  ln -sfn "$TELEMT_NGINX_BIN" /usr/local/sbin/nginx
+  hash -r
+
+  write_file_root "$TELEMT_NGINX_DROPIN" 0644 root:root <<EOF
+[Service]
+ExecStartPre=
+ExecStartPre=$TELEMT_NGINX_BIN -t -q -c $TELEMT_NGINX_CONF
+ExecStart=
+ExecStart=$TELEMT_NGINX_BIN -c $TELEMT_NGINX_CONF -g 'daemon on; master_process on;'
+ExecReload=
+ExecReload=$TELEMT_NGINX_BIN -c $TELEMT_NGINX_CONF -g 'daemon on; master_process on;' -s reload
+EOF
+
+  "$TELEMT_NGINX_BIN" -t -c "$TELEMT_NGINX_CONF"
+  systemctl stop nginx 2>/dev/null || true
+  systemctl daemon-reload
+  systemctl enable nginx
+  systemctl start nginx
+}
+
+ensure_nginx_openssl35() {
+  local current_versions side_version=""
+  case "$TELEMT_NGINX_OPENSSL_MODE" in
+    auto|required|off) ;;
+    *) die "TELEMT_NGINX_OPENSSL_MODE must be auto, required, or off." ;;
+  esac
+
+  if [ -x /opt/openssl-3.5/bin/openssl ]; then
+    side_version="$(/opt/openssl-3.5/bin/openssl version 2>/dev/null | awk '{print $2}' || true)"
+    say "Detected side-by-side OpenSSL: ${side_version:-unknown} (/opt/openssl-3.5). It is not injected into apt, curl, or the system linker."
+  fi
+
+  if nginx_has_compatible_openssl; then
+    current_versions="$(nginx_openssl_versions | tr '\n' ' ')"
+    if nginx_stack_versions_at_least "$TELEMT_OPENSSL_BUILD_VERSION"; then
+      say "Nginx already uses security-current compatible OpenSSL: ${current_versions:-unknown}."
+      return 0
+    fi
+    say "Nginx OpenSSL ${current_versions:-unknown} meets the feature floor $TELEMT_OPENSSL_MIN_VERSION but is older than security target $TELEMT_OPENSSL_BUILD_VERSION."
+  fi
+
+  if [ "$TELEMT_NGINX_OPENSSL_MODE" = "off" ]; then
+    say "WARN: Nginx OpenSSL compatibility build is disabled. The mask site may not support X25519MLKEM768."
+    return 0
+  fi
+
+  say "Nginx does not use OpenSSL >= $TELEMT_OPENSSL_MIN_VERSION with stream preread support."
+  say "Building isolated nginx $TELEMT_NGINX_BUILD_VERSION with security-fixed OpenSSL $TELEMT_OPENSSL_BUILD_VERSION."
+  say "System /usr/bin/openssl and system shared libraries will not be replaced."
+  install_custom_nginx_openssl35
+  nginx_has_compatible_openssl "$TELEMT_NGINX_BIN" || die "Custom nginx OpenSSL verification failed."
 }
 
 ensure_telemt_account() {
@@ -982,8 +1254,8 @@ acme_http01_failed() {
 
 verify_acme_http01_webroot() {
   local local_body="" public_body=""
-  ACME_PREFLIGHT_TOKEN="telemt-$(openssl rand -hex 12)"
-  ACME_PREFLIGHT_EXPECTED="telemt-acme-ok-$(openssl rand -hex 16)"
+  ACME_PREFLIGHT_TOKEN="telemt-$(system_openssl rand -hex 12)"
+  ACME_PREFLIGHT_EXPECTED="telemt-acme-ok-$(system_openssl rand -hex 16)"
   ACME_PREFLIGHT_PATH="/var/www/${DOMAIN}/.well-known/acme-challenge/${ACME_PREFLIGHT_TOKEN}"
   install -d -m 0755 "/var/www/${DOMAIN}/.well-known/acme-challenge"
   printf '%s\n' "$ACME_PREFLIGHT_EXPECTED" > "$ACME_PREFLIGHT_PATH"
@@ -1826,7 +2098,7 @@ EOF
 }
 
 openssl_supports_ipv4_flag() {
-  openssl s_client -help 2>&1 | grep -q -- '-4'
+  system_openssl s_client -help 2>&1 | grep -q -- '-4'
 }
 
 run_openssl_probe() {
@@ -1837,7 +2109,7 @@ run_openssl_probe() {
     printf '\n[%s]\n' "$label"
     printf 'command=timeout 15 openssl s_client -connect %s -servername %s\n' "$connect_to" "$DOMAIN"
   } >> "$log_file"
-  timeout 15 openssl s_client "${ipv4_flag[@]}" -connect "$connect_to" -servername "$DOMAIN" \
+  timeout 15 system_openssl s_client "${ipv4_flag[@]}" -connect "$connect_to" -servername "$DOMAIN" \
     -verify_hostname "$DOMAIN" -verify_return_error -brief </dev/null >> "$log_file" 2>&1 || rc=$?
   [ "$rc" -eq 0 ] && { printf 'result=OK\n' >> "$log_file"; return 0; }
   printf 'result=FAILED exit_code=%s optional=%s\n' "$rc" "$optional" >> "$log_file"
@@ -2018,6 +2290,7 @@ print_install_plan() {
 
 Install plan:
   mode:             systemd, no Docker
+  supported OS:     Ubuntu 24.x-26.x only
   domain:           ${DOMAIN}
   public IPv4:      ${PUBLIC_IP}
   email:            ${EMAIL}
@@ -2034,6 +2307,8 @@ Install plan:
   middle proxy:     ${USE_MIDDLE_PROXY}
   logs:             ${ENABLE_LOGS}
   high-load tuning: ${ENABLE_HIGH_LOAD_TUNING}
+  nginx OpenSSL:    require >= ${TELEMT_OPENSSL_MIN_VERSION}; auto-build ${TELEMT_OPENSSL_BUILD_VERSION} if needed
+  system CA:        ${SYSTEM_CA_FILE}
   binary:           ${BINARY_PATH}
   config:           ${CONFIG_FILE} -> ${CANONICAL_CONFIG_FILE}
   service:          ${SERVICE_FILE}
@@ -2044,7 +2319,8 @@ EOF
 run_fresh_install() {
   need_root
   require_apt_systemd
-  require_debian_ubuntu
+  require_supported_os
+  [ -s "$SYSTEM_CA_FILE" ] && configure_system_ca_environment
 
   if [ "$RESET_INSTALL_STATE" = "1" ]; then
     rm -f "$STATE_FILE" "$SAVED_CONFIG"
@@ -2099,6 +2375,9 @@ EOF
 
   step "Install packages"
   install_packages
+  configure_system_ca_environment
+  step "Verify nginx OpenSSL compatibility"
+  ensure_nginx_openssl35
   ensure_telemt_account
 
   step "Prepare Telemt secret"
@@ -2176,7 +2455,8 @@ EOF
 run_update_mode() {
   need_root
   require_apt_systemd
-  require_debian_ubuntu
+  require_supported_os
+  [ -s "$SYSTEM_CA_FILE" ] && configure_system_ca_environment
   if detect_docker_install; then
     die "Docker Telemt install detected. Migration is not supported here; use docker-telemt/install_docker-telemt.sh --update."
   fi
@@ -2185,6 +2465,11 @@ run_update_mode() {
   detect_public_ip
   detect_current_telemt_version || true
   resolve_update_target_version
+  if [ "$ALLOW_TELEMT_DOWNGRADE" != "1" ] &&
+     [ -n "$TELEMT_DETECTED_VERSION" ] &&
+     version_gt "$TELEMT_DETECTED_VERSION" "$TELEMT_UPDATE_TARGET_VERSION"; then
+    die "Refusing Telemt downgrade ${TELEMT_DETECTED_VERSION} -> ${TELEMT_UPDATE_TARGET_VERSION}. Update the checked compatible target, or set ALLOW_TELEMT_DOWNGRADE=1 only for an intentional rollback."
+  fi
   TELEMT_UPDATE_CONFIG_MISSING="$(build_update_config_gap_report || true)"
   [ -n "$TELEMT_UPDATE_CONFIG_MISSING" ] || TELEMT_UPDATE_CONFIG_MISSING="none"
   TELEMT_CLIENT_MSS="$(normalize_client_mss "$TELEMT_CLIENT_MSS")"
@@ -2203,6 +2488,7 @@ run_update_mode() {
 
 Update plan:
   mode:             systemd, no Docker migration
+  supported OS:     Ubuntu 24.x-26.x only
   domain:           ${DOMAIN}
   public IPv4:      ${PUBLIC_IP}
   current version:  ${TELEMT_DETECTED_VERSION:-unknown}${TELEMT_DETECTED_VERSION_SOURCE:+ (${TELEMT_DETECTED_VERSION_SOURCE})}
@@ -2212,7 +2498,9 @@ Update plan:
   service:          ${SERVICE_FILE}
   config patch:     only missing safe keys are added
   missing keys:     ${TELEMT_UPDATE_CONFIG_MISSING}
-  nginx:            preserved unless managed Telemt files are missing
+  nginx config:     preserved unless managed Telemt files are missing
+  nginx OpenSSL:    require >= ${TELEMT_OPENSSL_MIN_VERSION}; auto-build ${TELEMT_OPENSSL_BUILD_VERSION} if needed
+  system CA:        ${SYSTEM_CA_FILE}
   client_mss:       ${TELEMT_CLIENT_MSS}
   client_mss_bulk:  ${TELEMT_CLIENT_MSS_BULK}
   synlimit:         ${TELEMT_SYNLIMIT}
@@ -2226,6 +2514,9 @@ EOF
 
   step "Install/update packages"
   install_packages
+  configure_system_ca_environment
+  step "Verify/update nginx OpenSSL compatibility"
+  ensure_nginx_openssl35
   ensure_telemt_account
 
   step "Download and install exact Telemt release"

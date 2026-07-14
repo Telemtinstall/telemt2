@@ -28,10 +28,11 @@ telemt/
   common/
     add_key.sh
     README.md
-  debian-13-ubuntu/
-    install_telemt.sh
+  debian-13/
     install_telemt_systemd.sh
-    install_telemt_batch.sh
+    README.md
+  ubuntu-24-26/
+    install_telemt_systemd.sh
     README.md
   docker-telemt/
     Dockerfile
@@ -71,7 +72,8 @@ vpn/
 ## Which Directory To Use
 
 ```text
-Telemt on Debian 13             -> telemt/debian-13-ubuntu/
+Telemt on Debian 13             -> telemt/debian-13/
+Telemt on Ubuntu 24.x-26.x      -> telemt/ubuntu-24-26/
 Telemt on Tiny Core Linux       -> telemt/tinycore/
 Telemt Docker install/build     -> telemt/docker-telemt/
 SSH key helper                  -> telemt/common/
@@ -100,16 +102,25 @@ Each service directory has its own `README.md` with Russian and English instruct
 
 ## Download From GitHub / Скачать С GitHub
 
-RU: Для новой установки Telemt без Docker скачивайте актуальный systemd-установщик:
+RU: Для новой установки Telemt без Docker выберите установщик строго под ОС.
+Debian 13:
 
 ```bash
-wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13/install_telemt_systemd.sh
 chmod +x /root/install_telemt_systemd.sh
 /root/install_telemt_systemd.sh -lang ru
 ```
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang ru
+```
+
+Ubuntu 24.x-26.x с проверкой nginx/OpenSSL `>=3.5.2`:
+
+```bash
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
 chmod +x /root/install_telemt_systemd.sh
 /root/install_telemt_systemd.sh -lang ru
 ```
@@ -132,16 +143,25 @@ chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh -lang ru
 ```
 
-EN: For a new no-Docker Telemt install, download the current systemd installer:
+EN: For a new no-Docker Telemt install, use the installer matching the OS.
+Debian 13:
 
 ```bash
-wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13/install_telemt_systemd.sh
 chmod +x /root/install_telemt_systemd.sh
 /root/install_telemt_systemd.sh -lang en
 ```
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13-ubuntu/install_telemt_systemd.sh
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13/install_telemt_systemd.sh
+chmod +x /root/install_telemt_systemd.sh
+/root/install_telemt_systemd.sh -lang en
+```
+
+Ubuntu 24.x-26.x with nginx/OpenSSL `>=3.5.2` validation:
+
+```bash
+curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
 chmod +x /root/install_telemt_systemd.sh
 /root/install_telemt_systemd.sh -lang en
 ```
@@ -177,13 +197,7 @@ getent, dig, or host
 
 They do not install Telemt locally. They copy the OS-specific installer to target servers and run it over SSH.
 
-Examples:
-
-```bash
-cd telemt/debian-13-ubuntu
-chmod +x install_telemt_batch.sh ../common/add_key.sh
-./install_telemt_batch.sh
-```
+Example:
 
 ```bash
 cd telemt/tinycore

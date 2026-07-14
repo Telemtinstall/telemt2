@@ -30,7 +30,7 @@ add_key.sh                          вспомогательный скрипт 
 
 Официальный Telemt сейчас публикует `linux-musl` бинарники для `x86_64` и `aarch64`. Поэтому 32-bit Tiny Core x86 этим скриптом не поддерживается.
 
-По умолчанию используется pinned Telemt release `3.4.22` и pinned `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для другого Telemt release достаточно указать точный `TELEMT_RELEASE`: скрипт скачает matching `.sha256` из GitHub release и проверит архив автоматически. `latest` намеренно не поддерживается.
+По умолчанию используется pinned Telemt release `3.4.23` и pinned `acme.sh` `3.1.2`; оба скачивания проверяются через sha256. Для другого Telemt release достаточно указать точный `TELEMT_RELEASE`: скрипт скачает matching `.sha256` из GitHub release и проверит архив автоматически. `latest` намеренно не поддерживается.
 
 ### Что Ставит
 
@@ -111,7 +111,7 @@ Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
 Max Telemt connections [5000]: <Enter>
-Telemt release version [3.4.22]: <Enter>
+Telemt release version [3.4.23]: <Enter>
 Telemt first user name [default]: <Enter>
 How many proxy links/users to create now [1]: <Enter>
 Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
@@ -126,7 +126,7 @@ Install plan:
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
   Telemt limit: 5000
-  release:      3.4.22
+  release:      3.4.23
   users:        default
   client_mss:   tspu
   client_mss_bulk: 1400
@@ -159,7 +159,7 @@ Telemt на Tiny Core запускается без Docker из pinned native bi
 /root/install_telemt_tinycore.sh --update
 ```
 
-`--update` читает сохранённый `/opt/telemt/install.conf`, не использует `latest`, скачивает точный `TELEMT_RELEASE`, делает бэкап старого бинарника и `telemt.toml`, дописывает новые совместимые Telemt-настройки, перезапускает сервисы и сохраняет изменения через `filetool.sh -b`.
+`--update` читает сохранённый `/opt/telemt/install.conf`, отдельно определяет версию установленного бинарника и выбирает текущий проектный target `3.4.23`, а не старую версию из `install.conf` и не `latest`. До изменений он показывает current/target и ждёт `y`/`yes`. После подтверждения делает бэкап старого бинарника и `telemt.toml`, проверяет официальный `.sha256`, дописывает совместимые настройки, перезапускает сервисы и сохраняет изменения через `filetool.sh -b`. Случайное понижение версии блокируется.
 
 Проверка:
 
@@ -202,7 +202,7 @@ SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
 Telemt max TCP connections [5000]: <Enter>
-Telemt release version [3.4.22]: <Enter>
+Telemt release version [3.4.23]: <Enter>
 Telemt first user name [default]: <Enter>
 How many proxy links/users to create now [1]: <Enter>
 Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
@@ -277,7 +277,7 @@ Use a new Tiny Core server without existing websites, control panels, or network
 
 Official Telemt currently publishes `linux-musl` binaries for `x86_64` and `aarch64`. 32-bit Tiny Core x86 is not supported by this script.
 
-By default, the installer uses pinned Telemt release `3.4.22` and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To use another Telemt release, pass an exact `TELEMT_RELEASE`: the installer downloads the matching `.sha256` from the GitHub release and verifies the archive automatically. `latest` is intentionally unsupported.
+By default, the installer uses pinned Telemt release `3.4.23` and pinned `acme.sh` `3.1.2`; both downloads are verified with sha256. To use another Telemt release, pass an exact `TELEMT_RELEASE`: the installer downloads the matching `.sha256` from the GitHub release and verifies the archive automatically. `latest` is intentionally unsupported.
 
 ### What It Installs
 
@@ -358,7 +358,7 @@ Proxy domain: <PROXY_DOMAIN>
 Let's Encrypt email [admin@<PROXY_DOMAIN>]: <Enter>
 SSH port, Enter keeps current/default. Tiny Core installer does not change SSH config [22]: <Enter>
 Max Telemt connections [5000]: <Enter>
-Telemt release version [3.4.22]: <Enter>
+Telemt release version [3.4.23]: <Enter>
 Telemt first user name [default]: <Enter>
 How many proxy links/users to create now [1]: <Enter>
 Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>
@@ -373,7 +373,7 @@ Install plan:
   email:        admin@<PROXY_DOMAIN>
   SSH port:     22 (not changed by this installer)
   Telemt limit: 5000
-  release:      3.4.22
+  release:      3.4.23
   users:        default
   client_mss:   tspu
   client_mss_bulk: 1400
@@ -406,7 +406,7 @@ Update an existing Tiny Core Telemt install:
 /root/install_telemt_tinycore.sh --update
 ```
 
-`--update` reads the saved `/opt/telemt/install.conf`, never uses `latest`, downloads the exact `TELEMT_RELEASE`, backs up the old binary and `telemt.toml`, adds new compatible Telemt config keys, restarts services, and persists changes with `filetool.sh -b`.
+`--update` reads `/opt/telemt/install.conf`, detects the installed binary version separately, and selects the current project target `3.4.23` instead of reusing the old release from `install.conf` or a moving `latest`. It shows current/target and waits for `y`/`yes` before changing files. It then backs up the binary and `telemt.toml`, verifies the official `.sha256`, adds compatible config keys, restarts services, and persists changes with `filetool.sh -b`. Accidental downgrades are refused.
 
 Health check:
 
@@ -449,7 +449,7 @@ SSH user for installation [root]: root
 Current SSH port for connecting to servers [22]: <Enter>
 SSH port after install, Tiny Core installer does not change SSH config [22]: <Enter>
 Telemt max TCP connections [5000]: <Enter>
-Telemt release version [3.4.22]: <Enter>
+Telemt release version [3.4.23]: <Enter>
 Telemt first user name [default]: <Enter>
 How many proxy links/users to create now [1]: <Enter>
 Telemt listener TCP MSS: off/tspu/2in8/extreme-low/88..4096 [tspu]: <Enter>

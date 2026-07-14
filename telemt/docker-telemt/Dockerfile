@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG TELEMT_REPOSITORY=telemt/telemt
-ARG TELEMT_VERSION=3.4.22
+ARG TELEMT_VERSION=3.4.23
 ARG ALLOW_TELEMT_LATEST=0
 
 FROM debian:12-slim AS fetch
