@@ -10,7 +10,7 @@ Tiny Core Linux-версия сделана отдельно и не замен�
 
 ```bash
 wget -O /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang ru
 ```
@@ -280,7 +280,7 @@ Recommended single-server install/update entry point:
 
 ```bash
 wget -O /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang en
 ```

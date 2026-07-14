@@ -24,28 +24,24 @@ EN: Run the installers only on a new clean VPS/server without existing websites,
 ## Structure
 
 ```text
+install.sh
 telemt/
-  install.sh
   common/
     add_key.sh
     README.md
   debian-13/
-    install.sh
     install_telemt_systemd.sh
     README.md
   ubuntu-24-26/
-    install.sh
     install_telemt_docker.sh
     README.md
   docker-telemt/
-    install.sh
     Dockerfile
     build.sh
     install_docker-telemt.sh
     compose.example.yml
     README.md
   tinycore/
-    install.sh
     install_telemt_tinycore.sh
     install_telemt_batch_tinycore.sh
     README.md
@@ -100,7 +96,7 @@ RU: Для обычной установки или обновления Telemt 
 
 ```bash
 curl -fsSL -o /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang ru
 ```
@@ -130,7 +126,7 @@ installer:
 
 ```bash
 curl -fsSL -o /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang en
 ```

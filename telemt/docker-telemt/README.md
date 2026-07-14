@@ -29,7 +29,7 @@ Latest repository changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 ### Быстрый выбор
 
 ```text
-install.sh                 Единый выбор установки/обновления по ОС.
+telemt2/install.sh         Единый выбор установки/обновления по ОС.
 build.sh                  Собрать Docker image Telemt.
 install_docker-telemt.sh  Установить сервер: nginx + certbot + Docker Telemt + маскировка.
 telemt-users.sh           Добавить/удалить пользователей и пересобрать ссылки после установки.
@@ -40,7 +40,7 @@ compose.example.yml       Пример hardened compose для ручной ин
 
 ```bash
 curl -fsSL -o /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang ru
 ```
@@ -486,7 +486,7 @@ ALLOW_TELEMT_LATEST
 ### Quick Choice
 
 ```text
-install.sh                 Select install/update and installer by OS.
+telemt2/install.sh         Select install/update and installer by OS.
 build.sh                  Build the Telemt Docker image.
 install_docker-telemt.sh  Install server: nginx + certbot + Docker Telemt + masking.
 telemt-users.sh           Add/remove users and regenerate proxy links after installation.
@@ -497,7 +497,7 @@ For a normal install or update, use the universal entry point:
 
 ```bash
 curl -fsSL -o /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang en
 ```

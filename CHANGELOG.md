@@ -4,8 +4,8 @@
 
 ### Added
 
-- Added one POSIX-compatible `telemt/install.sh` entry point, with identical
-  copies in every supported Telemt installer directory. It detects Debian 13,
+- Added one POSIX-compatible root `install.sh` entry point. Profile directories
+  link to this single file instead of carrying copies. It detects Debian 13,
   Ubuntu 24-26, or Tiny Core, detects Docker/native existing installs, asks for
   Install or Update, safely updates `Telemtinstall/telemt2`, and dispatches to
   the existing specialist installer without using a moving Telemt `latest`.

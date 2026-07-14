@@ -10,7 +10,7 @@ is not used.
 
 ```bash
 curl -fsSL -o /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang ru
 ```
@@ -134,7 +134,7 @@ Recommended universal entry point:
 
 ```bash
 curl -fsSL -o /root/install.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install.sh
 chmod +x /root/install.sh
 /root/install.sh -lang en
 ```
