@@ -32,7 +32,7 @@ telemt/
     install_telemt_systemd.sh
     README.md
   ubuntu-24-26/
-    install_telemt_systemd.sh
+    install_telemt_docker.sh
     README.md
   docker-telemt/
     Dockerfile
@@ -73,7 +73,7 @@ vpn/
 
 ```text
 Telemt on Debian 13             -> telemt/debian-13/
-Telemt on Ubuntu 24.x-26.x      -> telemt/ubuntu-24-26/
+Telemt Docker on Ubuntu 24-26   -> telemt/ubuntu-24-26/
 Telemt on Tiny Core Linux       -> telemt/tinycore/
 Telemt Docker install/build     -> telemt/docker-telemt/
 SSH key helper                  -> telemt/common/
@@ -102,8 +102,7 @@ Each service directory has its own `README.md` with Russian and English instruct
 
 ## Download From GitHub / Скачать С GitHub
 
-RU: Для новой установки Telemt без Docker выберите установщик строго под ОС.
-Debian 13:
+RU: Telemt без Docker поддерживается только на Debian 13:
 
 ```bash
 wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13/install_telemt_systemd.sh
@@ -117,15 +116,19 @@ chmod +x /root/install_telemt_systemd.sh
 /root/install_telemt_systemd.sh -lang ru
 ```
 
-Ubuntu 24.x-26.x с проверкой nginx/OpenSSL `>=3.5.2`:
+RU: На Ubuntu 24.x-26.x используется только Docker-вариант. Ubuntu launcher
+проверяет ОС и передаёт установку каноническому Docker installer, который также
+проверяет реальный host nginx/OpenSSL и при необходимости собирает nginx
+`1.31.2` с OpenSSL `3.5.7`:
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
-chmod +x /root/install_telemt_systemd.sh
-/root/install_telemt_systemd.sh -lang ru
+curl -fsSL -o /root/install_telemt_docker.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_docker.sh
+chmod +x /root/install_telemt_docker.sh
+/root/install_telemt_docker.sh -lang ru
 ```
 
-RU: Для Docker Telemt скачайте только каталог Docker-установщика:
+RU: Для Docker Telemt на Debian 13 или для прямого запуска без Ubuntu launcher
+скачайте каталог Docker-установщика:
 
 ```bash
 apt update
@@ -143,8 +146,7 @@ chmod +x ./build.sh ./install_docker-telemt.sh ./telemt-users.sh
 ./install_docker-telemt.sh -lang ru
 ```
 
-EN: For a new no-Docker Telemt install, use the installer matching the OS.
-Debian 13:
+EN: No-Docker Telemt is supported on Debian 13 only:
 
 ```bash
 wget -O /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/debian-13/install_telemt_systemd.sh
@@ -158,12 +160,14 @@ chmod +x /root/install_telemt_systemd.sh
 /root/install_telemt_systemd.sh -lang en
 ```
 
-Ubuntu 24.x-26.x with nginx/OpenSSL `>=3.5.2` validation:
+EN: Ubuntu 24.x-26.x uses Docker Telemt only. The Ubuntu launcher validates the
+OS and runs the canonical Docker installer, which checks the real host nginx
+OpenSSL stack and builds nginx `1.31.2` with OpenSSL `3.5.7` when required:
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
-chmod +x /root/install_telemt_systemd.sh
-/root/install_telemt_systemd.sh -lang en
+curl -fsSL -o /root/install_telemt_docker.sh https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_docker.sh
+chmod +x /root/install_telemt_docker.sh
+/root/install_telemt_docker.sh -lang en
 ```
 
 EN: For Docker Telemt, download only the Docker installer directory:

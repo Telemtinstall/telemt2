@@ -1,47 +1,27 @@
-# Telemt without Docker: Ubuntu 24-26 and OpenSSL 3.5
+# Telemt Docker: Ubuntu 24-26 and OpenSSL 3.5
 
-This is the separate native systemd installer for **Ubuntu 24.x through 26.x**.
-It pins Telemt `3.4.23` and treats OpenSSL compatibility as part of the nginx
-TLS stack instead of trusting the output of a separately installed CLI.
+Ubuntu 24.x through 26.x is supported **only in Docker mode**. Telemt runs in
+the hardened Docker container; host nginx still owns public ports 80/443,
+serves the HTTPS mask site, and routes Telegram SNI to the container backend.
 
-## Почему отдельный установщик
+There is no native/systemd Telemt installer in this directory. The small
+`install_telemt_docker.sh` launcher validates Ubuntu first and then runs the
+single canonical installer from `telemt/docker-telemt/`, so install, `--update`,
+secret preservation, and user management cannot drift between two copies.
 
-На Ubuntu 24.x системный nginx может быть собран с OpenSSL 3.0.x. Простая
-установка `/opt/openssl-3.5/bin/openssl` не меняет TLS-библиотеку уже собранного
-nginx. Поэтому установщик проверяет сразу:
+## Почему Ubuntu требует отдельной проверки
 
-1. что ОС действительно Ubuntu с major-версией от 24 до 26;
-2. какие версии OpenSSL сообщает реально запускаемый nginx;
-3. что nginx собран с `stream` и `stream_ssl_preread`;
-4. что используется OpenSSL не ниже `3.5.2`;
-5. что `curl` и проверки сертификата используют системный CA bundle.
+Ubuntu 24.x may ship nginx with OpenSSL 3.0.x. Installing OpenSSL `3.5.2` into
+`/opt/openssl-3.5` changes an `openssl version` command only; it does not change
+the TLS library already compiled into the nginx process.
 
-Уже установленная side-by-side OpenSSL `3.5.2` распознаётся, но не добавляется
-в глобальный linker path и не подменяет `/usr/bin/openssl`. Версия `3.5.2`
-считается минимальным функциональным порогом, но не конечным security target:
-если nginx использует `3.5.2`-`3.5.6`, для него будет установлен изолированный
-вариант на `3.5.7`.
+The Docker installer therefore checks both the nginx command and the binary
+started by `nginx.service`. On Ubuntu it requires stream preread support and
+OpenSSL `>=3.5.2`. The functional floor `3.5.2` is no longer the security
+target: if nginx uses an older stack, the installer builds isolated nginx
+`1.31.2` with security-fixed OpenSSL `3.5.7`.
 
-Для новой автоматической сборки используется OpenSSL `3.5.7`, а не `3.5.2`:
-это та же совместимая ветка 3.5, но с исправлениями безопасности. Она статически
-встраивается в отдельный nginx `1.31.2`. Системные shared libraries и системный
-`/usr/bin/openssl` не заменяются.
-
-## Установка
-
-```bash
-curl -fsSL -o /root/install_telemt_systemd.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
-chmod +x /root/install_telemt_systemd.sh
-/root/install_telemt_systemd.sh -lang ru
-```
-
-Нужен чистый VPS, домен с A-записью на сервер и свободные публичные порты
-`80/tcp` и `443/tcp`. Проверка Ubuntu выполняется до установки пакетов.
-
-Если nginx уже использует OpenSSL `>=3.5.7`, долгая сборка пропускается.
-OpenSSL `3.5.2` распознаётся как поддерживающая нужную функцию, но обновляется
-до security target. При необходимости собирается изолированный nginx:
+This changes only host nginx:
 
 ```text
 /usr/local/sbin/nginx-telemt-openssl35
@@ -49,73 +29,73 @@ OpenSSL `3.5.2` распознаётся как поддерживающая н�
 /etc/systemd/system/nginx.service.d/90-telemt-openssl35.conf
 ```
 
-Исходники OpenSSL и nginx скачиваются только с официальных release URL и
-проверяются закреплёнными SHA-256. На VPS с памятью меньше примерно 1.8 ГБ
-сборка идёт одним потоком, чтобы не получить OOM.
+System OpenSSL shared libraries are not replaced. Telemt itself remains in
+Docker. Source archives are downloaded from official OpenSSL/nginx release
+URLs and checked against pinned SHA-256 values.
 
-## Обновление существующей установки
+## Новая установка
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
-chmod +x /root/install_telemt_systemd.sh
-/root/install_telemt_systemd.sh --update -lang ru
+curl -fsSL -o /root/install_telemt_docker.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_docker.sh
+chmod +x /root/install_telemt_docker.sh
+/root/install_telemt_docker.sh -lang ru
 ```
 
-Это одновременно заменяет старый ручной wrapper для **нативной** Ubuntu
-установки: скрипт явно передаёт `/etc/ssl/certs/ca-certificates.crt` в
-`SSL_CERT_FILE` и `CURL_CA_BUNDLE`, использует системный OpenSSL для служебных
-проверок и не зависит от `PATH=/opt/openssl-3.5/bin`.
+The launcher accepts only Ubuntu 24.x-26.x, installs Git when needed, prepares
+a sparse checkout under `/root/telemt2`, and starts the canonical Docker
+installer. A clean server, a domain A record pointing to this VPS, and free
+public ports `80/tcp` and `443/tcp` are required.
 
-`--update` сохраняет Telemt secret, пользователей, ссылки, сертификат и ручные
-значения конфига. Понижение Telemt блокируется; штатный target сейчас `3.4.23`.
-
-## Режимы OpenSSL nginx
-
-`TELEMT_NGINX_OPENSSL_MODE=auto` является default: использовать совместимый
-nginx или собрать изолированный.
-
-`TELEMT_NGINX_OPENSSL_MODE=required` также требует совместимый nginx и полезен
-для автоматизации, где любая ошибка должна остановить установку.
-
-`TELEMT_NGINX_OPENSSL_MODE=off` отключает сборку. Это диагностический override;
-сайт-маска тогда может не поддерживать `X25519MLKEM768`.
-
-Порог `TELEMT_OPENSSL_MIN_VERSION=3.5.2` менять обычно не нужно. Версии сборки
-также закреплены и не берутся из `latest`.
-
-## Проверка после установки
+## Обновление
 
 ```bash
+curl -fsSL -o /root/install_telemt_docker.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_docker.sh
+chmod +x /root/install_telemt_docker.sh
+/root/install_telemt_docker.sh --update -lang ru
+```
+
+`--update` detects the running Telemt version, targets the exact checked
+release `3.4.23`, backs up the current state, preserves users/secrets/links and
+certificates, upgrades the Ubuntu host nginx/OpenSSL stack when required, and
+recreates only the Telemt container.
+
+## Режим OpenSSL
+
+Default `TELEMT_NGINX_OPENSSL_MODE=auto` uses an already compatible nginx or
+builds the isolated stack. `required` has the same target but is intended for
+strict automation. `off` skips the build for diagnostics and may leave the
+mask site without `X25519MLKEM768` support.
+
+## Проверка
+
+```bash
+docker exec telemt /app/telemt --version
+docker ps --filter name=telemt
+curl -fsS http://127.0.0.1:9091/v1/users | jq
 nginx -V 2>&1 | grep -oE 'nginx/[0-9.]+|OpenSSL [0-9.]+'
 systemctl show nginx -p ExecStart --no-pager
-/usr/local/bin/telemt --version
-systemctl status nginx telemt --no-pager
-telemt-report 5m
+nginx -t
+cat /root/telemt-active-probing-check.txt
 ```
-
-## Docker wrapper
-
-Ранее созданный `telemt/docker-telemt/update-with-system-ca.sh` остаётся для
-старых **Docker**-установок. Для этой нативной Ubuntu-ветки CA-исправление уже
-встроено в сам установщик, поэтому дополнительный wrapper не требуется.
 
 ## English quick start
 
-The installer accepts Ubuntu major versions 24 through 26 only. It requires the
-nginx process serving the mask site to use OpenSSL `>=3.5.2`; if necessary it
-builds isolated nginx `1.31.2` with security-fixed OpenSSL `3.5.7`, without
-replacing system OpenSSL shared libraries. Telemt is pinned to `3.4.23`.
+Ubuntu uses Docker Telemt only. The launcher rejects non-Ubuntu systems and
+Ubuntu releases outside 24.x-26.x. Host nginx is checked against the real
+service binary and, when needed, rebuilt as nginx `1.31.2` with isolated
+OpenSSL `3.5.7`; Telemt stays in Docker.
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
-chmod +x /root/install_telemt_systemd.sh
-/root/install_telemt_systemd.sh -lang en
+curl -fsSL -o /root/install_telemt_docker.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_docker.sh
+chmod +x /root/install_telemt_docker.sh
+/root/install_telemt_docker.sh -lang en
 ```
 
 Update:
 
 ```bash
-/root/install_telemt_systemd.sh --update -lang en
+/root/install_telemt_docker.sh --update -lang en
 ```

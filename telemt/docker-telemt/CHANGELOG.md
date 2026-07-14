@@ -7,11 +7,13 @@
 - Added `update-with-system-ca.sh`, a separate compatibility wrapper for Docker Telemt servers with a manually installed OpenSSL whose compiled default trust path does not use the operating system CA bundle.
 - The wrapper compares default and explicit-CA TLS verification and refuses to hide real certificate-chain failures. It is check-only by default; `--run-update` explicitly invokes the existing updater with `SSL_CERT_FILE`/`CURL_CA_BUNDLE` after refusing a possible Telemt version downgrade.
 - The wrapper does not patch the Docker installer at runtime. It does not edit certificates, nginx configuration, Telemt configuration, users, or secrets; after validation it invokes the normal documented `--update` behavior.
+- Added Ubuntu host nginx/OpenSSL validation to fresh install, `--update`, and `--fix-nginx`. The installer checks both the nginx command and the service binary, then builds isolated nginx `1.31.2` with pinned OpenSSL `3.5.7` when the host stack is too old.
 
 ### Changed
 
 - Updated the exact checked compatible Telemt target and example image tag to `3.4.23`.
 - Docker OS validation now accepts Debian 13.x or Ubuntu 24.x-26.x and stops before installation on other versions.
+- Ubuntu support is Docker-only. The host nginx fallback does not replace system OpenSSL shared libraries, while Debian 13 keeps the existing distro-nginx path.
 
 ## 2026-07-07
 

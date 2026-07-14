@@ -9,6 +9,7 @@ RU: Этот проект содержит обычный Bash-установщ�
 - Telemt: GitHub releases проекта `telemt/telemt`, `https://github.com/telemt/telemt`; Dockerfile скачивает release asset и проверяет upstream `.sha256`.
 - Docker / containerd / Docker Compose: пакеты дистрибутива или официальный Docker apt repository, `https://download.docker.com`.
 - nginx, certbot, openssl, jq, iproute2 и другие системные пакеты: официальные репозитории Debian/Ubuntu.
+- Ubuntu nginx/OpenSSL fallback: официальные release archives OpenSSL и nginx с закрепленными SHA-256.
 - base images: `debian:12-slim` и `gcr.io/distroless/static-debian12:nonroot` из публичных registry.
 
 EN: This project contains an ordinary Bash installer and Dockerfile that make Telemt with HTTPS camouflage easier to install. It is not an official Telemt installer. This repository does not contain an embedded Telemt binary, certificates, keys, or proxy secrets. The build and installer download software from official sources:
@@ -16,6 +17,7 @@ EN: This project contains an ordinary Bash installer and Dockerfile that make Te
 - Telemt: GitHub releases of `telemt/telemt`, `https://github.com/telemt/telemt`; the Dockerfile downloads the release asset and verifies the upstream `.sha256`.
 - Docker / containerd / Docker Compose: distribution packages or the official Docker apt repository, `https://download.docker.com`.
 - nginx, certbot, openssl, jq, iproute2, and other system packages: official Debian/Ubuntu repositories.
+- Ubuntu nginx/OpenSSL fallback: official OpenSSL and nginx release archives with pinned SHA-256 values.
 - base images: `debian:12-slim` and `gcr.io/distroless/static-debian12:nonroot` from public registries.
 
 The image is not published unless `PUSH=1` is explicitly set.
@@ -159,6 +161,18 @@ docker run --rm --entrypoint /app/telemt telemt-local:3.4.23 --version
 Заглушка намеренно настраивается как обычный HTTPS без отдельной директивы `http2`. Это совместимо с nginx 1.24 и старыми пакетами Debian/Ubuntu, где строка `http2 on;` вызывает ошибку `unknown directive "http2"`. Для маскировочного сайта HTTP/2 не нужен.
 
 Перед запуском нужен чистый Debian 13.x или Ubuntu 24.x-26.x сервер, A-запись домена на IPv4 сервера и свободные `80/tcp`, `443/tcp`. Другие версии ОС установщик останавливает сразу, до установки пакетов.
+
+На Ubuntu Telemt устанавливается только в Docker. Публичные `80/443` принимает
+host nginx. Установщик проверяет OpenSSL не по случайной команде из `PATH`, а у
+nginx command и бинарника, реально указанного в `nginx.service`. Если Ubuntu
+nginx не имеет stream preread или использует OpenSSL ниже функционального
+порога `3.5.2`/security target `3.5.7`, автоматически собирается изолированный
+nginx `1.31.2` с OpenSSL `3.5.7`. Системные shared libraries не заменяются,
+Telemt остается в Docker. Та же проверка выполняется при `--update` и
+`--fix-nginx`; Debian 13 продолжает использовать обычный distro nginx.
+
+Короткий Ubuntu-only launcher находится в `telemt/ubuntu-24-26/`. Он проверяет
+ОС и передает все аргументы этому каноническому Docker-установщику.
 
 Если `80/tcp` или `443/tcp` уже заняты Docker-контейнером, установщик покажет имя контейнера, image и проброшенные порты, например `whatsapp-proxy facebook/whatsapp_proxy:20260607`, и спросит, удалить ли эти контейнеры для продолжения установки Telemt. При ответе `no` установка остановится без удаления.
 
@@ -582,6 +596,14 @@ In this architecture, a normal scanner or browser without the MTProxy key receiv
 The mask site is intentionally configured as regular HTTPS without a separate `http2` directive. This stays compatible with nginx 1.24 and older Debian/Ubuntu packages where `http2 on;` fails with `unknown directive "http2"`. HTTP/2 is not needed for the camouflage site.
 
 Before running, use a clean Debian 13.x or Ubuntu 24.x-26.x server, create a DNS A record pointing to the server IPv4, and keep `80/tcp` and `443/tcp` free. Other OS versions are stopped before package installation.
+
+Ubuntu uses Docker Telemt only. Host nginx owns public ports 80/443. The
+installer checks the OpenSSL versions compiled into both the nginx command and
+the binary actually started by `nginx.service`. If stream preread support is
+missing or the stack is older than the OpenSSL `3.5.2` feature floor / `3.5.7`
+security target, it builds isolated nginx `1.31.2` with OpenSSL `3.5.7`.
+System shared libraries are not replaced and Telemt remains in Docker. The same
+check runs during `--update` and `--fix-nginx`; Debian 13 keeps its distro nginx.
 
 If `80/tcp` or `443/tcp` is already used by a Docker container, the installer shows the container name, image, and published ports, for example `whatsapp-proxy facebook/whatsapp_proxy:20260607`, and asks whether to remove those containers before continuing Telemt installation. If you answer `no`, installation stops without removing anything.
 

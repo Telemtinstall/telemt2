@@ -4,11 +4,12 @@ This directory contains the native systemd installer for **Debian 13 only**.
 It installs the exact checked Telemt release `3.4.23`; the moving `latest` tag
 is not used.
 
-## Важно: для Ubuntu сделан отдельный установщик
+## Важно: Ubuntu устанавливается только через Docker
 
-Этот Debian-установщик нельзя использовать на Ubuntu. Для Ubuntu 24.x-26.x
-создан отдельный каталог [`telemt/ubuntu-24-26/`](../ubuntu-24-26/README.md) и
-отдельный `install_telemt_systemd.sh`.
+Этот Debian systemd-установщик нельзя использовать на Ubuntu. Для Ubuntu
+24.x-26.x создан отдельный Docker entry point в каталоге
+[`telemt/ubuntu-24-26/`](../ubuntu-24-26/README.md). Он проверяет версию Ubuntu
+и запускает канонический `telemt/docker-telemt/install_docker-telemt.sh`.
 
 Причина разделения связана с OpenSSL и nginx:
 
@@ -18,12 +19,11 @@ is not used.
    `/opt/openssl-3.5`. Это меняет команду `openssl version`, но само по себе не
    переводит уже собранный и запущенный nginx на новую TLS-библиотеку.
 3. OpenSSL `3.5.2` теперь является устаревшей security-версией: уязвимости ветки
-   `3.5.0`-`3.5.6` исправлены в security-релизе `3.5.7`. Поэтому новый
-   Ubuntu-установщик распознаёт `3.5.2` как минимальный функциональный порог,
-   но для nginx использует исправленную OpenSSL `3.5.7`.
-4. Ubuntu-установщик проверяет OpenSSL именно у реально запускаемого nginx,
-   использует системный CA bundle и при необходимости собирает отдельный nginx
-   `1.31.2` с OpenSSL `3.5.7`, не заменяя системные shared libraries.
+   `3.5.0`-`3.5.6` исправлены в security-релизе `3.5.7`.
+4. Docker-установщик на Ubuntu проверяет OpenSSL именно у реально запускаемого
+   host nginx и при необходимости собирает отдельный nginx `1.31.2` с OpenSSL
+   `3.5.7`, не заменяя системные shared libraries. Telemt при этом работает в
+   Docker, а не как systemd-сервис на хосте.
 
 Официальные сведения: [OpenSSL 3.5 release notes](https://openssl-library.org/news/openssl-3.5-notes/)
 и [уязвимости ветки OpenSSL 3.5](https://openssl-library.org/news/vulnerabilities-3.5/).
@@ -31,10 +31,10 @@ is not used.
 Установка на Ubuntu 24.x-26.x:
 
 ```bash
-curl -fsSL -o /root/install_telemt_systemd.sh \
-  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_systemd.sh
-chmod +x /root/install_telemt_systemd.sh
-/root/install_telemt_systemd.sh -lang ru
+curl -fsSL -o /root/install_telemt_docker.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/ubuntu-24-26/install_telemt_docker.sh
+chmod +x /root/install_telemt_docker.sh
+/root/install_telemt_docker.sh -lang ru
 ```
 
 ## Установка

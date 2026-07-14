@@ -18,6 +18,18 @@ TELEMT_LATEST_COMPATIBLE_VERSION="${TELEMT_LATEST_COMPATIBLE_VERSION:-3.4.23}"
 OS_RELEASE_FILE="${OS_RELEASE_FILE:-/etc/os-release}"
 TELEMT_DEFAULT_VERSION="${TELEMT_DEFAULT_VERSION:-$TELEMT_LATEST_COMPATIBLE_VERSION}"
 
+SYSTEM_CA_FILE="${SYSTEM_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
+TELEMT_OPENSSL_MIN_VERSION="${TELEMT_OPENSSL_MIN_VERSION:-3.5.2}"
+TELEMT_OPENSSL_BUILD_VERSION="${TELEMT_OPENSSL_BUILD_VERSION:-3.5.7}"
+TELEMT_OPENSSL_BUILD_SHA256="${TELEMT_OPENSSL_BUILD_SHA256:-a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8}"
+TELEMT_NGINX_BUILD_VERSION="${TELEMT_NGINX_BUILD_VERSION:-1.31.2}"
+TELEMT_NGINX_BUILD_SHA256="${TELEMT_NGINX_BUILD_SHA256:-af2a957c41da636ddc4f883e4523c6d140b4784dbce42000c364ae5092aa473c}"
+TELEMT_NGINX_OPENSSL_MODE="${TELEMT_NGINX_OPENSSL_MODE:-auto}"
+TELEMT_NGINX_PREFIX="${TELEMT_NGINX_PREFIX:-/opt/telemt-nginx-openssl35}"
+TELEMT_NGINX_BIN="${TELEMT_NGINX_BIN:-/usr/local/sbin/nginx-telemt-openssl35}"
+TELEMT_NGINX_CONF="${TELEMT_NGINX_CONF:-$TELEMT_NGINX_PREFIX/nginx.conf}"
+TELEMT_NGINX_DROPIN="${TELEMT_NGINX_DROPIN:-/etc/systemd/system/nginx.service.d/90-telemt-openssl35.conf}"
+
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
 TELEMT_IMAGE="${TELEMT_IMAGE:-telemt-local:${TELEMT_DEFAULT_VERSION}}"
@@ -64,6 +76,8 @@ ACME_PREFLIGHT_TOKEN=""
 ACME_PREFLIGHT_EXPECTED=""
 ACME_PREFLIGHT_PATH=""
 ACME_PREFLIGHT_LOG="/root/telemt-acme-http01-check.txt"
+DETECTED_OS_ID=""
+DETECTED_OS_VERSION_ID=""
 
 say() {
   printf '%s\n' "$*"
@@ -120,7 +134,8 @@ usage() {
   -update, --update
                   Проанализировать текущую установку, выбрать точную
                   совместимую версию Telemt, обновить Docker image и
-                  перезапустить контейнер, сохранив telemt.toml,
+                  перезапустить контейнер; на Ubuntu также проверить host
+                  nginx/OpenSSL. Сохранить telemt.toml,
                   docker-compose.yml, секреты, ссылки и nginx-конфиги.
   -fix, --fix-nginx
                   Аварийно починить nginx после ошибки
@@ -133,6 +148,9 @@ usage() {
   RESET_INSTALL_STATE=1
                   Новая установка с нуля: не читать старый сохраненный ввод,
                   удалить старый Telemt secret/config/compose/container.
+  TELEMT_NGINX_OPENSSL_MODE=auto|required|off
+                  Только Ubuntu: проверить реальный host nginx и при
+                  необходимости собрать nginx/OpenSSL 3.5.7. Default: auto.
 EOF
     return 0
   fi
@@ -159,8 +177,9 @@ Options:
   -update, --update
                   Analyze the current install, choose an exact compatible
                   Telemt version, update the Docker image, and recreate the
-                  container while preserving telemt.toml, docker-compose.yml,
-                  secrets, links, and nginx configs.
+                  container; on Ubuntu also validate host nginx/OpenSSL.
+                  Preserve telemt.toml, docker-compose.yml, secrets, links,
+                  and nginx configs.
   -fix, --fix-nginx
                   Emergency nginx repair for unknown directive "http2"
                   and Docker doctor checks. Secrets, certificates, and
@@ -172,6 +191,9 @@ Variables:
   RESET_INSTALL_STATE=1
                   Fresh install: do not load old saved input; remove the old
                   Telemt secret/config/compose/container.
+  TELEMT_NGINX_OPENSSL_MODE=auto|required|off
+                  Ubuntu only: validate the real host nginx and build the
+                  isolated nginx/OpenSSL 3.5.7 stack if needed. Default: auto.
 EOF
 }
 
@@ -240,6 +262,8 @@ require_supported_os() {
   os_id="$(lower "${ID:-}")"
   version_id="${VERSION_ID:-}"
   pretty="${PRETTY_NAME:-$os_id $version_id}"
+  DETECTED_OS_ID="$os_id"
+  DETECTED_OS_VERSION_ID="$version_id"
 
   case "$os_id" in
     debian)
@@ -305,6 +329,7 @@ run_fix_nginx_mode() {
   say
   say "nginx -t before fix:"
   nginx -t 2>&1 || true
+  ensure_ubuntu_nginx_openssl35
 
   changed=0
   while IFS= read -r -d '' file; do
@@ -1451,6 +1476,250 @@ install_packages() {
   ensure_compose_available
   systemctl enable --now nginx || true
   systemctl enable --now certbot.timer 2>/dev/null || true
+}
+
+configure_system_ca_environment() {
+  [ -s "$SYSTEM_CA_FILE" ] || die "System CA bundle is missing: $SYSTEM_CA_FILE"
+  export SSL_CERT_FILE="$SYSTEM_CA_FILE"
+  export CURL_CA_BUNDLE="$SYSTEM_CA_FILE"
+  [ -d /etc/ssl/certs ] && export SSL_CERT_DIR=/etc/ssl/certs
+}
+
+version_ge() {
+  local current="$1" required="$2"
+  [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n 1)" = "$required" ]
+}
+
+nginx_openssl_versions() {
+  local nginx_bin="${1:-$(command -v nginx 2>/dev/null || true)}"
+  [ -n "$nginx_bin" ] || return 1
+  "$nginx_bin" -V 2>&1 | grep -oE 'OpenSSL [0-9]+\.[0-9]+\.[0-9]+' | awk '{print $2}' | sort -Vu
+}
+
+nginx_service_binary() {
+  local service_exec
+  service_exec="$(systemctl show nginx.service -p ExecStart --value 2>/dev/null || true)"
+  printf '%s\n' "$service_exec" | grep -oE '/[^ ;]*nginx[^ ;]*' | head -n 1
+}
+
+nginx_stack_versions_at_least() {
+  local required="$1" command_bin service_bin bin versions version
+  command_bin="$(command -v nginx 2>/dev/null || true)"
+  service_bin="$(nginx_service_binary || true)"
+  [ -n "$command_bin" ] || return 1
+  for bin in "$command_bin" "$service_bin"; do
+    [ -n "$bin" ] || continue
+    [ -x "$bin" ] || return 1
+    versions="$(nginx_openssl_versions "$bin" || true)"
+    [ -n "$versions" ] || return 1
+    while IFS= read -r version; do
+      [ -n "$version" ] || continue
+      version_ge "$version" "$required" || return 1
+    done <<< "$versions"
+  done
+}
+
+nginx_has_compatible_openssl() {
+  local nginx_bin="${1:-$(command -v nginx 2>/dev/null || true)}" output versions version service_bin
+  [ -n "$nginx_bin" ] && [ -x "$nginx_bin" ] || return 1
+  output="$("$nginx_bin" -V 2>&1 || true)"
+  printf '%s\n' "$output" | grep -q -- '--with-stream' || return 1
+  printf '%s\n' "$output" | grep -q -- '--with-stream_ssl_preread_module' || return 1
+  versions="$(nginx_openssl_versions "$nginx_bin" || true)"
+  [ -n "$versions" ] || return 1
+  while IFS= read -r version; do
+    [ -n "$version" ] || continue
+    version_ge "$version" "$TELEMT_OPENSSL_MIN_VERSION" || return 1
+  done <<< "$versions"
+
+  service_bin="$(nginx_service_binary || true)"
+  if [ -n "$service_bin" ] && [ "$service_bin" != "$nginx_bin" ]; then
+    [ -x "$service_bin" ] || return 1
+    versions="$(nginx_openssl_versions "$service_bin" || true)"
+    [ -n "$versions" ] || return 1
+    while IFS= read -r version; do
+      [ -n "$version" ] || continue
+      version_ge "$version" "$TELEMT_OPENSSL_MIN_VERSION" || return 1
+    done <<< "$versions"
+  fi
+}
+
+backup_nginx_path() {
+  local path="$1" backup_root="$2"
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    install -d -m 0700 "$backup_root$(dirname "$path")"
+    cp -a "$path" "$backup_root$path"
+  fi
+}
+
+write_custom_nginx_config() {
+  install -d -m 0755 \
+    "$TELEMT_NGINX_PREFIX" /var/log/nginx /var/lib/nginx \
+    /etc/nginx/conf.d /etc/nginx/sites-enabled /etc/nginx/modules-enabled
+  write_file_root "$TELEMT_NGINX_CONF" 0644 root:root <<'EOF'
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log;
+worker_rlimit_nofile 65535;
+
+events {
+    worker_connections 8192;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    server_tokens off;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    access_log /var/log/nginx/access.log;
+    gzip on;
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+
+include /etc/nginx/modules-enabled/*telemt-stream-sni.conf;
+EOF
+}
+
+install_custom_nginx_openssl35() {
+  local build_dir openssl_archive nginx_archive openssl_src nginx_src build_jobs=1 backup_root
+  build_dir="$(mktemp -d /tmp/telemt-nginx-openssl35.XXXXXX)"
+  openssl_archive="$build_dir/openssl-${TELEMT_OPENSSL_BUILD_VERSION}.tar.gz"
+  nginx_archive="$build_dir/nginx-${TELEMT_NGINX_BUILD_VERSION}.tar.gz"
+  openssl_src="$build_dir/openssl-${TELEMT_OPENSSL_BUILD_VERSION}"
+  nginx_src="$build_dir/nginx-${TELEMT_NGINX_BUILD_VERSION}"
+  backup_root="/root/telemt-docker-nginx-openssl-backups/$(date +%Y%m%d-%H%M%S)"
+
+  backup_nginx_path "$TELEMT_NGINX_BIN" "$backup_root"
+  backup_nginx_path "$TELEMT_NGINX_CONF" "$backup_root"
+  backup_nginx_path "$TELEMT_NGINX_DROPIN" "$backup_root"
+  backup_nginx_path /usr/local/sbin/nginx "$backup_root"
+
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y --no-install-recommends build-essential perl zlib1g-dev libpcre2-dev
+
+  if [ -r /proc/meminfo ] && [ "$(awk '/MemTotal/{print $2}' /proc/meminfo)" -ge 1800000 ]; then
+    build_jobs=2
+  fi
+
+  (
+    trap 'rm -rf "$build_dir"' EXIT
+    curl -fL --retry 3 --connect-timeout 20 \
+      "https://github.com/openssl/openssl/releases/download/openssl-${TELEMT_OPENSSL_BUILD_VERSION}/openssl-${TELEMT_OPENSSL_BUILD_VERSION}.tar.gz" \
+      -o "$openssl_archive"
+    printf '%s  %s\n' "$TELEMT_OPENSSL_BUILD_SHA256" "$openssl_archive" | sha256sum -c -
+
+    curl -fL --retry 3 --connect-timeout 20 \
+      "https://nginx.org/download/nginx-${TELEMT_NGINX_BUILD_VERSION}.tar.gz" \
+      -o "$nginx_archive"
+    printf '%s  %s\n' "$TELEMT_NGINX_BUILD_SHA256" "$nginx_archive" | sha256sum -c -
+
+    tar -xzf "$openssl_archive" -C "$build_dir"
+    tar -xzf "$nginx_archive" -C "$build_dir"
+    cd "$nginx_src"
+    ./configure \
+      --prefix="$TELEMT_NGINX_PREFIX" \
+      --sbin-path="$TELEMT_NGINX_BIN" \
+      --conf-path="$TELEMT_NGINX_CONF" \
+      --pid-path=/run/nginx.pid \
+      --lock-path=/run/lock/nginx.lock \
+      --error-log-path=/var/log/nginx/error.log \
+      --http-log-path=/var/log/nginx/access.log \
+      --http-client-body-temp-path=/var/lib/nginx/body \
+      --http-proxy-temp-path=/var/lib/nginx/proxy \
+      --http-fastcgi-temp-path=/var/lib/nginx/fastcgi \
+      --user=www-data \
+      --group=www-data \
+      --with-compat \
+      --with-threads \
+      --with-http_ssl_module \
+      --with-http_v2_module \
+      --with-http_realip_module \
+      --with-http_gzip_static_module \
+      --with-http_stub_status_module \
+      --with-stream \
+      --with-stream_ssl_preread_module \
+      --with-pcre-jit \
+      --with-openssl="$openssl_src" \
+      --with-openssl-opt="no-shared no-tests --openssldir=$TELEMT_NGINX_PREFIX/ssl"
+    make -j"$build_jobs"
+    make install
+  )
+
+  write_custom_nginx_config
+  install -d -m 0755 \
+    /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi \
+    "$(dirname "$TELEMT_NGINX_DROPIN")"
+  ln -sfn "$TELEMT_NGINX_BIN" /usr/local/sbin/nginx
+  hash -r
+
+  write_file_root "$TELEMT_NGINX_DROPIN" 0644 root:root <<EOF
+[Service]
+ExecStartPre=
+ExecStartPre=$TELEMT_NGINX_BIN -t -q -c $TELEMT_NGINX_CONF
+ExecStart=
+ExecStart=$TELEMT_NGINX_BIN -c $TELEMT_NGINX_CONF -g 'daemon on; master_process on;'
+ExecReload=
+ExecReload=$TELEMT_NGINX_BIN -c $TELEMT_NGINX_CONF -g 'daemon on; master_process on;' -s reload
+EOF
+
+  "$TELEMT_NGINX_BIN" -t -c "$TELEMT_NGINX_CONF"
+  systemctl stop nginx 2>/dev/null || true
+  systemctl daemon-reload
+  systemctl enable nginx
+  systemctl start nginx
+  chmod -R go-rwx "$backup_root" 2>/dev/null || true
+  say "Nginx/OpenSSL backup: $backup_root"
+}
+
+ensure_ubuntu_nginx_openssl35() {
+  local current_versions side_version=""
+  [ "$DETECTED_OS_ID" = "ubuntu" ] || return 0
+
+  case "$TELEMT_NGINX_OPENSSL_MODE" in
+    auto|required|off) ;;
+    *) die "TELEMT_NGINX_OPENSSL_MODE must be auto, required, or off." ;;
+  esac
+
+  configure_system_ca_environment
+  if [ -x /opt/openssl-3.5/bin/openssl ]; then
+    side_version="$(/opt/openssl-3.5/bin/openssl version 2>/dev/null | awk '{print $2}' || true)"
+    say "Detected side-by-side OpenSSL: ${side_version:-unknown}. It is not injected into apt, curl, Docker, or the system linker."
+  fi
+
+  if nginx_has_compatible_openssl; then
+    current_versions="$(nginx_openssl_versions | tr '\n' ' ')"
+    if nginx_stack_versions_at_least "$TELEMT_OPENSSL_BUILD_VERSION"; then
+      say "Ubuntu host nginx already uses compatible OpenSSL: ${current_versions:-unknown}."
+      return 0
+    fi
+    say "Ubuntu host nginx OpenSSL ${current_versions:-unknown} is older than security target $TELEMT_OPENSSL_BUILD_VERSION."
+  fi
+
+  if [ "$TELEMT_NGINX_OPENSSL_MODE" = "off" ]; then
+    say "WARN: Ubuntu nginx OpenSSL compatibility build is disabled. The mask site may not support X25519MLKEM768."
+    return 0
+  fi
+
+  say "Building Ubuntu host nginx $TELEMT_NGINX_BUILD_VERSION with isolated OpenSSL $TELEMT_OPENSSL_BUILD_VERSION."
+  say "Telemt remains in Docker; system OpenSSL shared libraries are not replaced."
+  install_custom_nginx_openssl35
+  nginx_has_compatible_openssl "$TELEMT_NGINX_BIN" || die "Custom nginx OpenSSL verification failed."
+}
+
+host_nginx_tls_plan() {
+  if [ "$DETECTED_OS_ID" = "ubuntu" ]; then
+    printf 'Ubuntu host nginx >= OpenSSL %s; auto-build %s/%s' \
+      "$TELEMT_OPENSSL_MIN_VERSION" "$TELEMT_NGINX_BUILD_VERSION" "$TELEMT_OPENSSL_BUILD_VERSION"
+  else
+    printf 'distribution nginx (Debian path unchanged)'
+  fi
 }
 
 install_official_docker_packages() {
@@ -3236,6 +3505,7 @@ print_plan() {
   логи включены:      $ENABLE_LOGS
   Docker hardening:   $ENABLE_DOCKER_HARDENING
   high-load tuning:   $ENABLE_HIGH_LOAD_TUNING
+  host nginx TLS:     $(host_nginx_tls_plan)
 
 Установщик настроит:
   - TLS-Fronting + TCP-Splitting схему для своего домена
@@ -3310,6 +3580,7 @@ Install plan:
   logs enabled:       $ENABLE_LOGS
   Docker hardening:   $ENABLE_DOCKER_HARDENING
   high-load tuning:   $ENABLE_HIGH_LOAD_TUNING
+  host nginx TLS:     $(host_nginx_tls_plan)
 
 This installer will configure:
   - TLS-Fronting + TCP-Splitting for your own domain
@@ -4167,14 +4438,16 @@ apply_update_compatibility_patches() {
 
 run_update_mode() {
   if is_ru; then
-    say "Режим update: сохраняю существующие настройки и обновляю только Docker image/контейнер."
+    say "Режим update: сохраняю настройки, обновляю Docker image/контейнер и проверяю host nginx/OpenSSL на Ubuntu."
   else
-    say "Update mode: preserving existing settings and updating only the Docker image/container."
+    say "Update mode: preserving settings, updating the Docker image/container, and validating host nginx/OpenSSL on Ubuntu."
   fi
 
   [ -d "$INSTALL_DIR" ] || die "Install directory not found: $INSTALL_DIR"
   [ -f "$INSTALL_DIR/docker-compose.yml" ] || die "docker-compose.yml not found: $INSTALL_DIR/docker-compose.yml"
   [ -f "$INSTALL_DIR/telemt.toml" ] || die "telemt.toml not found: $INSTALL_DIR/telemt.toml"
+
+  [ -s "$SYSTEM_CA_FILE" ] && configure_system_ca_environment
 
   infer_update_config_from_existing_files
   [ -n "$DOMAIN" ] || die "Cannot detect domain from saved config or $INSTALL_DIR/telemt.toml."
@@ -4222,6 +4495,7 @@ run_update_mode() {
   client_mss:       $TELEMT_CLIENT_MSS
   client_mss_bulk:  $TELEMT_CLIENT_MSS_BULK
   synlimit:         $TELEMT_SYNLIMIT
+  host nginx TLS:   $(host_nginx_tls_plan)
   секреты/ссылки:   будут сохранены, ссылки будут пересобраны из текущего секрета
 
 EOF
@@ -4242,6 +4516,7 @@ Update plan:
   client_mss:       $TELEMT_CLIENT_MSS
   client_mss_bulk:  $TELEMT_CLIENT_MSS_BULK
   synlimit:         $TELEMT_SYNLIMIT
+  host nginx TLS:   $(host_nginx_tls_plan)
   secrets/links:    preserved; links regenerated from the existing secret
 
 EOF
@@ -4250,6 +4525,7 @@ EOF
 
   ensure_docker_available
   backup_update_state
+  ensure_ubuntu_nginx_openssl35
   ensure_python3_for_idn
   refresh_docker_image_for_update
   apply_update_compatibility_patches
@@ -4345,6 +4621,7 @@ main() {
     if [ "$SCRIPT_LANG_FROM_CLI" = "1" ]; then
       SCRIPT_LANG="$requested_script_lang"
     fi
+    require_supported_os
     run_fix_nginx_mode
     exit 0
   fi
@@ -4421,29 +4698,37 @@ main() {
     install_packages
     mark_done packages
   fi
+
+  if step_done host_nginx_tls; then
+    is_ru && say "[03] Host nginx/OpenSSL (уже проверено)" || say "[03] Host nginx/OpenSSL (already checked)"
+  else
+    is_ru && say "[03] Проверка host nginx/OpenSSL" || say "[03] Check host nginx/OpenSSL"
+    ensure_ubuntu_nginx_openssl35
+    mark_done host_nginx_tls
+  fi
   ensure_docker_available
   ensure_compose_available
 
   if step_done docker_image; then
-    is_ru && say "[03] Проверка Docker image (уже выполнено)" || say "[03] Check Docker image (already done)"
+    is_ru && say "[04] Проверка Docker image (уже выполнено)" || say "[04] Check Docker image (already done)"
   else
-    is_ru && say "[03] Проверка Docker image" || say "[03] Check Docker image"
+    is_ru && say "[04] Проверка Docker image" || say "[04] Check Docker image"
     check_docker_image
     mark_done docker_image
   fi
 
   if step_done high_load; then
-    is_ru && say "[04] High-load tuning (уже выполнено)" || say "[04] High-load tuning (already done)"
+    is_ru && say "[05] High-load tuning (уже выполнено)" || say "[05] High-load tuning (already done)"
   else
-    is_ru && say "[04] High-load tuning" || say "[04] High-load tuning"
+    is_ru && say "[05] High-load tuning" || say "[05] High-load tuning"
     configure_high_load
     mark_done high_load
   fi
 
   if step_done cert; then
-    is_ru && say "[05] nginx HTTP и сертификат (уже выполнено)" || say "[05] nginx HTTP and certificate (already done)"
+    is_ru && say "[06] nginx HTTP и сертификат (уже выполнено)" || say "[06] nginx HTTP and certificate (already done)"
   else
-    is_ru && say "[05] nginx HTTP и сертификат" || say "[05] nginx HTTP and certificate"
+    is_ru && say "[06] nginx HTTP и сертификат" || say "[06] nginx HTTP and certificate"
     write_mask_site_http_only
     write_firewall_hints
     verify_acme_http01_webroot
@@ -4452,9 +4737,9 @@ main() {
   fi
 
   if step_done config; then
-    is_ru && say "[06] Конфиг Telemt и nginx SNI (уже выполнено)" || say "[06] Telemt config and nginx SNI (already done)"
+    is_ru && say "[07] Конфиг Telemt и nginx SNI (уже выполнено)" || say "[07] Telemt config and nginx SNI (already done)"
   else
-    is_ru && say "[06] Конфиг Telemt и nginx SNI" || say "[06] Telemt config and nginx SNI"
+    is_ru && say "[07] Конфиг Telemt и nginx SNI" || say "[07] Telemt config and nginx SNI"
     ensure_secret
     write_telemt_config
     write_compose
@@ -4465,10 +4750,10 @@ main() {
   fi
   fix_runtime_permissions
 
-  is_ru && say "[07] Запуск Telemt" || say "[07] Start Telemt"
+  is_ru && say "[08] Запуск Telemt" || say "[08] Start Telemt"
   start_telemt
 
-  is_ru && say "[08] Проверка" || say "[08] Validate"
+  is_ru && say "[09] Проверка" || say "[09] Validate"
   validate_install
   mark_done complete
 
@@ -4521,4 +4806,6 @@ EOF
   fi
 }
 
-main "$@"
+if [ "${TELEMT_INSTALLER_SOURCE_ONLY:-0}" != "1" ]; then
+  main "$@"
+fi
