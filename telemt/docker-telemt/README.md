@@ -57,6 +57,10 @@ Telemt и предложит безопасное действие. На Ubuntu 
 Команды `install_docker-telemt.sh` ниже являются прямым интерфейсом Docker-
 установщика и остаются полезны для `--fix-nginx`, `--auto` и диагностики.
 
+Тот же `install.sh` автоматически зеркалируется в корень старого Docker-
+репозитория `Telemtinstall/telemt`. Вложенных копий в папках установщиков нет;
+оба корневых файла байт-в-байт одинаковы и используют `telemt2` как источник.
+
 ### Что делает
 
 `Dockerfile` скачивает официальный Telemt release asset из `telemt/telemt`, скачивает рядом `.sha256`, проверяет checksum и кладет бинарник в минимальный image.
@@ -507,6 +511,10 @@ installation. Ubuntu is Docker-only; a clean Debian 13 install offers Docker
 or native/systemd. Run `/root/install.sh --update -lang en` to update the
 detected variant without the first menu. Direct `install_docker-telemt.sh`
 commands remain available for `--fix-nginx`, `--auto`, and diagnostics.
+
+The same `install.sh` is mirrored automatically to the root of the legacy
+`Telemtinstall/telemt` Docker repository. There are no nested installer copies;
+both root files are byte-identical and use `telemt2` as their source.
 
 ### What It Does
 

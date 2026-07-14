@@ -4,8 +4,9 @@
 
 ### Added
 
-- Documented the single universal POSIX `install.sh` located at the root of
-  `Telemtinstall/telemt2`. It detects the OS and existing install, offers
+- Documented the universal POSIX `install.sh` located at the roots of both
+  `Telemtinstall/telemt2` and the legacy `Telemtinstall/telemt` Docker mirror.
+  Both files are byte-identical. It detects the OS and existing install, offers
   Install or Update, refreshes `telemt2` with `git pull --ff-only`, and invokes
   this canonical Docker installer when Docker is the compatible route.
 - Added `update-with-system-ca.sh`, a separate compatibility wrapper for Docker Telemt servers with a manually installed OpenSSL whose compiled default trust path does not use the operating system CA bundle.
