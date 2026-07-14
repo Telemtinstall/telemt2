@@ -181,8 +181,8 @@ status_users() {
 write_links() {
   require_config
   local domain port domain_hex direct_host user secret enabled tls_secret https_link tg_link direct_https direct_tg first_https="" first_direct_https=""
-  domain="$(config_value 'general\.links' public_host)"
-  port="$(config_value 'general\.links' public_port)"
+  domain="$(config_value 'general\\.links' public_host)"
+  port="$(config_value 'general\\.links' public_port)"
   direct_host="$(config_first_value announce || true)"
   [ -n "$domain" ] || die "Cannot detect public_host from [general.links]."
   port="${port:-443}"

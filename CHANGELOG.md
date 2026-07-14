@@ -20,6 +20,10 @@
 
 - Removed the Ubuntu native/systemd Telemt installer to keep Ubuntu support Docker-only and prevent two independent update implementations from drifting apart.
 
+### Fixed
+
+- Removed `mawk` escape warnings from Docker `telemt-users links` by passing the dotted TOML section name with portable escaping; link output and secrets are unchanged.
+
 ## 2026-07-13
 
 ### Fixed

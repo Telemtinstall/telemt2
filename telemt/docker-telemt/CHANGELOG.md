@@ -15,6 +15,10 @@
 - Docker OS validation now accepts Debian 13.x or Ubuntu 24.x-26.x and stops before installation on other versions.
 - Ubuntu support is Docker-only. The host nginx fallback does not replace system OpenSSL shared libraries, while Debian 13 keeps the existing distro-nginx path.
 
+### Fixed
+
+- Fixed `mawk` warnings about the `general.links` section escape in `telemt-users links`; Debian and Ubuntu now regenerate links without OS-specific warning noise.
+
 ## 2026-07-07
 
 ### Changed
