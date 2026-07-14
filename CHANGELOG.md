@@ -14,6 +14,7 @@
 - Native systemd update mode now refuses an accidental Telemt downgrade by default.
 - Fixed Tiny Core `--update` so an old `TELEMT_RELEASE` saved in `install.conf` cannot override the current project target; it now detects current/target, asks for confirmation, and blocks accidental downgrades.
 - Ubuntu native installs and updates explicitly use the operating system CA bundle, so an existing side-by-side `/opt/openssl-3.5` does not break release or certificate checks.
+- Expanded the Debian 13 README with a prominent Ubuntu/OpenSSL explanation: why Ubuntu 24-26 has a separate installer, why a side-by-side OpenSSL `3.5.2` does not switch nginx, and why new nginx builds use security-fixed OpenSSL `3.5.7`.
 
 ## 2026-07-13
 
