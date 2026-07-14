@@ -25,22 +25,27 @@ EN: Run the installers only on a new clean VPS/server without existing websites,
 
 ```text
 telemt/
+  install.sh
   common/
     add_key.sh
     README.md
   debian-13/
+    install.sh
     install_telemt_systemd.sh
     README.md
   ubuntu-24-26/
+    install.sh
     install_telemt_docker.sh
     README.md
   docker-telemt/
+    install.sh
     Dockerfile
     build.sh
     install_docker-telemt.sh
     compose.example.yml
     README.md
   tinycore/
+    install.sh
     install_telemt_tinycore.sh
     install_telemt_batch_tinycore.sh
     README.md
@@ -85,6 +90,56 @@ WhatsApp Chat Proxy             -> proxy/whatsapp/
 ```
 
 Each service directory has its own `README.md` with Russian and English instructions.
+
+## Universal Telemt Installer / Единый установщик Telemt
+
+RU: Для обычной установки или обновления Telemt используйте одну точку входа.
+Она определяет ОС, проверяет уже установленный Docker/native-вариант, предлагает
+`Установить` или `Обновить`, выполняет безопасный `git pull --ff-only` и запускает
+подходящий профильный установщик:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang ru
+```
+
+Обновление без первого меню:
+
+```bash
+/root/install.sh --update -lang ru
+```
+
+```text
+Debian 13       -> Docker (по умолчанию) или native/systemd
+Ubuntu 24-26    -> только Docker, включая проверку host nginx/OpenSSL
+Tiny Core Linux -> native Tiny Core installer
+```
+
+Универсальный скрипт не выбирает moving `latest`: точную проверенную версию
+Telemt определяет профильный установщик. При обновлении сохраняется текущий
+способ установки; автоматической миграции Docker <-> systemd нет. Если каталог
+`/root/telemt2` принадлежит другому Git-репозиторию или содержит локальные
+изменения, скрипт ничего не перезаписывает и останавливается.
+
+EN: Use the same entry point for a normal Telemt install or update. It detects
+the OS and an existing Docker/native installation, offers Install or Update,
+runs a safe `git pull --ff-only`, and starts the compatible specialist
+installer:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang en
+```
+
+Run `/root/install.sh --update -lang en` to skip the first menu. Debian 13
+offers Docker or native/systemd, Ubuntu 24-26 uses Docker only, and Tiny Core
+uses its native installer. The specialist installer selects the exact checked
+Telemt release instead of `latest`; update mode never migrates between Docker
+and systemd and never overwrites a dirty or unrelated `/root/telemt2` checkout.
 
 ## VPN Directories / VPN-Каталоги
 

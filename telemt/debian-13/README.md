@@ -4,6 +4,28 @@ This directory contains the native systemd installer for **Debian 13 only**.
 It installs the exact checked Telemt release `3.4.23`; the moving `latest` tag
 is not used.
 
+## Единый установщик
+
+Рекомендуемый способ установки и обновления:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang ru
+```
+
+Скрипт определит Debian 13 и предложит Docker-вариант по умолчанию либо
+native/systemd без Docker. Если Telemt уже установлен, ответом по умолчанию
+будет обновление найденного варианта. Обновить без первого меню:
+
+```bash
+/root/install.sh --update -lang ru
+```
+
+Команды с `install_telemt_systemd.sh` ниже оставлены для прямого запуска
+профильного native-установщика.
+
 ## Важно: Ubuntu устанавливается только через Docker
 
 Этот Debian systemd-установщик нельзя использовать на Ubuntu. Для Ubuntu
@@ -107,6 +129,20 @@ chmod +x /root/install_telemt_systemd.sh
 Изменения начинаются только после показа плана и ответа `y`/`yes`.
 
 ## English quick start
+
+Recommended universal entry point:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang en
+```
+
+It detects Debian 13, offers Docker (default) or native/systemd, and defaults
+to updating the detected installation when Telemt is already present. Use
+`/root/install.sh --update -lang en` to skip the first menu. The direct
+systemd commands below remain available for advanced/manual operation.
 
 The installer accepts Debian 13 only and aborts before package installation on
 any other OS. It pins Telemt `3.4.23`, verifies the official release checksum,

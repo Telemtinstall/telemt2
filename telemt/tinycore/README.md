@@ -4,6 +4,29 @@
 
 Tiny Core Linux-версия сделана отдельно и не заменяет Debian 13 или Docker-скрипты.
 
+### Единый установщик
+
+Рекомендуемый способ установки и обновления одного сервера:
+
+```bash
+wget -O /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang ru
+```
+
+Универсальный скрипт определит Tiny Core, при необходимости установит Git через
+`tce-load`, скачает/обновит `/tmp/telemt2` и запустит native Tiny Core
+installer. Если Telemt уже найден в `/opt/telemt`, обновление будет ответом по
+умолчанию. Запуск обновления без первого меню:
+
+```bash
+/root/install.sh --update -lang ru
+```
+
+Для этого, как и для основного установщика, заранее нужен настроенный
+persistent TCE. Прямые команды ниже оставлены для ручного запуска и batch mode.
+
 ```text
 install_telemt_tinycore.sh          установка одного Tiny Core сервера
 install_telemt_batch_tinycore.sh    пакетная установка на несколько Tiny Core серверов
@@ -250,6 +273,24 @@ RESET_INSTALL_STATE=1 sh /root/install_telemt_tinycore.sh
 ## EN
 
 The Tiny Core Linux version is separate and does not replace the Debian 13 or Docker scripts.
+
+### Universal Installer
+
+Recommended single-server install/update entry point:
+
+```bash
+wget -O /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang en
+```
+
+It detects Tiny Core, installs Git through `tce-load` when needed,
+downloads/updates `/tmp/telemt2`, and starts the native Tiny Core installer.
+An existing `/opt/telemt` install defaults to Update. Use
+`/root/install.sh --update -lang en` to skip the first menu. A persistent TCE
+must already be configured. Direct commands below remain available for manual
+and batch operation.
 
 ```text
 install_telemt_tinycore.sh          single Tiny Core server installer

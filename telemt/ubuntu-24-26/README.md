@@ -9,6 +9,28 @@ There is no native/systemd Telemt installer in this directory. The small
 single canonical installer from `telemt/docker-telemt/`, so install, `--update`,
 secret preservation, and user management cannot drift between two copies.
 
+## Единый установщик
+
+Рекомендуемый способ установки и обновления:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang ru
+```
+
+Он определяет Ubuntu 24.x-26.x, выбирает только Docker-вариант и передаёт
+работу каноническому установщику с проверкой реально запущенного host nginx и
+OpenSSL. Если установка уже существует, обновление будет предложено по
+умолчанию. Без первого меню:
+
+```bash
+/root/install.sh --update -lang ru
+```
+
+Прямые команды с `install_telemt_docker.sh` ниже остаются для ручного запуска.
+
 ## Почему Ubuntu требует отдельной проверки
 
 Ubuntu 24.x may ship nginx with OpenSSL 3.0.x. Installing OpenSSL `3.5.2` into
@@ -81,6 +103,21 @@ cat /root/telemt-active-probing-check.txt
 ```
 
 ## English quick start
+
+Recommended universal entry point:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang en
+```
+
+It detects Ubuntu 24.x-26.x, selects Docker only, and starts the canonical
+installer with validation of the nginx service binary and its OpenSSL build.
+An existing install defaults to Update; use
+`/root/install.sh --update -lang en` to skip the first menu. The direct
+launcher commands below remain available for manual operation.
 
 Ubuntu uses Docker Telemt only. The launcher rejects non-Ubuntu systems and
 Ubuntu releases outside 24.x-26.x. Host nginx is checked against the real

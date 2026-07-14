@@ -4,12 +4,20 @@
 
 ### Added
 
+- Added one POSIX-compatible `telemt/install.sh` entry point, with identical
+  copies in every supported Telemt installer directory. It detects Debian 13,
+  Ubuntu 24-26, or Tiny Core, detects Docker/native existing installs, asks for
+  Install or Update, safely updates `Telemtinstall/telemt2`, and dispatches to
+  the existing specialist installer without using a moving Telemt `latest`.
 - Added a standalone Docker Telemt compatibility wrapper for manually upgraded OpenSSL builds that no longer use the operating system CA bundle by default. It is check-only by default, can explicitly pass `SSL_CERT_FILE`/`CURL_CA_BUNDLE` to the existing updater, and refuses a possible Telemt version downgrade without changing the official installer.
 - Kept the native systemd installer for Debian 13 only and added an Ubuntu 24-26 Docker-only launcher that rejects the wrong OS before downloading or installing packages.
 - Moved the Ubuntu nginx/OpenSSL preflight into the canonical Docker installer: OpenSSL `3.5.2` is recognized as the PQ feature floor, while nginx older than security target `3.5.7` is replaced with isolated nginx `1.31.2` built against OpenSSL `3.5.7` without replacing system OpenSSL libraries. Telemt remains in Docker.
 
 ### Changed
 
+- Docker publication now mirrors `telemt2/telemt/docker-telemt` to the legacy
+  standalone `Telemtinstall/telemt` repository, keeping old server checkouts
+  and the current monorepo byte-identical.
 - Updated Docker (Debian 13 and Ubuntu 24-26), Debian 13 systemd, and Tiny Core targets to the exact checked Telemt `3.4.23` release.
 - Native systemd update mode now refuses an accidental Telemt downgrade by default.
 - Fixed Tiny Core `--update` so an old `TELEMT_RELEASE` saved in `install.conf` cannot override the current project target; it now detects current/target, asks for confirmation, and blocks accidental downgrades.

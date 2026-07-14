@@ -29,11 +29,33 @@ Latest repository changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 ### Быстрый выбор
 
 ```text
+install.sh                 Единый выбор установки/обновления по ОС.
 build.sh                  Собрать Docker image Telemt.
 install_docker-telemt.sh  Установить сервер: nginx + certbot + Docker Telemt + маскировка.
 telemt-users.sh           Добавить/удалить пользователей и пересобрать ссылки после установки.
 compose.example.yml       Пример hardened compose для ручной интеграции.
 ```
+
+Для обычной установки или обновления рекомендуется единая точка входа:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang ru
+```
+
+Она определит Debian 13 или Ubuntu 24-26, найдёт существующий Docker/native
+Telemt и предложит безопасное действие. На Ubuntu будет выбран только Docker;
+на Debian 13 при новой установке можно выбрать Docker или native/systemd.
+Обновить найденный вариант без первого меню:
+
+```bash
+/root/install.sh --update -lang ru
+```
+
+Команды `install_docker-telemt.sh` ниже являются прямым интерфейсом Docker-
+установщика и остаются полезны для `--fix-nginx`, `--auto` и диагностики.
 
 ### Что делает
 
@@ -464,11 +486,27 @@ ALLOW_TELEMT_LATEST
 ### Quick Choice
 
 ```text
+install.sh                 Select install/update and installer by OS.
 build.sh                  Build the Telemt Docker image.
 install_docker-telemt.sh  Install server: nginx + certbot + Docker Telemt + masking.
 telemt-users.sh           Add/remove users and regenerate proxy links after installation.
 compose.example.yml       Hardened compose example for manual integration.
 ```
+
+For a normal install or update, use the universal entry point:
+
+```bash
+curl -fsSL -o /root/install.sh \
+  https://raw.githubusercontent.com/Telemtinstall/telemt2/main/telemt/install.sh
+chmod +x /root/install.sh
+/root/install.sh -lang en
+```
+
+It detects Debian 13 or Ubuntu 24-26 and any existing Docker/native Telemt
+installation. Ubuntu is Docker-only; a clean Debian 13 install offers Docker
+or native/systemd. Run `/root/install.sh --update -lang en` to update the
+detected variant without the first menu. Direct `install_docker-telemt.sh`
+commands remain available for `--fix-nginx`, `--auto`, and diagnostics.
 
 ### What It Does
 
