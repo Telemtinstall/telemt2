@@ -1,20 +1,20 @@
-# Teleminstall WEB Proxy
+# WebProxyTelegram
 
 Новая установка одной командой — установщик сам загрузит актуальную ветку
 `main`, задаст вопрос о домене и выполнит всю настройку:
 
 ```bash
-apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/main/teleminstall/install.sh' -o /root/install.sh && bash /root/install.sh --auto
+apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/main/WebProxyTelegram/install.sh' -o /root/install.sh && bash /root/install.sh --auto
 ```
 
 Если домен уже известен:
 
 ```bash
-apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/main/teleminstall/install.sh' -o /root/install.sh && bash /root/install.sh --auto --domain proxy.example.com
+apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/main/WebProxyTelegram/install.sh' -o /root/install.sh && bash /root/install.sh --auto --domain proxy.example.com
 ```
 
 Повторный запуск этой команды сначала обновляет локальную копию репозитория в
-`/opt/teleminstall`, а затем запускает находящийся в ней актуальный установщик.
+`/opt/WebProxyTelegram`, а затем запускает находящийся в ней актуальный установщик.
 
 ## Пошаговая установка
 
@@ -38,12 +38,12 @@ proxy.example.com  A  192.0.2.10
 Выполните от `root` одну команду:
 
 ```bash
-apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/main/teleminstall/install.sh' -o /root/install.sh && bash /root/install.sh --auto --domain proxy.example.com
+apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/main/WebProxyTelegram/install.sh' -o /root/install.sh && bash /root/install.sh --auto --domain proxy.example.com
 ```
 
 Замените `proxy.example.com` своим доменом. Установщик сам:
 
-- обновит или загрузит репозиторий в `/opt/teleminstall`;
+- обновит или загрузит репозиторий в `/opt/WebProxyTelegram`;
 - установит nginx, certbot, WEB proxy и аналитику;
 - выпустит сертификат Let’s Encrypt и включит автоматическое продление;
 - создаст первого пользователя WEB proxy;
@@ -66,14 +66,14 @@ apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https:/
 Главный итоговый файл:
 
 ```bash
-cat /root/webproxy-install-summary.txt
+cat /root/WebProxyTelegram-install-summary.txt
 ```
 
 Дополнительные файлы:
 
 ```text
-/root/webproxy-only-links.txt
-/root/webproxy-analytics-credentials.txt
+/root/WebProxyTelegram-links.txt
+/root/WebProxyTelegram-analytics-credentials.txt
 ```
 
 В первом находятся ссылки `https://t.me/webproxy` и `tg://webproxy` для
@@ -110,7 +110,7 @@ webproxy_cli -delete USER
 Отдельный установщик только нового Telegram WEB proxy. Он не устанавливает
 Telemt или VPN и не изменяет SSH/маршруты.
 
-Исходные файлы опубликованы в каталоге `teleminstall` основной ветки репозитория
+Исходные файлы опубликованы в каталоге `WebProxyTelegram` основной ветки репозитория
 `Telemtinstall/telemt2`.
 
 ## Схема
@@ -189,10 +189,10 @@ chmod +x webproxy-install.sh
 В каталоге должен быть читаемый `index.html`. Уникальный настоящий сайт снижает
 возможность обнаружения одинакового шаблона активным сканированием.
 
-После установки ссылки находятся в `/root/webproxy-only-links.txt`.
-Доступ к аналитике находится в `/root/webproxy-analytics-credentials.txt`.
+После установки ссылки находятся в `/root/WebProxyTelegram-links.txt`.
+Доступ к аналитике находится в `/root/WebProxyTelegram-analytics-credentials.txt`.
 Все важные данные дополнительно собраны в одном защищённом файле
-`/root/webproxy-install-summary.txt` с правами `0600`. Установщик выводит его
+`/root/WebProxyTelegram-install-summary.txt` с правами `0600`. Установщик выводит его
 содержимое в конце успешной установки. Там находятся:
 
 - домен и адрес публичной страницы;
@@ -235,7 +235,7 @@ webproxy_cli -delete user
 удалить нельзя, потому что `tproxy-server` требует хотя бы один профиль. Перед
 изменением создаётся резервная копия, новая конфигурация проверяется, а при ошибке
 служб автоматически восстанавливается прежняя версия. Все ссылки также сохраняются
-в `/root/webproxy-users.txt`.
+в `/root/WebProxyTelegram-users.txt`.
 
 Проверка автоматического продления:
 

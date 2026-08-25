@@ -52,7 +52,7 @@ source_text="$(<"$INSTALLER")"
 [[ "$source_text" == *'umask 022'* ]] || fail "Go test umask fix missing"
 [[ "$source_text" == *'chmod 0755 "$build_directory"'* ]] || fail "MTProxy permission fix missing"
 [[ "$source_text" == *'run-webproxy-mtproxy'* ]] || fail "NAT-aware MTProxy runner missing"
-[[ "$source_text" == *'/root/webproxy-install-summary.txt'* ]] || fail "unified install summary missing"
+[[ "$source_text" == *'/root/WebProxyTelegram-install-summary.txt'* ]] || fail "unified install summary missing"
 [[ "$source_text" == *'WEB PROXY INSTALLATION SUMMARY'* ]] || fail "summary header missing"
 [[ "$source_text" == *'write_install_summary'* ]] || fail "summary finalizer missing"
 [[ "$source_text" == *'--ipinfo-token'* ]] || fail "IPinfo token option missing"
@@ -74,8 +74,8 @@ if [ -f "$BOOTSTRAP" ]; then
   bash -n "$BOOTSTRAP"
   bootstrap_text="$(<"$BOOTSTRAP")"
   [[ "$bootstrap_text" == *'https://github.com/Telemtinstall/telemt2.git'* ]] || fail "bootstrap repository missing"
-  [[ "$bootstrap_text" == *'INSTALL_ROOT="/opt/teleminstall"'* ]] || fail "bootstrap managed checkout missing"
-  [[ "$bootstrap_text" == *'PAYLOAD="teleminstall/webproxy-install.sh"'* ]] || fail "bootstrap payload missing"
+  [[ "$bootstrap_text" == *'INSTALL_ROOT="/opt/WebProxyTelegram"'* ]] || fail "bootstrap managed checkout missing"
+  [[ "$bootstrap_text" == *'PAYLOAD="WebProxyTelegram/webproxy-install.sh"'* ]] || fail "bootstrap payload missing"
   [[ "$bootstrap_text" == *'git -C "$INSTALL_ROOT" fetch --depth 1 origin "$REPOSITORY_BRANCH"'* ]] || fail "bootstrap update missing"
 fi
 test_tmp="$(mktemp -d)"
@@ -148,4 +148,4 @@ assert "password=abcdefghij" in summary
 assert "t.me/webproxy?server=proxy.example.com" in summary
 assert "webproxy_cli -add USER" in summary
 PY
-printf 'OK: webproxy-only offline tests passed.\n'
+printf 'OK: WebProxyTelegram offline tests passed.\n'

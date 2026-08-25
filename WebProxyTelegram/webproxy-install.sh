@@ -25,7 +25,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
   cat <<EOF
-WEB proxy only installer $SCRIPT_VERSION
+WebProxyTelegram installer $SCRIPT_VERSION
 
 Использование:
   sudo ./install.sh --auto
@@ -102,7 +102,7 @@ require_installer_assets() {
   local asset
   for asset in collector.py token_admin.py index.html app.css app.js; do
     [ -f "$ANALYTICS_ASSET_DIR/$asset" ] || \
-      die "Неполная загрузка установщика: отсутствует analytics/$asset. Запустите основной teleminstall/install.sh повторно."
+      die "Неполная загрузка установщика: отсутствует analytics/$asset. Запустите основной WebProxyTelegram/install.sh повторно."
   done
 }
 
@@ -342,10 +342,10 @@ from pathlib import Path
 CONFIG = Path("/etc/tproxy-server/config.json")
 PROFILES = Path("/etc/tproxy-server/profiles.json")
 SECRETS = Path("/etc/mtproxy/webproxy-secrets")
-LINKS = Path("/root/webproxy-users.txt")
-LEGACY_LINKS = Path("/root/webproxy-only-links.txt")
-SUMMARY = Path("/root/webproxy-install-summary.txt")
-ANALYTICS_CREDENTIALS = Path("/root/webproxy-analytics-credentials.txt")
+LINKS = Path("/root/WebProxyTelegram-users.txt")
+LEGACY_LINKS = Path("/root/WebProxyTelegram-links.txt")
+SUMMARY = Path("/root/WebProxyTelegram-install-summary.txt")
+ANALYTICS_CREDENTIALS = Path("/root/WebProxyTelegram-analytics-credentials.txt")
 IPINFO_TOKEN_FILE = Path("/etc/webproxy-analytics/ipinfo.token")
 BACKUPS = Path("/etc/tproxy-server/backups")
 LOCK = Path("/run/lock/webproxy-cli.lock")
@@ -454,11 +454,11 @@ webproxy_cli -del USER       # confirmation required
 webproxy_cli -delete USER    # delete without confirmation
 
 IMPORTANT FILES
-/root/webproxy-install-summary.txt
-/root/webproxy-users.txt
-/root/webproxy-analytics-credentials.txt
+/root/WebProxyTelegram-install-summary.txt
+/root/WebProxyTelegram-users.txt
+/root/WebProxyTelegram-analytics-credentials.txt
 /etc/webproxy-analytics/ipinfo.token
-/root/.webproxy-only.config
+/root/.WebProxyTelegram.config
 """
     write_private(SUMMARY, summary)
 
@@ -673,8 +673,8 @@ run_upstream_install() {
 
 configure_nginx_http() {
   install -d -m 0755 /var/www/webproxy-acme/.well-known/acme-challenge
-  rm -f /etc/nginx/sites-enabled/default
-  cat > /etc/nginx/sites-available/webproxy-only <<EOF
+  rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/webproxy-only
+  cat > /etc/nginx/sites-available/WebProxyTelegram <<EOF
 server {
     listen 80;
     listen [::]:80;
@@ -692,7 +692,7 @@ server {
     access_log off;
 }
 EOF
-  ln -sfn /etc/nginx/sites-available/webproxy-only /etc/nginx/sites-enabled/webproxy-only
+  ln -sfn /etc/nginx/sites-available/WebProxyTelegram /etc/nginx/sites-enabled/WebProxyTelegram
   nginx -t
   systemctl enable --now nginx
   systemctl reload nginx
@@ -709,7 +709,7 @@ issue_certificate() {
 }
 
 configure_nginx_https() {
-  cat > /etc/nginx/sites-available/webproxy-only <<EOF
+  cat > /etc/nginx/sites-available/WebProxyTelegram <<EOF
 server {
     listen 80;
     listen [::]:80;
@@ -741,7 +741,7 @@ server {
 
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     access_log off;
-    error_log /var/log/nginx/webproxy-only-error.log warn;
+    error_log /var/log/nginx/WebProxyTelegram-error.log warn;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -1048,7 +1048,10 @@ EOF
 }
 
 configure_analytics_credentials() {
-  local credentials=/root/webproxy-analytics-credentials.txt
+  local credentials=/root/WebProxyTelegram-analytics-credentials.txt
+  if [ ! -s "$credentials" ] && [ -s /root/webproxy-analytics-credentials.txt ]; then
+    cp -a /root/webproxy-analytics-credentials.txt "$credentials"
+  fi
   ANALYTICS_LOGIN=""
   ANALYTICS_PASSWORD=""
   if [ -s "$credentials" ]; then
@@ -1059,7 +1062,7 @@ configure_analytics_credentials() {
     ANALYTICS_LOGIN="$(openssl rand -hex 5)"
     ANALYTICS_PASSWORD="$(openssl rand -hex 5)"
   fi
-  htpasswd -bcB /etc/nginx/.htpasswd-webproxy-anal "$ANALYTICS_LOGIN" "$ANALYTICS_PASSWORD" >/dev/null
+  htpasswd -bcB /etc/nginx/.htpasswd-webproxy-anal "$ANALYTICS_LOGIN" "$ANALYTICS_PASSWORD" >/dev/null 2>&1
   chown root:www-data /etc/nginx/.htpasswd-webproxy-anal
   chmod 0640 /etc/nginx/.htpasswd-webproxy-anal
   cat > "$credentials" <<EOF
@@ -1204,9 +1207,12 @@ EOF
 configure_nginx_analytics() {
   local site_backup
   site_backup="/root/nginx-webproxy.before-analytics.$(date +%Y%m%d-%H%M%S).conf"
-  [ -f /etc/nginx/sites-available/webproxy-only ] && \
-    cp -a /etc/nginx/sites-available/webproxy-only "$site_backup"
-  cat > /etc/nginx/sites-available/webproxy-only <<EOF
+  if [ ! -f /etc/nginx/sites-available/WebProxyTelegram ] && [ -f /etc/nginx/sites-available/webproxy-only ]; then
+    cp -a /etc/nginx/sites-available/webproxy-only /etc/nginx/sites-available/WebProxyTelegram
+  fi
+  [ -f /etc/nginx/sites-available/WebProxyTelegram ] && \
+    cp -a /etc/nginx/sites-available/WebProxyTelegram "$site_backup"
+  cat > /etc/nginx/sites-available/WebProxyTelegram <<EOF
 server {
     listen 80;
     listen [::]:80;
@@ -1227,7 +1233,7 @@ server {
     ssl_session_tickets off;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     access_log /var/log/tproxy/access.log webproxy_transport if=\$webproxy_transport_loggable;
-    error_log /var/log/nginx/webproxy-only-error.log warn;
+    error_log /var/log/nginx/WebProxyTelegram-error.log warn;
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -1278,8 +1284,10 @@ server {
     access_log off;
 }
 EOF
+  rm -f /etc/nginx/sites-enabled/webproxy-only
+  ln -sfn /etc/nginx/sites-available/WebProxyTelegram /etc/nginx/sites-enabled/WebProxyTelegram
   if ! nginx -t; then
-    [ -f "$site_backup" ] && cp -a "$site_backup" /etc/nginx/sites-available/webproxy-only
+    [ -f "$site_backup" ] && cp -a "$site_backup" /etc/nginx/sites-available/WebProxyTelegram
     if [ "${ANALYTICS_LOG_CONFIG_EXISTED:-0}" -eq 1 ]; then
       cp -a "$ANALYTICS_LOG_CONFIG_BACKUP" /etc/nginx/conf.d/webproxy-analytics-log.conf
     else
@@ -1303,7 +1311,7 @@ setup_analytics() {
   fi
   if [ ! -s /srv/tproxy-site/index.html ] || grep -Fq 'This website is available.' /srv/tproxy-site/index.html; then
     [ ! -f /srv/tproxy-site/index.html ] || \
-      cp -a /srv/tproxy-site/index.html "/root/webproxy-index.before-analytics.$(date +%Y%m%d-%H%M%S).html"
+      cp -a /srv/tproxy-site/index.html "/root/WebProxyTelegram-index.before-analytics.$(date +%Y%m%d-%H%M%S).html"
     write_default_site /srv/tproxy-site
   fi
   write_analytics_collector
@@ -1336,24 +1344,24 @@ setup_analytics() {
 
 write_result_files() {
   umask 077
-  cat > /root/webproxy-only-links.txt <<EOF
+  cat > /root/WebProxyTelegram-links.txt <<EOF
 https://t.me/webproxy?server=${DOMAIN}&secret=${WEBPROXY_SECRET}
 tg://webproxy?server=${DOMAIN}&secret=${WEBPROXY_SECRET}
 EOF
-  cat > /root/.webproxy-only.config <<EOF
+  cat > /root/.WebProxyTelegram.config <<EOF
 DOMAIN=$(printf '%q' "$DOMAIN")
 EMAIL=$(printf '%q' "$EMAIL")
 WEBPROXY_SECRET=$(printf '%q' "$WEBPROXY_SECRET")
 MTPROXY_WORKERS=$(printf '%q' "$MTPROXY_WORKERS")
 MTPROXY_MAX_CONNECTIONS=$(printf '%q' "$MTPROXY_MAX_CONNECTIONS")
 EOF
-  chmod 0600 /root/webproxy-only-links.txt /root/.webproxy-only.config
+  chmod 0600 /root/WebProxyTelegram-links.txt /root/.WebProxyTelegram.config
 }
 
 write_install_summary() {
   /usr/local/sbin/webproxy_cli --sync-internal
-  [ -s /root/webproxy-install-summary.txt ] || die "Не удалось создать итоговый файл установки."
-  chmod 0600 /root/webproxy-install-summary.txt
+  [ -s /root/WebProxyTelegram-install-summary.txt ] || die "Не удалось создать итоговый файл установки."
+  chmod 0600 /root/WebProxyTelegram-install-summary.txt
 }
 
 validate_result() {
@@ -1367,9 +1375,9 @@ validate_result() {
   systemctl is-active --quiet certbot.timer
   [ -x /usr/local/sbin/webproxy_cli ]
   [ -s /var/lib/webproxy-analytics/data.json ]
-  [ -s /root/webproxy-analytics-credentials.txt ]
+  [ -s /root/WebProxyTelegram-analytics-credentials.txt ]
   for _ in $(seq 1 20); do
-    if curl -fsS --max-time 2 http://127.0.0.1:8083/status >/dev/null; then
+    if curl -fsS --max-time 2 http://127.0.0.1:8083/status >/dev/null 2>&1; then
       token_admin_ready=1
       break
     fi
@@ -1385,8 +1393,8 @@ validate_result() {
     sleep 2
   done
   [ "$ok" -eq 1 ] || die "Публичный HTTPS не ответил после установки. Проверьте DNS и firewall хостера."
-  analytics_login="$(sed -n 's/^login=//p' /root/webproxy-analytics-credentials.txt | head -n1)"
-  analytics_password="$(sed -n 's/^password=//p' /root/webproxy-analytics-credentials.txt | head -n1)"
+  analytics_login="$(sed -n 's/^login=//p' /root/WebProxyTelegram-analytics-credentials.txt | head -n1)"
+  analytics_password="$(sed -n 's/^password=//p' /root/WebProxyTelegram-analytics-credentials.txt | head -n1)"
   [ "${#analytics_login}" -eq 10 ] && [ "${#analytics_password}" -eq 10 ] || \
     die "Учётные данные аналитики имеют неверную длину."
   curl -kfsS --max-time 8 --resolve "$DOMAIN:443:127.0.0.1" \
@@ -1400,9 +1408,12 @@ main() {
   require_supported_os
   require_installer_assets
   if [ "$ANALYTICS_ONLY" -eq 1 ]; then
-    [ -r /root/.webproxy-only.config ] || die "Не найдена существующая конфигурация /root/.webproxy-only.config."
+    if [ ! -r /root/.WebProxyTelegram.config ] && [ -r /root/.webproxy-only.config ]; then
+      cp -a /root/.webproxy-only.config /root/.WebProxyTelegram.config
+    fi
+    [ -r /root/.WebProxyTelegram.config ] || die "Не найдена существующая конфигурация /root/.WebProxyTelegram.config."
     # shellcheck disable=SC1091
-    source /root/.webproxy-only.config
+    source /root/.WebProxyTelegram.config
     [ -n "$DOMAIN" ] || die "В существующей конфигурации не указан DOMAIN."
     collect_ipinfo_token
     install_bootstrap_packages
@@ -1414,7 +1425,7 @@ main() {
 
 WEB proxy и analytics обновлены.
 
-$(cat /root/webproxy-install-summary.txt)
+$(cat /root/WebProxyTelegram-install-summary.txt)
 EOF
     exit 0
   fi
@@ -1430,7 +1441,7 @@ EOF
   fi
 
   local temporary repository generated_site active_site
-  temporary="$(mktemp -d /tmp/webproxy-only.XXXXXX)"
+  temporary="$(mktemp -d /tmp/WebProxyTelegram.XXXXXX)"
   trap 'rm -rf "$temporary"' EXIT
   repository="$(download_source "$temporary")"
   patch_upstream_installer "$repository"
@@ -1459,14 +1470,14 @@ EOF
 
 WEB proxy установлен полностью.
 
-$(cat /root/webproxy-install-summary.txt)
+$(cat /root/WebProxyTelegram-install-summary.txt)
 
 Проверка:
   systemctl --no-pager --full status nginx certbot.timer mtproxy tproxy-server webproxy-analytics webproxy-token-admin
   certbot renew --dry-run
   curl -fsS http://127.0.0.1:8081/readyz
 
-Все данные сохранены: /root/webproxy-install-summary.txt
+Все данные сохранены: /root/WebProxyTelegram-install-summary.txt
 EOF
 }
 

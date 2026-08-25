@@ -22,7 +22,7 @@ def domain():
 
 def validate_token(token):
     url = "https://ipinfo.io/8.8.8.8/json?token=" + urllib.parse.quote(token, safe="")
-    request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "Teleminstall-WEB-Proxy/1.0"})
+    request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "WebProxyTelegram/1.0"})
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             payload = json.loads(response.read().decode())
