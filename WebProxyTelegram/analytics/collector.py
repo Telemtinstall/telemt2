@@ -18,8 +18,10 @@ METRICS = "http://127.0.0.1:8081/metrics"
 IPINFO_TOKEN_FILE = "/run/credentials/webproxy-analytics.service/ipinfo_token"
 WINDOWS = {"15m": 900, "1h": 3600, "24h": 86400, "7d": 604800}
 TOKEN_CHECK_INTERVAL = 3600
+IPWHO_DAILY_LIMIT = 900
+IPWHO_API = "https://ipwho.is/"
 ENDPOINTS = {"/api/v1/session", "/api/v1/up", "/api/v1/down", "/api/v1/ws"}
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 running = True
 
 
@@ -42,6 +44,52 @@ def state_value(db, key, default=""):
 
 def set_state(db, key, value):
     db.execute("INSERT INTO state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+
+
+def next_utc_day(now):
+    current = datetime.fromtimestamp(now, timezone.utc)
+    midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    return int(midnight.timestamp()) + 86400
+
+
+def reserve_ipwho_request(db, now):
+    day = datetime.fromtimestamp(now, timezone.utc).date().isoformat()
+    if state_value(db, "ipwho_usage_day") != day:
+        set_state(db, "ipwho_usage_day", day)
+        set_state(db, "ipwho_usage_count", 0)
+    try:
+        used = int(state_value(db, "ipwho_usage_count", "0"))
+    except ValueError:
+        used = 0
+    if used >= IPWHO_DAILY_LIMIT:
+        return False
+    set_state(db, "ipwho_usage_count", used + 1)
+    db.commit()
+    return True
+
+
+def lookup_city_ipwho(db, remote, now):
+    if not reserve_ipwho_request(db, now):
+        return "", "", next_utc_day(now), "quota"
+    query = urllib.parse.urlencode({
+        "lang": "ru",
+        "fields": "success,message,country,country_code,region,region_code,city",
+    })
+    url = IPWHO_API + urllib.parse.quote(remote, safe=":") + "?" + query
+    request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "WebProxyTelegram/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode())
+        city = str(payload.get("city") or "").strip() if payload.get("success") is True else ""
+        region = str(payload.get("region") or "").strip() if city else ""
+        if city:
+            return city[:128], region[:128], now + 5184000, "ok"
+        return "", "", now + 604800, "not_found"
+    except Exception as exc:
+        print(json.dumps({"event": "city_fallback_error",
+                          "ip_hash": hashlib.sha256(remote.encode()).hexdigest()[:12],
+                          "error_type": type(exc).__name__}), flush=True)
+        return "", "", now + 3600, "error"
 
 
 def prepare_token_state(db):
@@ -254,14 +302,23 @@ def enrich_one(db):
                 provider = provider or (org_parts[1] if len(org_parts) > 1 else legacy_org)
             else:
                 provider = provider or legacy_org
+        city = str(geo_payload.get("city") or "")[:128]
+        region = str(geo_payload.get("region") or "")[:128]
+        geo_status = "ok"
+        next_lookup = now + 5184000
+        if not city:
+            city, fallback_region, next_lookup, fallback_status = lookup_city_ipwho(db, remote, now)
+            if fallback_region:
+                region = fallback_region
+            if fallback_status != "ok":
+                geo_status = "retry"
         db.execute("""UPDATE geo SET country_code=?,country_name=?,region_name=?,city_name=?,asn=?,provider=?,
-          status='ok',updated=?,next_lookup=? WHERE remote=?""",
-          (country_code[:2], country_name[:96], str(geo_payload.get("region") or "")[:128],
-           str(geo_payload.get("city") or "")[:128], asn[:24], provider[:255],
-           now, now + 5184000, remote))
+          status=?,updated=?,next_lookup=? WHERE remote=?""",
+          (country_code[:2], country_name[:96], region, city, asn[:24], provider[:255],
+           geo_status, now, next_lookup, remote))
         set_state(db, "geo_api_status", "active")
         set_state(db, "geo_api_error", "")
-        set_state(db, "geo_city_available", "yes" if geo_payload.get("city") else "no")
+        set_state(db, "geo_city_available", "yes" if city else "no")
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
             message = f"IPinfo отклонил токен (HTTP {exc.code}). Укажите другой токен."
@@ -309,7 +366,9 @@ def check_token_health(db):
             raise RuntimeError("country is absent in IPinfo response")
         set_state(db, "geo_api_status", "active")
         set_state(db, "geo_api_error", "")
-        set_state(db, "geo_city_available", "yes" if geo_payload.get("city") else "no")
+        # A valid IPinfo token enables geography. When its plan omits a city,
+        # the per-IP enrichment path fills city and region through ipwho.is.
+        set_state(db, "geo_city_available", "yes")
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
             set_state(db, "geo_api_status", "invalid")

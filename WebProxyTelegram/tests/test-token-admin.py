@@ -46,9 +46,19 @@ with tempfile.TemporaryDirectory() as directory:
     response = connection.getresponse()
     payload = json.loads(response.read())
     assert response.status == 200 and payload["ok"] is True
+    assert payload["city_available"] is True
     assert "valid_token_123" not in json.dumps(payload)
     assert module.TOKEN_FILE.read_text() == "valid_token_123"
     assert os.stat(module.TOKEN_FILE).st_mode & 0o777 == 0o600
+
+    module.validate_token = lambda token: {"country": "US", "city_available": False}
+    connection.request("POST", "/token", json.dumps({"token": "fallback_token_123"}),
+                       {"Content-Type": "application/json", "Origin": "https://proxy.example.com"})
+    response = connection.getresponse()
+    payload = json.loads(response.read())
+    assert response.status == 200 and payload["city_available"] is True
+    assert payload["ipinfo_city_available"] is False and "ipwho.is" in payload["message"]
+    assert module.TOKEN_FILE.read_text() == "fallback_token_123"
 
     connection.request("GET", "/status")
     response = connection.getresponse()
@@ -61,7 +71,7 @@ with tempfile.TemporaryDirectory() as directory:
     response = connection.getresponse()
     payload = json.loads(response.read())
     assert response.status == 422 and "HTTP 401" in payload["error"]
-    assert module.TOKEN_FILE.read_text() == "valid_token_123"
+    assert module.TOKEN_FILE.read_text() == "fallback_token_123"
 
     connection.close()
     server.shutdown()

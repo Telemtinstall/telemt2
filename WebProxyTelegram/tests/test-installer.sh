@@ -90,6 +90,7 @@ if [ -f "$PROJECT_DIR/analytics/collector.py" ]; then
   require_installer_assets
   python3 -c 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")' "$PROJECT_DIR/analytics/collector.py"
   grep -Fq 'https://ipinfo.io/' "$PROJECT_DIR/analytics/collector.py" || fail "official IPinfo endpoint missing"
+  grep -Fq 'https://ipwho.is/' "$PROJECT_DIR/analytics/collector.py" || fail "ipwho.is city fallback missing"
   grep -Fq 'geo_enabled' "$PROJECT_DIR/analytics/collector.py" || fail "optional geolocation state missing"
   grep -Fq 'Города' "$PROJECT_DIR/analytics/index.html" || fail "city tiles missing"
   grep -Fq 'IP-адреса' "$PROJECT_DIR/analytics/index.html" || fail "IP tiles missing"

@@ -163,7 +163,7 @@ function rerenderGeo() {
 function tokenForm(data) {
   const error = data.geo_error ? `<div class="token-error">${esc(data.geo_error)}</div>` : '';
   const title = data.geo_status === 'invalid' || data.geo_status === 'error' ? 'Укажите другой IPinfo token' : 'Укажите IPinfo token для географии';
-  return `<div class="geo-setup"><b>${title}</b>${error}<form id="ipinfoForm"><input id="ipinfoToken" type="password" autocomplete="off" spellcheck="false" placeholder="Вставьте IPinfo token" required minlength="8" maxlength="256"><button type="submit">Проверить и сохранить</button></form><div id="tokenResult" class="token-result"></div><small><a href="https://ipinfo.io/account/token" target="_blank" rel="noopener noreferrer">Получить token на IPinfo</a> · города зависят от тарифа</small></div>`;
+  return `<div class="geo-setup"><b>${title}</b>${error}<form id="ipinfoForm"><input id="ipinfoToken" type="password" autocomplete="off" spellcheck="false" placeholder="Вставьте IPinfo token" required minlength="8" maxlength="256"><button type="submit">Проверить и сохранить</button></form><div id="tokenResult" class="token-result"></div><small><a href="https://ipinfo.io/account/token" target="_blank" rel="noopener noreferrer">Получить token на IPinfo</a> · если IPinfo не возвращает город, используется ipwho.is</small></div>`;
 }
 
 function wireTokenForm() {
@@ -199,7 +199,7 @@ function render(data) {
   const traffic = (period.bytes_up_total || 0) + (period.bytes_down_total || 0), unique = new Set(windowData.geo.ips.map(row => row.ip)).size;
   const countryCount = data.geo_enabled ? new Set([...windowData.geo.countries.good, ...windowData.geo.countries.failed].filter(row => row.code !== 'ZZ').map(row => row.code)).size : 0;
   const statusLabel = data.geo_status === 'active' ? nf.format(countryCount) + ' стран' : data.geo_status === 'checking' ? 'проверяется' : data.geo_status === 'invalid' ? 'ошибка токена' : data.geo_status === 'error' ? 'ошибка IPinfo' : 'отключена';
-  const cityNote = data.geo_city_available === false ? ' · города недоступны на тарифе' : '';
+  const cityNote = data.geo_city_available === false ? ' · города уточняются через ipwho.is' : '';
   document.getElementById('summary').innerHTML = `<div class="metric"><span>Активные сессии</span><strong>${nf.format(latest.sessions_live || 0)}</strong><small>${nf.format(latest.streams_live || 0)} активных потоков</small></div><div class="metric"><span>Создано сессий</span><strong>${nf.format(period.sessions_created_total || 0)}</strong><small>за выбранный период</small></div><div class="metric"><span>Полезный трафик</span><strong>${bytes(traffic)}</strong><small>в обе стороны</small></div><div class="metric"><span>География</span><strong>${statusLabel}</strong><small>${nf.format(unique)} IP в выборке${cityNote}</small></div>`;
   document.getElementById('goodTotal').textContent = nf.format(good);
   document.getElementById('failedTotal').textContent = nf.format(bad);

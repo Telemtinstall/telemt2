@@ -61,7 +61,7 @@ def save_token(token):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "TeleminstallTokenAdmin/1"
+    server_version = "WebProxyTelegramTokenAdmin/1"
 
     def log_message(self, *_):
         return
@@ -125,8 +125,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         message = "Токен принят. География обновляется."
         if not result["city_available"]:
-            message += " Страны доступны; города зависят от тарифа IPinfo."
-        self.reply(200, {"ok": True, "message": message, "city_available": result["city_available"]})
+            message += " IPinfo не возвращает города; они будут дополнены через ipwho.is."
+        self.reply(200, {"ok": True, "message": message, "city_available": True,
+                         "ipinfo_city_available": result["city_available"]})
 
 
 def main():
