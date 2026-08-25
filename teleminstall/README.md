@@ -50,7 +50,9 @@ chmod +x webproxy-install.sh
 ./webproxy-install.sh --auto
 ```
 
-Будут заданы два коротких вопроса: домен и необязательный токен IPinfo. По умолчанию:
+Будут заданы два коротких вопроса: домен и необязательный токен IPinfo. Получить
+токен можно на <https://ipinfo.io/account/token>, регистрация —
+<https://ipinfo.io/signup>. По умолчанию:
 
 - email: `admin@DOMAIN`;
 - WEB secret: генерируется;

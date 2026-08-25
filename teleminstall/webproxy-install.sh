@@ -133,7 +133,10 @@ collect_ipinfo_token() {
     return
   fi
   if [ -z "$IPINFO_TOKEN" ] && [ -t 0 ]; then
-    printf 'IPinfo token для стран и городов (Enter — аналитика без географии): '
+    printf '\nIPinfo token нужен для стран, городов и ASN.\n'
+    printf 'Получить токен: https://ipinfo.io/account/token\n'
+    printf 'Регистрация:      https://ipinfo.io/signup\n'
+    printf 'IPinfo token (Enter — аналитика без географии): '
     read -r answer || true
     IPINFO_TOKEN="$answer"
   fi
