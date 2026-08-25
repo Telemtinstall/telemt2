@@ -3,12 +3,15 @@ set -Eeuo pipefail
 umask 077
 
 SCRIPT_VERSION="2026-08-25"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ANALYTICS_ASSET_DIR="$SCRIPT_DIR/analytics"
 TPROXY_COMMIT="52a5feb7fac38f68da5afef9cedd9b3bfc8473ca"
 TPROXY_ARCHIVE_SHA256="2c56987035c7f0b9a3d40907fe9ff8889fd41d1a6dcb7bdd6e0de7784c442bfe"
 
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
 WEBPROXY_SECRET="${WEBPROXY_SECRET:-}"
+IPINFO_TOKEN="${IPINFO_TOKEN:-}"
 SITE_DIR="${SITE_DIR:-}"
 MTPROXY_WORKERS="${MTPROXY_WORKERS:-1}"
 MTPROXY_MAX_CONNECTIONS="${MTPROXY_MAX_CONNECTIONS:-4096}"
@@ -32,6 +35,7 @@ WEB proxy only installer $SCRIPT_VERSION
   --domain DOMAIN               Публичный домен WEB proxy.
   --email EMAIL                 Default: admin@DOMAIN.
   --secret HEX                  32 hex или dd + 32 hex; default: generate.
+  --ipinfo-token TOKEN          Токен IPinfo для стран, городов и ASN; optional.
   --site-dir DIR                Свой публичный сайт; default: simple local site.
   --mtproxy-workers N           Default: 1.
   --mtproxy-max-connections N   Default: 4096.
@@ -52,6 +56,7 @@ parse_args() {
       --domain) need_value "$@"; DOMAIN="$2"; shift 2 ;;
       --email) need_value "$@"; EMAIL="$2"; shift 2 ;;
       --secret) need_value "$@"; WEBPROXY_SECRET="$2"; shift 2 ;;
+      --ipinfo-token) need_value "$@"; IPINFO_TOKEN="$2"; shift 2 ;;
       --site-dir) need_value "$@"; SITE_DIR="$2"; shift 2 ;;
       --mtproxy-workers) need_value "$@"; MTPROXY_WORKERS="$2"; shift 2 ;;
       --mtproxy-max-connections) need_value "$@"; MTPROXY_MAX_CONNECTIONS="$2"; shift 2 ;;
@@ -118,6 +123,34 @@ collect_inputs() {
   if [ -n "$SITE_DIR" ]; then
     [ -r "$SITE_DIR/index.html" ] || die "$SITE_DIR должен содержать читаемый index.html."
     SITE_DIR="$(cd "$SITE_DIR" && pwd -P)"
+  fi
+}
+
+collect_ipinfo_token() {
+  local existing=/etc/webproxy-analytics/ipinfo.token answer=""
+  if [ -z "$IPINFO_TOKEN" ] && [ -s "$existing" ]; then
+    IPINFO_TOKEN="$(tr -d '\r\n' < "$existing")"
+    return
+  fi
+  if [ -z "$IPINFO_TOKEN" ] && [ -t 0 ]; then
+    printf 'IPinfo token для стран и городов (Enter — аналитика без географии): '
+    read -r answer || true
+    IPINFO_TOKEN="$answer"
+  fi
+  if [ -n "$IPINFO_TOKEN" ] && ! [[ "$IPINFO_TOKEN" =~ ^[A-Za-z0-9._-]{8,256}$ ]]; then
+    die "Токен IPinfo содержит недопустимые символы или слишком короткий."
+  fi
+}
+
+configure_ipinfo_token() {
+  install -d -o root -g root -m 0700 /etc/webproxy-analytics
+  printf '%s' "$IPINFO_TOKEN" > /etc/webproxy-analytics/ipinfo.token
+  chown root:root /etc/webproxy-analytics/ipinfo.token
+  chmod 0600 /etc/webproxy-analytics/ipinfo.token
+  if [ -n "$IPINFO_TOKEN" ]; then
+    say "IPinfo: включены страны, города и ASN; токен сохранён только на сервере."
+  else
+    say "IPinfo: токен не указан; аналитика работает без стран и городов."
   fi
 }
 
@@ -302,6 +335,7 @@ LINKS = Path("/root/webproxy-users.txt")
 LEGACY_LINKS = Path("/root/webproxy-only-links.txt")
 SUMMARY = Path("/root/webproxy-install-summary.txt")
 ANALYTICS_CREDENTIALS = Path("/root/webproxy-analytics-credentials.txt")
+IPINFO_TOKEN_FILE = Path("/etc/webproxy-analytics/ipinfo.token")
 BACKUPS = Path("/etc/tproxy-server/backups")
 LOCK = Path("/run/lock/webproxy-cli.lock")
 NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -381,6 +415,10 @@ def sync_auxiliary(profiles, domain):
         analytics = ANALYTICS_CREDENTIALS.read_text().strip()
     else:
         analytics = "Analytics credentials will be added after installation completes."
+    try:
+        geo_status = "enabled" if IPINFO_TOKEN_FILE.read_text().strip() else "disabled (token not provided)"
+    except OSError:
+        geo_status = "disabled (token not provided)"
     summary = f"""WEB PROXY INSTALLATION SUMMARY
 Updated: {datetime.now().astimezone().isoformat(timespec='seconds')}
 Domain: {domain}
@@ -394,6 +432,10 @@ WEB PROXY USERS AND LINKS
 ANALYTICS
 {analytics}
 
+IPINFO GEOLOCATION
+status={geo_status}
+token_file=/etc/webproxy-analytics/ipinfo.token
+
 USER MANAGEMENT
 webproxy_cli -add USER
 webproxy_cli -list
@@ -404,6 +446,7 @@ IMPORTANT FILES
 /root/webproxy-install-summary.txt
 /root/webproxy-users.txt
 /root/webproxy-analytics-credentials.txt
+/etc/webproxy-analytics/ipinfo.token
 /root/.webproxy-only.config
 """
     write_private(SUMMARY, summary)
@@ -724,6 +767,11 @@ EOF
 
 write_analytics_collector() {
   install -d -m 0755 /usr/local/lib/webproxy-analytics
+  if [ -f "$ANALYTICS_ASSET_DIR/collector.py" ]; then
+    install -o root -g root -m 0755 "$ANALYTICS_ASSET_DIR/collector.py" \
+      /usr/local/lib/webproxy-analytics/collector.py
+    return
+  fi
   cat > /usr/local/lib/webproxy-analytics/collector.py <<'PY'
 #!/usr/bin/env python3
 import hashlib
@@ -958,6 +1006,13 @@ PY
 
 write_analytics_dashboard() {
   install -d -o root -g root -m 0755 /srv/tproxy-site/anal
+  if [ -f "$ANALYTICS_ASSET_DIR/index.html" ] && [ -f "$ANALYTICS_ASSET_DIR/app.css" ] && [ -f "$ANALYTICS_ASSET_DIR/app.js" ]; then
+    sed "s/__DOMAIN__/$DOMAIN/g" "$ANALYTICS_ASSET_DIR/index.html" > /srv/tproxy-site/anal/index.html
+    install -o root -g root -m 0644 "$ANALYTICS_ASSET_DIR/app.css" /srv/tproxy-site/anal/app.css
+    install -o root -g root -m 0644 "$ANALYTICS_ASSET_DIR/app.js" /srv/tproxy-site/anal/app.js
+    chmod 0644 /srv/tproxy-site/anal/index.html
+    return
+  fi
   cat > /srv/tproxy-site/anal/index.html <<EOF
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WEB proxy · Analytics</title><link rel="stylesheet" href="/anal/app.css"></head><body><main>
@@ -1028,6 +1083,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/webproxy-analytics
+LoadCredential=ipinfo_token:/etc/webproxy-analytics/ipinfo.token
 
 [Install]
 WantedBy=multi-user.target
@@ -1069,13 +1125,10 @@ EOF
 }
 
 configure_tproxy_public_upstream() {
-  local backup=""
-  if [ -f /etc/tproxy-server/config.json ]; then
-    backup="/root/tproxy-config.before-analytics.$(date +%Y%m%d-%H%M%S).json"
-    cp -a /etc/tproxy-server/config.json "$backup"
-  fi
-  TPROXY_CONFIG_BACKUP="$backup"
-  cat > /etc/tproxy-server/config.json <<EOF
+  local backup="" candidate
+  TPROXY_CONFIG_CHANGED=0
+  candidate="$(mktemp /tmp/tproxy-config.XXXXXX)"
+  cat > "$candidate" <<EOF
 {
   "public_hostname": "$DOMAIN",
   "listen": "127.0.0.1:8080",
@@ -1084,8 +1137,19 @@ configure_tproxy_public_upstream() {
   "profiles_file": "/run/credentials/tproxy-server.service/profiles.json"
 }
 EOF
-  chown root:tproxy /etc/tproxy-server/config.json
-  chmod 0640 /etc/tproxy-server/config.json
+  if [ -f /etc/tproxy-server/config.json ] && cmp -s "$candidate" /etc/tproxy-server/config.json; then
+    rm -f "$candidate"
+    TPROXY_CONFIG_BACKUP=""
+    return
+  fi
+  if [ -f /etc/tproxy-server/config.json ]; then
+    backup="/root/tproxy-config.before-analytics.$(date +%Y%m%d-%H%M%S).json"
+    cp -a /etc/tproxy-server/config.json "$backup"
+  fi
+  TPROXY_CONFIG_BACKUP="$backup"
+  install -o root -g tproxy -m 0640 "$candidate" /etc/tproxy-server/config.json
+  rm -f "$candidate"
+  TPROXY_CONFIG_CHANGED=1
   if ! /usr/local/bin/tproxy-server -config /etc/tproxy-server/config.json \
     -profiles-file /etc/tproxy-server/profiles.json -check; then
     [ -n "$backup" ] && cp -a "$backup" /etc/tproxy-server/config.json
@@ -1188,13 +1252,17 @@ setup_analytics() {
   write_analytics_collector
   write_analytics_dashboard
   configure_analytics_credentials
+  configure_ipinfo_token
   configure_analytics_service
   configure_analytics_logging
   configure_tproxy_public_upstream
   configure_nginx_analytics
   systemctl daemon-reload
-  systemctl restart tproxy-server
-  systemctl enable --now webproxy-analytics
+  if [ "${TPROXY_CONFIG_CHANGED:-0}" -eq 1 ] || ! systemctl is-active --quiet tproxy-server; then
+    systemctl restart tproxy-server
+  fi
+  systemctl enable webproxy-analytics
+  systemctl restart webproxy-analytics
   local ready=0
   for _ in $(seq 1 20); do
     if [ -s /var/lib/webproxy-analytics/data.json ]; then ready=1; break; fi
@@ -1266,6 +1334,7 @@ main() {
     # shellcheck disable=SC1091
     source /root/.webproxy-only.config
     [ -n "$DOMAIN" ] || die "В существующей конфигурации не указан DOMAIN."
+    collect_ipinfo_token
     install_bootstrap_packages
     setup_webproxy_cli
     setup_analytics
@@ -1282,6 +1351,7 @@ EOF
   check_clean_server
   install_bootstrap_packages
   collect_inputs
+  collect_ipinfo_token
   check_dns
   print_plan
   if [ "$DRY_RUN" -eq 1 ]; then

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WEB proxy · Analytics</title>
+  <link rel="stylesheet" href="/anal/app.css">
+</head>
+<body><main>
+  <nav><a href="/">__DOMAIN__</a><span><i></i> WEB proxy live</span></nav>
+  <header><div><p class="eyebrow">Private dashboard</p><h1>Аналитика WEB proxy</h1><p class="sub">Сессии, трафик, страны, города и IP. Обновление каждые 5 секунд.</p></div>
+    <div class="ranges"><button data-window="15m">15 мин</button><button data-window="1h" class="active">1 час</button><button data-window="24h">24 часа</button><button data-window="7d">7 дней</button></div>
+  </header>
+  <section class="summary" id="summary"></section>
+  <section class="boards">
+    <article><div class="title"><h2>Успешные операции по странам</h2><strong id="goodTotal">0</strong></div><div id="goodCountries" class="tiles country-tiles"></div></article>
+    <article class="failed"><div class="title"><h2>Ошибки по странам</h2><strong id="failedTotal">0</strong></div><div id="failedCountries" class="tiles country-tiles"></div></article>
+  </section>
+  <section class="geo-grid">
+    <article><div class="title"><h2>Города</h2><span>операции · IP · трафик</span></div><div id="cities" class="tiles compact-tiles"></div></article>
+    <article><div class="title"><h2>IP-адреса</h2><span>география и провайдер</span></div><div id="ips" class="tiles ip-tiles"></div></article>
+  </section>
+  <section class="lower"><article><h2>Причины ошибок</h2><div id="reasons" class="reasons"></div></article><article><div class="title"><h2>Последние ошибки</h2><span id="updated"></span></div><div class="table"><table><thead><tr><th>Время</th><th>IP и география</th><th>Endpoint</th><th>Статус</th><th>Задержка</th></tr></thead><tbody id="errors"></tbody></table></div></article></section>
+</main><script src="/anal/app.js"></script></body>
+</html>
