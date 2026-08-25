@@ -356,7 +356,7 @@ def geo_data(db, since, geo_enabled):
       COALESCE(NULLIF(g.asn,''),''),COALESCE(NULLIF(g.provider,''),'Провайдер не определён'),
       SUM(s.requests),SUM(s.request_bytes+s.response_bytes),MAX(s.bucket),SUM(CASE WHEN s.class='failed' THEN s.requests ELSE 0 END)
       FROM ip_minute_stats s LEFT JOIN geo g ON g.remote=s.remote WHERE s.bucket>=?
-      GROUP BY s.remote ORDER BY 8 DESC LIMIT 100""", (since,)).fetchall():
+      GROUP BY s.remote ORDER BY 8 DESC LIMIT 1000""", (since,)).fetchall():
         ips.append({"ip": r[0], "code": r[1], "country": r[2], "city": r[3], "region": r[4], "asn": r[5],
                     "provider": r[6], "connections": r[7] or 0, "traffic": r[8] or 0,
                     "last_seen": datetime.fromtimestamp(r[9], timezone.utc).isoformat(), "errors": r[10] or 0})

@@ -1357,7 +1357,7 @@ write_install_summary() {
 }
 
 validate_result() {
-  local analytics_login analytics_password ok=0
+  local analytics_login analytics_password ok=0 token_admin_ready=0
   nginx -t
   systemctl is-active --quiet nginx
   systemctl is-active --quiet mtproxy
@@ -1368,7 +1368,14 @@ validate_result() {
   [ -x /usr/local/sbin/webproxy_cli ]
   [ -s /var/lib/webproxy-analytics/data.json ]
   [ -s /root/webproxy-analytics-credentials.txt ]
-  curl -fsS --max-time 5 http://127.0.0.1:8083/status >/dev/null
+  for _ in $(seq 1 20); do
+    if curl -fsS --max-time 2 http://127.0.0.1:8083/status >/dev/null; then
+      token_admin_ready=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$token_admin_ready" -eq 1 ] || die "Сервис управления IPinfo token не открыл 127.0.0.1:8083."
   curl -fsS --max-time 5 http://127.0.0.1:8081/readyz >/dev/null
   for _ in $(seq 1 30); do
     if curl -4fsS --max-time 8 "https://$DOMAIN/" >/dev/null; then

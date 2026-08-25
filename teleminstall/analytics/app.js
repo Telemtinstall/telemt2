@@ -3,45 +3,161 @@ const regionNames = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNa
 const names = {'/api/v1/session': 'Сессии', '/api/v1/up': 'Отправка', '/api/v1/down': 'Получение', '/api/v1/ws': 'WebSocket'};
 const reasonNames = {capacity_or_backpressure: 'Лимит или обратное давление', rejected_request: 'Запрос отклонён', server_error: 'Ошибка сервера', unexpected_status: 'Неожиданный HTTP-статус'};
 let selected = '1h';
+let latestData = null;
+const geoSelection = {country: '', countryLabel: '', city: '', region: '', provider: '', asn: ''};
 
 const bytes = n => n < 1024 ? n + ' Б' : n < 1048576 ? (n / 1024).toFixed(1) + ' КБ' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' МБ' : (n / 1073741824).toFixed(2) + ' ГБ';
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const countryName = r => r.country && r.country.length > 2 ? r.country : (regionNames && r.code !== 'ZZ' ? regionNames.of(r.code) : r.code);
+const countryName = row => {
+  try {
+    if (regionNames && /^[A-Z]{2}$/.test(row.code) && row.code !== 'ZZ') return regionNames.of(row.code);
+  } catch (_) {}
+  return row.country && row.country.length > 2 ? row.country : row.code;
+};
+
+function resetGeoSelection() {
+  Object.assign(geoSelection, {country: '', countryLabel: '', city: '', region: '', provider: '', asn: ''});
+}
 
 function countryTiles(id, rows) {
   const box = document.getElementById(id);
   box.innerHTML = rows.length ? '' : '<div class="empty">Событий за период нет</div>';
-  rows.forEach(r => {
-    const e = document.createElement('div'), label = countryName(r);
-    e.className = 'tile';
-    e.title = `${label} · ${nf.format(r.connections)} операций`;
-    e.innerHTML = `<b>${esc(label)} · ${esc(r.code)}</b><strong>${nf.format(r.connections)}</strong><small>${nf.format(r.unique_ips)} IP · ${bytes(r.bytes_in + r.bytes_out)}</small>`;
-    box.appendChild(e);
+  rows.forEach(row => {
+    const label = countryName(row);
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'tile clickable' + (geoSelection.country === row.code ? ' active' : '');
+    element.title = `${label} · показать города`;
+    element.innerHTML = `<b>${esc(label)} · ${esc(row.code)}</b><strong>${nf.format(row.connections)}</strong><small>${nf.format(row.unique_ips)} IP · ${bytes(row.bytes_in + row.bytes_out)}<br>Нажмите: показать города</small>`;
+    element.addEventListener('click', () => {
+      if (geoSelection.country === row.code) resetGeoSelection();
+      else Object.assign(geoSelection, {country: row.code, countryLabel: label, city: '', region: '', provider: '', asn: ''});
+      rerenderGeo();
+    });
+    box.appendChild(element);
   });
+}
+
+function aggregateCities(rows) {
+  const grouped = new Map();
+  rows.forEach(row => {
+    const key = [row.code, row.city, row.region].join('\u0000');
+    if (!grouped.has(key)) grouped.set(key, {city: row.city, region: row.region, country: row.country, code: row.code, connections: 0, traffic: 0, unique_ips: 0});
+    const city = grouped.get(key);
+    city.connections += row.connections;
+    city.traffic += row.traffic;
+    city.unique_ips += 1;
+  });
+  return [...grouped.values()].sort((a, b) => b.connections - a.connections);
+}
+
+function aggregateProviders(rows) {
+  const grouped = new Map();
+  rows.forEach(row => {
+    const providerName = row.provider || 'Провайдер не определён';
+    const key = [providerName, row.asn || ''].join('\u0000');
+    if (!grouped.has(key)) grouped.set(key, {provider: providerName, asn: row.asn || '', connections: 0, traffic: 0, unique_ips: 0});
+    const provider = grouped.get(key);
+    provider.connections += row.connections;
+    provider.traffic += row.traffic;
+    provider.unique_ips += 1;
+  });
+  return [...grouped.values()].sort((a, b) => b.connections - a.connections);
 }
 
 function cityTiles(rows) {
   const box = document.getElementById('cities');
-  box.innerHTML = rows.length ? '' : '<div class="empty">Геоданные ещё собираются</div>';
-  rows.forEach(r => {
-    const e = document.createElement('div');
-    e.className = 'tile';
-    e.innerHTML = `<b>${esc(r.city)}</b><strong>${nf.format(r.connections)}</strong><small>${esc(r.region ? r.region + ' · ' : '')}${esc(r.country)} · ${esc(r.code)}<br>${nf.format(r.unique_ips)} IP · ${bytes(r.traffic)}</small>`;
-    box.appendChild(e);
+  box.innerHTML = rows.length ? '' : '<div class="empty">Города ещё не определены</div>';
+  rows.forEach(row => {
+    const active = geoSelection.country === row.code && geoSelection.city === row.city && geoSelection.region === row.region;
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'tile clickable' + (active ? ' active' : '');
+    element.title = `${row.city} · показать IP`;
+    element.innerHTML = `<b>${esc(row.city)}</b><strong>${nf.format(row.connections)}</strong><small>${esc(row.region ? row.region + ' · ' : '')}${esc(countryName(row))} · ${esc(row.code)}<br>${nf.format(row.unique_ips)} IP · ${bytes(row.traffic)}<br>Нажмите: показать IP</small>`;
+    element.addEventListener('click', () => {
+      if (active) Object.assign(geoSelection, {city: '', region: '', provider: '', asn: ''});
+      else Object.assign(geoSelection, {country: row.code, countryLabel: countryName(row), city: row.city, region: row.region, provider: '', asn: ''});
+      rerenderGeo();
+    });
+    box.appendChild(element);
+  });
+}
+
+function providerTiles(rows) {
+  const box = document.getElementById('providers');
+  box.innerHTML = rows.length ? '' : '<div class="empty">Провайдеры ещё не определены</div>';
+  rows.forEach(row => {
+    const active = geoSelection.provider === row.provider && geoSelection.asn === row.asn;
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'tile clickable' + (active ? ' active' : '');
+    element.title = `${row.provider} · показать IP`;
+    element.innerHTML = `<b>${esc(row.provider)}</b><strong>${nf.format(row.connections)}</strong><small>${esc(row.asn || 'ASN неизвестен')} · ${nf.format(row.unique_ips)} IP<br>${bytes(row.traffic)}<br>Нажмите: показать IP</small>`;
+    element.addEventListener('click', () => {
+      if (active) Object.assign(geoSelection, {provider: '', asn: ''});
+      else Object.assign(geoSelection, {provider: row.provider, asn: row.asn});
+      rerenderGeo();
+    });
+    box.appendChild(element);
   });
 }
 
 function ipTiles(rows, geoEnabled) {
   const box = document.getElementById('ips');
-  box.innerHTML = rows.length ? '' : '<div class="empty">IP за период нет</div>';
-  rows.forEach(r => {
-    const e = document.createElement('div');
-    e.className = 'tile' + (r.errors ? ' error-ip' : '');
-    const provider = geoEnabled ? (r.asn ? r.asn + ' · ' : '') + r.provider : '';
-    const geo = geoEnabled ? `${esc(r.city)} · ${esc(r.country)} · ${esc(r.code)}<br>${esc(provider)}<br>` : '';
-    e.innerHTML = `<b>${esc(r.ip)}</b><strong>${nf.format(r.connections)} операций</strong><small>${geo}${bytes(r.traffic)}${r.errors ? ' · ошибок ' + nf.format(r.errors) : ''}</small>`;
-    box.appendChild(e);
+  box.innerHTML = rows.length ? '' : '<div class="empty">IP по выбранному фильтру нет</div>';
+  rows.forEach(row => {
+    const element = document.createElement('div');
+    element.className = 'tile' + (row.errors ? ' error-ip' : '');
+    const provider = geoEnabled ? (row.asn ? row.asn + ' · ' : '') + row.provider : '';
+    const geo = geoEnabled ? `${esc(row.city)} · ${esc(countryName(row))} · ${esc(row.code)}<br>${esc(provider)}<br>` : '';
+    element.innerHTML = `<b>${esc(row.ip)}</b><strong>${nf.format(row.connections)} операций</strong><small>${geo}${bytes(row.traffic)}${row.errors ? ' · ошибок ' + nf.format(row.errors) : ''}</small>`;
+    box.appendChild(element);
   });
+  document.getElementById('ipNote').textContent = nf.format(rows.length) + ' IP по выбранному фильтру';
+}
+
+function renderGeoFilter() {
+  const bar = document.getElementById('geoFilter');
+  const parts = [];
+  if (geoSelection.country) parts.push(geoSelection.countryLabel || geoSelection.country);
+  if (geoSelection.city) parts.push(geoSelection.city + (geoSelection.region ? ' · ' + geoSelection.region : ''));
+  if (geoSelection.provider) parts.push(geoSelection.provider + (geoSelection.asn ? ' · ' + geoSelection.asn : ''));
+  if (!parts.length) {
+    bar.hidden = true;
+    bar.replaceChildren();
+    return;
+  }
+  const label = document.createElement('span');
+  label.append('Выбрано: ');
+  const strong = document.createElement('b');
+  strong.textContent = parts.join(' → ');
+  label.appendChild(strong);
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.textContent = 'Сбросить фильтр';
+  reset.addEventListener('click', () => { resetGeoSelection(); rerenderGeo(); });
+  bar.replaceChildren(label, reset);
+  bar.hidden = false;
+}
+
+function renderGeo(windowData, data) {
+  countryTiles('goodCountries', windowData.geo.countries.good);
+  countryTiles('failedCountries', windowData.geo.countries.failed);
+  const allIps = windowData.geo.ips;
+  const countryIps = geoSelection.country ? allIps.filter(row => row.code === geoSelection.country) : allIps;
+  cityTiles(aggregateCities(countryIps));
+  const cityIps = geoSelection.city ? countryIps.filter(row => row.city === geoSelection.city && row.region === geoSelection.region) : countryIps;
+  providerTiles(aggregateProviders(cityIps));
+  const providerIps = geoSelection.provider ? cityIps.filter(row => (row.provider || 'Провайдер не определён') === geoSelection.provider && (row.asn || '') === geoSelection.asn) : cityIps;
+  ipTiles(providerIps, data.geo_status === 'active');
+  renderGeoFilter();
+}
+
+function rerenderGeo() {
+  if (!latestData) return;
+  const windowData = latestData.windows[selected];
+  if (latestData.geo_status === 'active' || latestData.geo_status === 'checking') renderGeo(windowData, latestData);
 }
 
 function tokenForm(data) {
@@ -77,43 +193,46 @@ function wireTokenForm() {
 }
 
 function render(data) {
-  const w = data.windows[selected], latest = w.metrics.latest, period = w.metrics.period;
-  const good = w.endpoints.good.reduce((s, r) => s + r.requests, 0), bad = w.endpoints.failed.reduce((s, r) => s + r.requests, 0);
-  const traffic = (period.bytes_up_total || 0) + (period.bytes_down_total || 0), unique = new Set(w.geo.ips.map(x => x.ip)).size;
-  const countryCount = data.geo_enabled ? new Set([...w.geo.countries.good, ...w.geo.countries.failed].filter(x => x.code !== 'ZZ').map(x => x.code)).size : 0;
+  latestData = data;
+  const windowData = data.windows[selected], latest = windowData.metrics.latest, period = windowData.metrics.period;
+  const good = windowData.endpoints.good.reduce((sum, row) => sum + row.requests, 0), bad = windowData.endpoints.failed.reduce((sum, row) => sum + row.requests, 0);
+  const traffic = (period.bytes_up_total || 0) + (period.bytes_down_total || 0), unique = new Set(windowData.geo.ips.map(row => row.ip)).size;
+  const countryCount = data.geo_enabled ? new Set([...windowData.geo.countries.good, ...windowData.geo.countries.failed].filter(row => row.code !== 'ZZ').map(row => row.code)).size : 0;
   const statusLabel = data.geo_status === 'active' ? nf.format(countryCount) + ' стран' : data.geo_status === 'checking' ? 'проверяется' : data.geo_status === 'invalid' ? 'ошибка токена' : data.geo_status === 'error' ? 'ошибка IPinfo' : 'отключена';
   const cityNote = data.geo_city_available === false ? ' · города недоступны на тарифе' : '';
   document.getElementById('summary').innerHTML = `<div class="metric"><span>Активные сессии</span><strong>${nf.format(latest.sessions_live || 0)}</strong><small>${nf.format(latest.streams_live || 0)} активных потоков</small></div><div class="metric"><span>Создано сессий</span><strong>${nf.format(period.sessions_created_total || 0)}</strong><small>за выбранный период</small></div><div class="metric"><span>Полезный трафик</span><strong>${bytes(traffic)}</strong><small>в обе стороны</small></div><div class="metric"><span>География</span><strong>${statusLabel}</strong><small>${nf.format(unique)} IP в выборке${cityNote}</small></div>`;
   document.getElementById('goodTotal').textContent = nf.format(good);
   document.getElementById('failedTotal').textContent = nf.format(bad);
   if (data.geo_status === 'active' || data.geo_status === 'checking') {
-    countryTiles('goodCountries', w.geo.countries.good);
-    countryTiles('failedCountries', w.geo.countries.failed);
-    cityTiles(w.geo.cities);
+    renderGeo(windowData, data);
   } else {
+    resetGeoSelection();
     document.getElementById('goodCountries').innerHTML = tokenForm(data);
     document.getElementById('failedCountries').innerHTML = '<div class="empty">География появится после проверки IPinfo token</div>';
     document.getElementById('cities').innerHTML = '<div class="empty">Аналитика городов ожидает действующий IPinfo token</div>';
+    document.getElementById('providers').innerHTML = '<div class="empty">Провайдеры и ASN появятся после проверки токена</div>';
+    document.getElementById('ips').innerHTML = '<div class="empty">IP продолжают собираться без публикации географии</div>';
+    document.getElementById('ipNote').textContent = 'страна → город → провайдер';
+    document.getElementById('geoFilter').hidden = true;
     wireTokenForm();
   }
-  ipTiles(w.geo.ips, data.geo_status === 'active');
 
-  const reasons = document.getElementById('reasons'), entries = Object.entries(w.reasons), max = Math.max(1, ...entries.map(x => x[1]));
+  const reasons = document.getElementById('reasons'), entries = Object.entries(windowData.reasons), max = Math.max(1, ...entries.map(row => row[1]));
   reasons.innerHTML = entries.length ? '' : '<div class="empty">Ошибок за период нет</div>';
-  entries.forEach(([key, n]) => {
-    const e = document.createElement('div');
-    e.className = 'reason';
-    e.innerHTML = `<span>${esc(reasonNames[key] || key)}</span><strong>${nf.format(n)}</strong><div><i style="width:${n / max * 100}%"></i></div>`;
-    reasons.appendChild(e);
+  entries.forEach(([key, count]) => {
+    const element = document.createElement('div');
+    element.className = 'reason';
+    element.innerHTML = `<span>${esc(reasonNames[key] || key)}</span><strong>${nf.format(count)}</strong><div><i style="width:${count / max * 100}%"></i></div>`;
+    reasons.appendChild(element);
   });
   const body = document.getElementById('errors');
   body.innerHTML = '';
-  w.errors.forEach(r => {
-    const tr = document.createElement('tr'), geo = data.geo_status === 'active' ? [r.city, r.country, r.code].filter(Boolean).join(' · ') : '', provider = data.geo_status === 'active' ? [r.asn, r.provider].filter(Boolean).join(' · ') : '';
-    tr.innerHTML = `<td>${new Date(r.time).toLocaleString('ru-RU')}</td><td>${esc(r.ip)}${geo ? '<br><small>' + esc(geo) + (provider ? '<br>' + esc(provider) : '') + '</small>' : ''}</td><td>${esc(names[r.endpoint] || r.endpoint)} · ${esc(r.method)}</td><td>${r.status} · ${esc(reasonNames[r.reason] || r.reason)}</td><td>${r.ms} мс · ${bytes(r.bytes_in + r.bytes_out)}</td>`;
-    body.appendChild(tr);
+  windowData.errors.forEach(row => {
+    const tableRow = document.createElement('tr'), geo = data.geo_status === 'active' ? [row.city, row.country, row.code].filter(Boolean).join(' · ') : '', provider = data.geo_status === 'active' ? [row.asn, row.provider].filter(Boolean).join(' · ') : '';
+    tableRow.innerHTML = `<td>${new Date(row.time).toLocaleString('ru-RU')}</td><td>${esc(row.ip)}${geo ? '<br><small>' + esc(geo) + (provider ? '<br>' + esc(provider) : '') + '</small>' : ''}</td><td>${esc(names[row.endpoint] || row.endpoint)} · ${esc(row.method)}</td><td>${row.status} · ${esc(reasonNames[row.reason] || row.reason)}</td><td>${row.ms} мс · ${bytes(row.bytes_in + row.bytes_out)}</td>`;
+    body.appendChild(tableRow);
   });
-  if (!w.errors.length) body.innerHTML = '<tr><td colspan="5" class="empty">Ошибок за период нет</td></tr>';
+  if (!windowData.errors.length) body.innerHTML = '<tr><td colspan="5" class="empty">Ошибок за период нет</td></tr>';
   document.getElementById('updated').textContent = 'обновлено ' + new Date(data.generated_at).toLocaleTimeString('ru-RU');
 }
 
@@ -129,7 +248,8 @@ async function load() {
 
 document.querySelectorAll('[data-window]').forEach(button => button.onclick = () => {
   selected = button.dataset.window;
-  document.querySelectorAll('[data-window]').forEach(x => x.classList.toggle('active', x === button));
+  resetGeoSelection();
+  document.querySelectorAll('[data-window]').forEach(item => item.classList.toggle('active', item === button));
   load();
 });
 load();
