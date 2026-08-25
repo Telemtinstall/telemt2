@@ -55,6 +55,47 @@ step_done telemt || fail "state marker was not persisted"
 [[ "$MTPROXY_COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "bad MTProxy commit pin"
 [[ "$MTPROXY_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "bad MTProxy archive hash"
 
+cat > "$TEST_TMP/debian-13" <<'EOF'
+ID=debian
+VERSION_ID="13"
+PRETTY_NAME="Debian GNU/Linux 13"
+EOF
+OS_RELEASE_FILE="$TEST_TMP/debian-13"
+detect_supported_os
+assert_eq debian "$DETECTED_OS_ID" "Debian OS detection"
+assert_eq 13 "$DETECTED_OS_VERSION_ID" "Debian version detection"
+
+cat > "$TEST_TMP/ubuntu-24" <<'EOF'
+ID=ubuntu
+VERSION_ID="24.04"
+PRETTY_NAME="Ubuntu 24.04 LTS"
+EOF
+OS_RELEASE_FILE="$TEST_TMP/ubuntu-24"
+detect_supported_os
+assert_eq ubuntu "$DETECTED_OS_ID" "Ubuntu 24 OS detection"
+assert_eq 24.04 "$DETECTED_OS_VERSION_ID" "Ubuntu 24 version detection"
+
+cat > "$TEST_TMP/ubuntu-26" <<'EOF'
+ID=ubuntu
+VERSION_ID="26.04"
+PRETTY_NAME="Ubuntu 26.04 LTS"
+EOF
+OS_RELEASE_FILE="$TEST_TMP/ubuntu-26"
+detect_supported_os
+assert_eq ubuntu "$DETECTED_OS_ID" "Ubuntu 26 OS detection"
+
+cat > "$TEST_TMP/ubuntu-22" <<'EOF'
+ID=ubuntu
+VERSION_ID="22.04"
+PRETTY_NAME="Ubuntu 22.04 LTS"
+EOF
+if (
+  OS_RELEASE_FILE="$TEST_TMP/ubuntu-22"
+  detect_supported_os
+) >/dev/null 2>&1; then
+  fail "unsupported Ubuntu 22 was accepted"
+fi
+
 installer_source="$(<"$PROJECT_DIR/install.sh")"
 [[ "$installer_source" == *"log_format mtproto_safe"* ]] || fail "safe log format missing"
 [[ "$installer_source" == *'public_upstream: "http://127.0.0.1:8082"'* ]] || \

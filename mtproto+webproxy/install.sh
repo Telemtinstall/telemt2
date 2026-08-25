@@ -2,10 +2,11 @@
 set -Eeuo pipefail
 umask 077
 
-SCRIPT_VERSION="2026-08-25-preview1"
+SCRIPT_VERSION="2026-08-25-preview2"
 PROJECT_NAME="mtproto+webproxy"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TELEMT_INSTALLER="$SCRIPT_DIR/vendor/telemt-docker/install_docker-telemt.sh"
+OS_RELEASE_FILE="${OS_RELEASE_FILE:-/etc/os-release}"
 
 STATE_FILE="${STATE_FILE:-/root/.mtproto_webproxy.state}"
 SAVED_CONFIG="${SAVED_CONFIG:-/root/.mtproto_webproxy.config}"
@@ -32,6 +33,8 @@ REPAIR_MODE=0
 DRY_RUN=0
 TRANSACTION_BACKUP=""
 TRANSACTION_ACTIVE=0
+DETECTED_OS_ID=""
+DETECTED_OS_VERSION_ID=""
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'WARN: %s\n' "$*" >&2; }
@@ -134,12 +137,37 @@ need_root() {
   [ "${EUID:-$(id -u)}" -eq 0 ] || die "Запустите установщик от root: sudo ./install.sh"
 }
 
-require_clean_os() {
-  [ -r /etc/os-release ] || die "Не найден /etc/os-release."
+detect_supported_os() {
+  local os_id version_id pretty major
+  [ -r "$OS_RELEASE_FILE" ] || die "Не найден $OS_RELEASE_FILE."
   # shellcheck disable=SC1091
-  source /etc/os-release
-  [ "${ID:-}" = "debian" ] && [[ "${VERSION_ID:-}" == 13* ]] || \
-    die "Первая версия поддерживает только Debian 13 x86_64."
+  source "$OS_RELEASE_FILE"
+  os_id="$(printf '%s' "${ID:-}" | tr '[:upper:]' '[:lower:]')"
+  version_id="${VERSION_ID:-}"
+  pretty="${PRETTY_NAME:-$os_id $version_id}"
+  major="${version_id%%.*}"
+  [[ "$major" =~ ^[0-9]+$ ]] || die "Не удалось определить версию ОС: $pretty"
+
+  case "$os_id" in
+    debian)
+      [ "$major" = "13" ] || \
+        die "Неподдерживаемая ОС: $pretty. Используйте Debian 13.x."
+      ;;
+    ubuntu)
+      [ "$major" -ge 24 ] && [ "$major" -le 26 ] || \
+        die "Неподдерживаемая ОС: $pretty. Используйте Ubuntu 24.x-26.x."
+      ;;
+    *)
+      die "Неподдерживаемая ОС: $pretty. Используйте Debian 13.x или Ubuntu 24.x-26.x."
+      ;;
+  esac
+
+  DETECTED_OS_ID="$os_id"
+  DETECTED_OS_VERSION_ID="$version_id"
+}
+
+require_supported_os() {
+  detect_supported_os
   [ "$(uname -m)" = "x86_64" ] || die "Официальный MTProxy требует x86_64."
   have systemctl || die "Требуется systemd."
   [ -x "$TELEMT_INSTALLER" ] || die "Не найден vendor Telemt installer: $TELEMT_INSTALLER"
@@ -197,6 +225,7 @@ print_plan() {
   safe nginx access-log:   $ENABLE_SAFE_ACCESS_LOG
   official MTProxy:        workers=$MTPROXY_WORKERS connections=$MTPROXY_MAX_CONNECTIONS
   MTProxy NAT:             $MTPROXY_NAT_INFO
+  operating system:        $DETECTED_OS_ID $DETECTED_OS_VERSION_ID
   VPN/SSH:                 не изменяются
   public ports:            80/tcp, 443/tcp
 EOF
@@ -868,7 +897,7 @@ main() {
   load_saved_config
   parse_args "$@"
   need_root
-  require_clean_os
+  require_supported_os
   collect_inputs
   print_plan
   if [ "$DRY_RUN" -eq 1 ]; then
