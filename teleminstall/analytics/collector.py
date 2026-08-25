@@ -6,6 +6,7 @@ import os
 import signal
 import sqlite3
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ LOG = "/var/log/tproxy/access.log"
 METRICS = "http://127.0.0.1:8081/metrics"
 IPINFO_TOKEN_FILE = "/run/credentials/webproxy-analytics.service/ipinfo_token"
 WINDOWS = {"15m": 900, "1h": 3600, "24h": 86400, "7d": 604800}
+TOKEN_CHECK_INTERVAL = 3600
 ENDPOINTS = {"/api/v1/session", "/api/v1/up", "/api/v1/down", "/api/v1/ws"}
 SCHEMA_VERSION = "2"
 running = True
@@ -31,6 +33,37 @@ def ipinfo_token():
         return open(IPINFO_TOKEN_FILE, encoding="utf-8").read().strip()
     except OSError:
         return ""
+
+
+def state_value(db, key, default=""):
+    row = db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
+    return row[0] if row else default
+
+
+def set_state(db, key, value):
+    db.execute("INSERT INTO state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+
+
+def prepare_token_state(db):
+    token = ipinfo_token()
+    fingerprint = hashlib.sha256(token.encode()).hexdigest() if token else ""
+    if state_value(db, "geo_token_fingerprint") != fingerprint:
+        db.execute("UPDATE geo SET status='pending',next_lookup=0")
+        set_state(db, "geo_token_fingerprint", fingerprint)
+        set_state(db, "geo_api_status", "checking" if token else "disabled")
+        set_state(db, "geo_api_error", "")
+        set_state(db, "geo_city_available", "unknown")
+        set_state(db, "geo_token_checked", "0")
+        db.commit()
+
+
+def runtime_geo_state(db):
+    if not ipinfo_token():
+        return {"enabled": False, "status": "disabled", "error": "", "city_available": None}
+    city = state_value(db, "geo_city_available", "unknown")
+    return {"enabled": True, "status": state_value(db, "geo_api_status", "checking"),
+            "error": state_value(db, "geo_api_error", ""),
+            "city_available": None if city == "unknown" else city == "yes"}
 
 
 def connect():
@@ -176,6 +209,8 @@ def enrich_one(db):
     token = ipinfo_token()
     if not token:
         return
+    if state_value(db, "geo_api_status") == "invalid":
+        return
     now = int(time.time())
     row = db.execute("SELECT remote FROM geo WHERE next_lookup<=? AND status IN ('pending','retry') ORDER BY next_lookup,remote LIMIT 1", (now,)).fetchone()
     if not row:
@@ -215,10 +250,70 @@ def enrich_one(db):
           (country_code[:2], country_name[:96], str(geo_payload.get("region") or "")[:128],
            str(geo_payload.get("city") or "")[:128], asn[:24], provider[:255],
            now, now + 5184000, remote))
+        set_state(db, "geo_api_status", "active")
+        set_state(db, "geo_api_error", "")
+        set_state(db, "geo_city_available", "yes" if geo_payload.get("city") else "no")
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            message = f"IPinfo отклонил токен (HTTP {exc.code}). Укажите другой токен."
+            status = "invalid"
+        elif exc.code == 429:
+            message = "IPinfo сообщил о превышении лимита (HTTP 429). Проверьте тариф или укажите другой токен."
+            status = "error"
+        else:
+            message = f"IPinfo временно вернул ошибку HTTP {exc.code}."
+            status = "error"
+        set_state(db, "geo_api_status", status)
+        set_state(db, "geo_api_error", message)
+        db.execute("UPDATE geo SET status='retry',updated=?,next_lookup=? WHERE remote=?", (now, now + 300, remote))
+        print(json.dumps({"event": "geo_error", "ip_hash": hashlib.sha256(remote.encode()).hexdigest()[:12],
+                          "http_status": exc.code}), flush=True)
     except Exception as exc:
+        set_state(db, "geo_api_status", "error")
+        set_state(db, "geo_api_error", "Не удалось связаться с IPinfo. Повторная проверка будет выполнена автоматически.")
         db.execute("UPDATE geo SET status='retry',updated=?,next_lookup=? WHERE remote=?", (now, now + 86400, remote))
         print(json.dumps({"event": "geo_error", "ip_hash": hashlib.sha256(remote.encode()).hexdigest()[:12],
                           "error_type": type(exc).__name__}), flush=True)
+    db.commit()
+
+
+def check_token_health(db):
+    token = ipinfo_token()
+    if not token:
+        return
+    now = int(time.time())
+    try:
+        last_check = int(state_value(db, "geo_token_checked", "0"))
+    except ValueError:
+        last_check = 0
+    if now - last_check < TOKEN_CHECK_INTERVAL:
+        return
+    set_state(db, "geo_token_checked", now)
+    url = "https://ipinfo.io/8.8.8.8/json?token=" + urllib.parse.quote(token, safe="")
+    request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "Teleminstall-WEB-Proxy/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode())
+        geo_payload = payload.get("geo") if isinstance(payload.get("geo"), dict) else payload
+        country = str(geo_payload.get("country_code") or geo_payload.get("country") or "")
+        if not country:
+            raise RuntimeError("country is absent in IPinfo response")
+        set_state(db, "geo_api_status", "active")
+        set_state(db, "geo_api_error", "")
+        set_state(db, "geo_city_available", "yes" if geo_payload.get("city") else "no")
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            set_state(db, "geo_api_status", "invalid")
+            set_state(db, "geo_api_error", f"IPinfo отклонил токен (HTTP {exc.code}). Укажите другой токен.")
+        elif exc.code == 429:
+            set_state(db, "geo_api_status", "error")
+            set_state(db, "geo_api_error", "IPinfo сообщил о превышении лимита (HTTP 429). Проверьте тариф или укажите другой токен.")
+        else:
+            set_state(db, "geo_api_status", "error")
+            set_state(db, "geo_api_error", f"IPinfo временно вернул ошибку HTTP {exc.code}.")
+    except Exception:
+        set_state(db, "geo_api_status", "error")
+        set_state(db, "geo_api_error", "Не удалось связаться с IPinfo. Повторная проверка будет выполнена автоматически.")
     db.commit()
 
 
@@ -303,8 +398,11 @@ def window_data(db, since, geo_enabled):
 
 def publish(db):
     now = int(time.time())
-    geo_enabled = bool(ipinfo_token())
-    payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "geo_enabled": geo_enabled, "windows": {}}
+    geo_state = runtime_geo_state(db)
+    geo_enabled = geo_state["enabled"]
+    payload = {"generated_at": datetime.now(timezone.utc).isoformat(), "geo_enabled": geo_enabled,
+               "geo_status": geo_state["status"], "geo_error": geo_state["error"],
+               "geo_city_available": geo_state["city_available"], "windows": {}}
     for name, seconds in WINDOWS.items():
         payload["windows"][name] = window_data(db, now - seconds, geo_enabled)
     temporary = OUTPUT + ".tmp"
@@ -327,7 +425,8 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     db = connect()
-    last_metrics = last_publish = last_cleanup = last_geo = 0
+    prepare_token_state(db)
+    last_metrics = last_publish = last_cleanup = last_geo = last_token_check = 0
     while running:
         try:
             import_log(db)
@@ -336,6 +435,8 @@ def main():
                 collect_metrics(db); last_metrics = now
             if now - last_geo >= 2:
                 enrich_one(db); last_geo = now
+            if now - last_token_check >= 60:
+                check_token_health(db); last_token_check = now
             if now - last_publish >= 5:
                 publish(db); last_publish = now
             if now - last_cleanup >= 3600:

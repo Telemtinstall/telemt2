@@ -1093,6 +1093,39 @@ WantedBy=multi-user.target
 EOF
 }
 
+configure_token_admin() {
+  [ -f "$ANALYTICS_ASSET_DIR/token_admin.py" ] || die "Не найден $ANALYTICS_ASSET_DIR/token_admin.py."
+  install -o root -g root -m 0755 "$ANALYTICS_ASSET_DIR/token_admin.py" \
+    /usr/local/lib/webproxy-analytics/token_admin.py
+  printf '%s\n' "$DOMAIN" > /etc/webproxy-analytics/domain
+  chown root:root /etc/webproxy-analytics/domain
+  chmod 0600 /etc/webproxy-analytics/domain
+  cat > /etc/systemd/system/webproxy-token-admin.service <<'EOF'
+[Unit]
+Description=WEB proxy IPinfo token administrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/lib/webproxy-analytics/token_admin.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/webproxy-analytics
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
 configure_analytics_logging() {
   install -d -o root -g www-data -m 0750 /var/log/tproxy
   touch /var/log/tproxy/access.log
@@ -1215,6 +1248,19 @@ server {
         alias /var/lib/webproxy-analytics/data.json;
         add_header Cache-Control "no-store" always;
     }
+    location = /anal/ipinfo-token {
+        auth_basic "WEB proxy analytics";
+        auth_basic_user_file /etc/nginx/.htpasswd-webproxy-anal;
+        limit_except POST { deny all; }
+        proxy_pass http://127.0.0.1:8083/token;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Origin \$http_origin;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 20s;
+        add_header Cache-Control "no-store" always;
+    }
     location ^~ /anal/ {
         auth_basic "WEB proxy analytics";
         auth_basic_user_file /etc/nginx/.htpasswd-webproxy-anal;
@@ -1257,6 +1303,7 @@ setup_analytics() {
   configure_analytics_credentials
   configure_ipinfo_token
   configure_analytics_service
+  configure_token_admin
   configure_analytics_logging
   configure_tproxy_public_upstream
   configure_nginx_analytics
@@ -1266,6 +1313,8 @@ setup_analytics() {
   fi
   systemctl enable webproxy-analytics
   systemctl restart webproxy-analytics
+  systemctl enable webproxy-token-admin
+  systemctl restart webproxy-token-admin
   local ready=0
   for _ in $(seq 1 20); do
     if [ -s /var/lib/webproxy-analytics/data.json ]; then ready=1; break; fi
@@ -1306,10 +1355,12 @@ validate_result() {
   systemctl is-active --quiet mtproxy
   systemctl is-active --quiet tproxy-server
   systemctl is-active --quiet webproxy-analytics
+  systemctl is-active --quiet webproxy-token-admin
   systemctl is-active --quiet certbot.timer
   [ -x /usr/local/sbin/webproxy_cli ]
   [ -s /var/lib/webproxy-analytics/data.json ]
   [ -s /root/webproxy-analytics-credentials.txt ]
+  curl -fsS --max-time 5 http://127.0.0.1:8083/status >/dev/null
   curl -fsS --max-time 5 http://127.0.0.1:8081/readyz >/dev/null
   for _ in $(seq 1 30); do
     if curl -4fsS --max-time 8 "https://$DOMAIN/" >/dev/null; then
@@ -1395,7 +1446,7 @@ WEB proxy установлен полностью.
 $(cat /root/webproxy-install-summary.txt)
 
 Проверка:
-  systemctl --no-pager --full status nginx certbot.timer mtproxy tproxy-server webproxy-analytics
+  systemctl --no-pager --full status nginx certbot.timer mtproxy tproxy-server webproxy-analytics webproxy-token-admin
   certbot renew --dry-run
   curl -fsS http://127.0.0.1:8081/readyz
 
