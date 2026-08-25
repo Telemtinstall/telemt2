@@ -95,6 +95,7 @@ if [ -f "$PROJECT_DIR/analytics/collector.py" ]; then
   grep -Fq 'IP-адреса' "$PROJECT_DIR/analytics/index.html" || fail "IP tiles missing"
   grep -Fq 'Провайдеры / ASN' "$PROJECT_DIR/analytics/index.html" || fail "provider tiles missing"
   grep -Fq 'geoFilter' "$PROJECT_DIR/analytics/index.html" || fail "geography filter breadcrumb missing"
+  grep -Fq '/anal/app.js?v=' "$PROJECT_DIR/analytics/index.html" || fail "dashboard cache busting missing"
   grep -Fq 'Укажите IPinfo token' "$PROJECT_DIR/analytics/app.js" || fail "no-token analytics state missing"
   grep -Fq 'Укажите другой IPinfo token' "$PROJECT_DIR/analytics/app.js" || fail "invalid-token replacement state missing"
   grep -Fq '/anal/ipinfo-token' "$PROJECT_DIR/analytics/app.js" || fail "web token form endpoint missing"
