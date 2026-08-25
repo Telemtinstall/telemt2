@@ -63,6 +63,8 @@ source_text="$(<"$INSTALLER")"
 [[ "$source_text" == *'webproxy-token-admin.service'* ]] || fail "token admin service missing"
 [[ "$source_text" == *'location = /anal/ipinfo-token'* ]] || fail "protected token endpoint missing"
 [[ "$source_text" == *'proxy_set_header Origin \$http_origin;'* ]] || fail "token endpoint Origin forwarding missing"
+[[ "$source_text" == *'proxy_set_header Host \$host;'* ]] || fail "token endpoint Host forwarding is not escaped"
+[[ "$source_text" == *'require_installer_assets'* ]] || fail "installer asset preflight missing"
 
 bash -n "$INSTALLER"
 BOOTSTRAP="$PROJECT_DIR/bootstrap.sh"
@@ -77,10 +79,14 @@ if [ -f "$BOOTSTRAP" ]; then
 fi
 test_tmp="$(mktemp -d)"
 trap 'rm -rf "$test_tmp"' EXIT
+if (ANALYTICS_ASSET_DIR="$test_tmp/incomplete"; require_installer_assets) >/dev/null 2>&1; then
+  fail "incomplete installer payload was accepted"
+fi
 collector="$test_tmp/collector.py"
 sed -n '/^  cat > \/usr\/local\/lib\/webproxy-analytics\/collector.py <<'"'"'PY'"'"'$/,/^PY$/p' "$INSTALLER" | sed '1d;$d' > "$collector"
 python3 -c 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")' "$collector"
 if [ -f "$PROJECT_DIR/analytics/collector.py" ]; then
+  require_installer_assets
   python3 -c 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")' "$PROJECT_DIR/analytics/collector.py"
   grep -Fq 'https://ipinfo.io/' "$PROJECT_DIR/analytics/collector.py" || fail "official IPinfo endpoint missing"
   grep -Fq 'geo_enabled' "$PROJECT_DIR/analytics/collector.py" || fail "optional geolocation state missing"

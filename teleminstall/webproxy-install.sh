@@ -98,6 +98,14 @@ require_supported_os() {
   have systemctl || die "Требуется systemd."
 }
 
+require_installer_assets() {
+  local asset
+  for asset in collector.py token_admin.py index.html app.css app.js; do
+    [ -f "$ANALYTICS_ASSET_DIR/$asset" ] || \
+      die "Неполная загрузка установщика: отсутствует analytics/$asset. Запустите основной teleminstall/install.sh повторно."
+  done
+}
+
 collect_inputs() {
   if [ -z "$DOMAIN" ]; then
     [ -t 0 ] || die "Укажите --domain proxy.example.com."
@@ -1383,6 +1391,7 @@ main() {
   parse_args "$@"
   need_root
   require_supported_os
+  require_installer_assets
   if [ "$ANALYTICS_ONLY" -eq 1 ]; then
     [ -r /root/.webproxy-only.config ] || die "Не найдена существующая конфигурация /root/.webproxy-only.config."
     # shellcheck disable=SC1091
