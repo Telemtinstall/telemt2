@@ -103,6 +103,10 @@ installer_source="$(<"$PROJECT_DIR/install.sh")"
 [[ "$installer_source" == *"proxy_pass http://127.0.0.1:8080"* ]] || \
   fail "nginx relay integration missing"
 [[ "$installer_source" == *"2398, 8888"* ]] || fail "backend firewall ports missing"
+[[ "$installer_source" == *"ensure_full_installer_bundle"* ]] || \
+  fail "standalone bootstrap missing"
+[[ "$installer_source" == *"mtproto%2Bwebproxy.tar.gz"* ]] || \
+  fail "bootstrap branch archive missing"
 
 bash -n "$PROJECT_DIR/install.sh"
 bash "$PROJECT_DIR/vendor/telemt-docker/tests/test-update-policy.sh"

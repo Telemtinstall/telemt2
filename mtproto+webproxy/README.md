@@ -39,6 +39,18 @@ vendor-установщик Telemt: на Ubuntu он проверяет акти
 
 ## Быстрый запуск
 
+Одна команда на чистом сервере:
+
+```bash
+wget -qO install.sh 'https://raw.githubusercontent.com/Telemtinstall/telemt2/mtproto%2Bwebproxy/mtproto%2Bwebproxy/install.sh' && bash install.sh --auto
+```
+
+Загруженный одиночный `install.sh` сам установит `ca-certificates`, `curl` и
+`tar`, скачает полный комплект с vendor-файлами в
+`/opt/mtproto-webproxy-installer` и продолжит установку. Git заранее не нужен.
+
+Запуск из полного Git checkout:
+
 ```bash
 chmod +x install.sh
 sudo ./install.sh --auto

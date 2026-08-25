@@ -2,11 +2,13 @@
 set -Eeuo pipefail
 umask 077
 
-SCRIPT_VERSION="2026-08-25-preview2"
+SCRIPT_VERSION="2026-08-25-preview3"
 PROJECT_NAME="mtproto+webproxy"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TELEMT_INSTALLER="$SCRIPT_DIR/vendor/telemt-docker/install_docker-telemt.sh"
 OS_RELEASE_FILE="${OS_RELEASE_FILE:-/etc/os-release}"
+BOOTSTRAP_ARCHIVE_URL="${BOOTSTRAP_ARCHIVE_URL:-https://github.com/Telemtinstall/telemt2/archive/refs/heads/mtproto%2Bwebproxy.tar.gz}"
+BOOTSTRAP_INSTALL_DIR="${BOOTSTRAP_INSTALL_DIR:-/opt/mtproto-webproxy-installer}"
 
 STATE_FILE="${STATE_FILE:-/root/.mtproto_webproxy.state}"
 SAVED_CONFIG="${SAVED_CONFIG:-/root/.mtproto_webproxy.config}"
@@ -135,6 +137,46 @@ mark_done() {
 
 need_root() {
   [ "${EUID:-$(id -u)}" -eq 0 ] || die "Запустите установщик от root: sudo ./install.sh"
+}
+
+ensure_full_installer_bundle() {
+  [ -x "$TELEMT_INSTALLER" ] && return 0
+
+  say "Обнаружен отдельный install.sh без vendor-файлов."
+  say "Скачиваю полный комплект $PROJECT_NAME из Telemtinstall/telemt2..."
+  export DEBIAN_FRONTEND=noninteractive
+  have apt-get || die "Для автоматической загрузки полного комплекта требуется apt-get."
+  apt-get update
+  apt-get install -y --no-install-recommends ca-certificates curl tar gzip
+
+  local temporary archive extracted_installer bundle_dir stage old_install
+  temporary="$(mktemp -d /tmp/mtproto-webproxy-bootstrap.XXXXXX)"
+  archive="$temporary/project.tar.gz"
+  curl --fail --silent --show-error --location \
+    --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    --output "$archive" "$BOOTSTRAP_ARCHIVE_URL"
+  tar -C "$temporary" -xzf "$archive"
+  extracted_installer="$(find "$temporary" -type f \
+    -path '*/mtproto+webproxy/install.sh' -print -quit)"
+  [ -n "$extracted_installer" ] || die "В архиве GitHub не найден mtproto+webproxy/install.sh."
+  bundle_dir="$(dirname "$extracted_installer")"
+  [ -x "$bundle_dir/vendor/telemt-docker/install_docker-telemt.sh" ] || \
+    die "Архив GitHub не содержит полный vendor Telemt."
+
+  stage="${BOOTSTRAP_INSTALL_DIR}.new.$$"
+  install -d -m 0755 "$(dirname "$BOOTSTRAP_INSTALL_DIR")"
+  install -d -m 0755 "$stage"
+  cp -a "$bundle_dir/." "$stage/"
+  if [ -e "$BOOTSTRAP_INSTALL_DIR" ]; then
+    old_install="${BOOTSTRAP_INSTALL_DIR}.before.$(date +%Y%m%d%H%M%S)"
+    mv "$BOOTSTRAP_INSTALL_DIR" "$old_install"
+    say "Предыдущий комплект сохранён: $old_install"
+  fi
+  mv "$stage" "$BOOTSTRAP_INSTALL_DIR"
+  rm -rf "$temporary"
+
+  say "Полный комплект установлен: $BOOTSTRAP_INSTALL_DIR"
+  exec "$BOOTSTRAP_INSTALL_DIR/install.sh" "$@"
 }
 
 detect_supported_os() {
@@ -897,6 +939,7 @@ main() {
   load_saved_config
   parse_args "$@"
   need_root
+  ensure_full_installer_bundle "$@"
   require_supported_os
   collect_inputs
   print_plan
