@@ -1,0 +1,32 @@
+services:
+  telemt:
+    image: telemt-local:3.4.24
+    container_name: telemt
+    restart: unless-stopped
+    network_mode: host
+    user: "65532:65532"
+    environment:
+      RUST_LOG: "warn"
+    volumes:
+      - /opt/telemt-docker/telemt.toml:/etc/telemt/telemt.toml:ro
+    command: ["/etc/telemt/telemt.toml"]
+    healthcheck:
+      test: [ "CMD", "/app/telemt", "healthcheck", "/etc/telemt/telemt.toml", "--mode", "liveness" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges=true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m
+      - /run/telemt:rw,nosuid,nodev,noexec,size=32m
+    logging:
+      driver: "none"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
