@@ -1,5 +1,19 @@
 # mtproto+webproxy
 
+## Быстрая установка
+
+С запросом домена:
+
+```bash
+apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/mtproto%2Bwebproxy/mtproto%2Bwebproxy/install.sh' -o /root/install.sh && bash /root/install.sh --auto
+```
+
+С заранее указанным доменом (замените `proxy.example.com` своим):
+
+```bash
+apt-get update && apt-get install -y curl ca-certificates && curl -fsSL 'https://raw.githubusercontent.com/Telemtinstall/telemt2/mtproto%2Bwebproxy/mtproto%2Bwebproxy/install.sh' -o /root/install.sh && bash /root/install.sh --auto --domain proxy.example.com
+```
+
 Отдельный автоматический установщик для одного домена и одного публичного
 `443/tcp`:
 
@@ -37,7 +51,7 @@ vendor-установщик Telemt: на Ubuntu он проверяет акти
 необходимости устанавливает совместимую изолированную сборку, не заменяя
 системные библиотеки OpenSSL.
 
-## Быстрый запуск
+## Другие способы запуска
 
 Одна команда на чистом сервере:
 
