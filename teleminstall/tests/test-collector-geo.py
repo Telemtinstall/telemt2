@@ -40,6 +40,8 @@ with tempfile.TemporaryDirectory() as directory:
     module.enrich_one(db)
     state = module.runtime_geo_state(db)
     assert state["status"] == "active" and state["city_available"] is True
+    geo = db.execute("SELECT asn,provider FROM geo WHERE remote='8.8.8.8'").fetchone()
+    assert geo == ("AS15169", "Google LLC")
 
     module.ipinfo_token = lambda: "revoked_token_123"
     module.prepare_token_state(db)

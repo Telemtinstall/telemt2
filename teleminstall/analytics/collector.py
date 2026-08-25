@@ -19,7 +19,7 @@ IPINFO_TOKEN_FILE = "/run/credentials/webproxy-analytics.service/ipinfo_token"
 WINDOWS = {"15m": 900, "1h": 3600, "24h": 86400, "7d": 604800}
 TOKEN_CHECK_INTERVAL = 3600
 ENDPOINTS = {"/api/v1/session", "/api/v1/up", "/api/v1/down", "/api/v1/ws"}
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 running = True
 
 
@@ -104,6 +104,7 @@ def connect():
     if not version or version[0] != SCHEMA_VERSION:
         # Re-read the current transport log once so older events receive IP aggregates.
         db.executescript("DELETE FROM seen_events; DELETE FROM minute_stats; DELETE FROM ip_minute_stats; DELETE FROM errors; DELETE FROM state WHERE key='log_position';")
+        db.execute("UPDATE geo SET status='pending',next_lookup=0")
         db.execute("INSERT INTO state(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (SCHEMA_VERSION,))
         db.commit()
     return db
@@ -245,6 +246,14 @@ def enrich_one(db):
             raise RuntimeError("country is absent in IPinfo response")
         asn = str(as_payload.get("asn") or "")
         provider = str(as_payload.get("name") or as_payload.get("organization") or "")
+        legacy_org = str(payload.get("org") or "").strip()
+        if legacy_org and (not asn or not provider):
+            org_parts = legacy_org.split(None, 1)
+            if org_parts[0].upper().startswith("AS") and org_parts[0][2:].isdigit():
+                asn = asn or org_parts[0].upper()
+                provider = provider or (org_parts[1] if len(org_parts) > 1 else legacy_org)
+            else:
+                provider = provider or legacy_org
         db.execute("""UPDATE geo SET country_code=?,country_name=?,region_name=?,city_name=?,asn=?,provider=?,
           status='ok',updated=?,next_lookup=? WHERE remote=?""",
           (country_code[:2], country_name[:96], str(geo_payload.get("region") or "")[:128],

@@ -103,6 +103,7 @@ if [ -f "$PROJECT_DIR/analytics/collector.py" ]; then
   grep -Fq 'Нажмите: показать IP' "$PROJECT_DIR/analytics/app.js" || fail "city/provider drill-down missing"
   grep -Fq 'aggregateProviders' "$PROJECT_DIR/analytics/app.js" || fail "provider aggregation missing"
   grep -Fq 'LIMIT 1000' "$PROJECT_DIR/analytics/collector.py" || fail "extended IP detail sample missing"
+  grep -Fq 'legacy_org' "$PROJECT_DIR/analytics/collector.py" || fail "legacy IPinfo provider format missing"
   python3 -c 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")' "$PROJECT_DIR/analytics/token_admin.py"
   python3 "$PROJECT_DIR/tests/test-token-admin.py"
   python3 "$PROJECT_DIR/tests/test-collector-geo.py"
