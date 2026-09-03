@@ -360,7 +360,9 @@ package_version() {
 }
 
 package_candidate() {
-  apt-cache policy "$1" 2>/dev/null | awk '/Candidate:/ {print $2; exit}'
+  local policy=""
+  policy="$(apt-cache policy "$1" 2>/dev/null)" || true
+  awk '/Candidate:/ {print $2; exit}' <<< "$policy"
 }
 
 audit_extra_software() {
