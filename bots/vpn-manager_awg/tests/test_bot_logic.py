@@ -361,9 +361,9 @@ class MenuAndStatusTests(unittest.TestCase):
             SimpleNamespace(id="vless", title="Local VLESS", protocol="vless"),
         ]
         markup = keyboards.main_menu(servers)
-        self.assertEqual({"AmneziaWG", "VLESS", keyboards.ADMIN}, self.reply_texts(markup))
+        self.assertEqual({"Local AWG", "Local VLESS", keyboards.ADMIN}, self.reply_texts(markup))
         self.assertEqual(
-            [["AmneziaWG", "VLESS"], [keyboards.ADMIN]],
+            [["Local AWG", "Local VLESS"], [keyboards.ADMIN]],
             self.reply_rows(markup),
         )
         self.assertTrue(markup["resize_keyboard"])
@@ -376,8 +376,18 @@ class MenuAndStatusTests(unittest.TestCase):
         ]
         markup = keyboards.protocol_picker(servers)
         self.assertEqual(
-            [["AmneziaWG", "VLESS"], [keyboards.CANCEL]],
+            [["Local AWG", "Local VLESS"], [keyboards.CANCEL]],
             self.reply_rows(markup),
+        )
+
+    def test_packaged_main_menu_is_two_by_two_during_awg3_transition(self):
+        registry = ServerRegistry.from_file(Path(__file__).resolve().parents[1] / "servers.json")
+        self.assertEqual(
+            [
+                ["AmneziaWG 2.0", "AmneziaWG 3.1"],
+                ["VLESS", keyboards.ADMIN],
+            ],
+            self.reply_rows(keyboards.main_menu(registry.servers)),
         )
 
     def test_protocol_menu_exposes_primary_reply_actions(self):

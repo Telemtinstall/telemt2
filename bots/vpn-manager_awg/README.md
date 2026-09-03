@@ -5,8 +5,8 @@
 
 Это актуальная версия VPN Manager, которая заменяет прежнего бота,
 поддерживавшего только AmneziaWG. История старой реализации сохраняется в Git,
-а новый установщик
-поддерживает AmneziaWG и VLESS в одном интерфейсе.
+а новый установщик поддерживает параллельно AmneziaWG 2.0,
+AmneziaWG 3.1 и VLESS в одном интерфейсе.
 
 ## Быстрый запуск на новом сервере
 
@@ -35,7 +35,7 @@ chmod +x /tmp/install_bot.sh &&
 
 ```text
 Установить/обновить дополнительное ПО бота (Python, Pillow, logrotate, Speedtest)? [yes]:
-Установить/обновить AmneziaWG и VLESS, совместимые с ботом? [yes]:
+Установить/обновить AmneziaWG 2.0, AmneziaWG 3.1 и VLESS, совместимые с ботом? [yes]:
 ```
 
 На первый вопрос установщик проверяет `git`, `ca-certificates`, Python 3,
@@ -44,21 +44,22 @@ Pillow, шрифты для графиков, `logrotate` и `speedtest-cli`. О
 установщик ничего не обновляет, но остановится, если обязательного пакета нет.
 
 На второй вопрос ответ `yes` устанавливает отсутствующие протоколы и обновляет
-`awgctl`/`vlessctl` до версий из этого репозитория, не пересоздавая рабочие VPN,
-когда сами протоколы уже исправны. Ответ `no` разрешён только тогда, когда оба
+`awgctl`/`awg3ctl`/`vlessctl` до версий из этого репозитория, не пересоздавая рабочие VPN,
+когда сами протоколы уже исправны. Ответ `no` разрешён только тогда, когда все три
 управляющих скрипта уже полностью совпадают с совместимой версией.
 
 Если хотя бы одного протокола нет, установщик один раз спрашивает общие
 параметры:
 
 ```text
-Публичный IP/host для обоих VPN [определённый IP]:
-Имя первого пользователя в обоих VPN [vpnuser1]:
+Публичный IP/host для всех VPN [определённый IP]:
+Имя первого пользователя во всех VPN [vpnuser1]:
 ```
 
 После этого штатные установщики запускаются без повторных вопросов:
-AmneziaWG получает DNS-профиль и UDP `1234`, VLESS — direct WebSocket и TCP
-`443`. Один host и одно начальное имя используются для обоих протоколов.
+AmneziaWG 2.0 получает DNS-профиль на UDP `1234`, отдельный AmneziaWG 3.1 —
+AWG 3.x-профиль на UDP `1235`, VLESS — direct WebSocket на TCP `443`.
+Один host и одно начальное имя используются для всех трёх вариантов.
 
 ### Журнал и продолжение прерванной установки
 
@@ -90,7 +91,8 @@ chmod +x install.sh
 
 По умолчанию устанавливаются:
 
-- AmneziaWG с DNS-профилем, UDP 1234;
+- AmneziaWG 2.0 с DNS-профилем, UDP 1234;
+- AmneziaWG 3.1-совместимый профиль на отдельном интерфейсе `awg3`, UDP 1235;
 - VLESS/Xray direct WebSocket, TCP 443;
 - multi-protocol Telegram-бот с reply-меню;
 - отдельная SQLite-база каждого VPN-пользователя;
@@ -133,12 +135,12 @@ ASSUME_YES=1 \
 
 ---
 
-# VPN Bot: AmneziaWG + VLESS + Traffic Accounting
+# VPN Bot: AmneziaWG 2.0 + AmneziaWG 3.1 + VLESS
 
-Версия: `2026.08.10-amneziawg-qr.20`
+Версия: `2026.09.03-awg3-transition.1`
 
 Этот документ описывает рабочую версию Telegram-бота. Администраторы из `.env`
-управляют локальными AmneziaWG и VLESS/Xray, а обычные Telegram-пользователи
+управляют локальными AmneziaWG 2.0, AmneziaWG 3.1 и VLESS/Xray, а обычные Telegram-пользователи
 могут получить доступ только к выданным им VPN-профилям. Трафик каждого
 VPN-пользователя хранится в независимой SQLite-базе.
 
@@ -149,8 +151,9 @@ Telegram admin
   -> Telegram Bot API polling
   -> /root/vpnbot/bot.py
      -> выбор протокола
-     -> AmneziaWG -> /usr/local/sbin/awgctl
-     -> VLESS      -> /usr/local/sbin/vlessctl
+     -> AmneziaWG 2.0 -> /usr/local/sbin/awgctl
+     -> AmneziaWG 3.1 -> /usr/local/sbin/awg3ctl
+     -> VLESS          -> /usr/local/sbin/vlessctl
 
 Telegram VPN user
   -> одноразовый /start claim_<token>
@@ -169,9 +172,10 @@ Daily systemd timer (23:59 UTC)
 
 После `/start` или `/menu` бот предлагает протокол:
 
-1. `AmneziaWG`
-2. `VLESS`
-3. `Админ`
+1. `AmneziaWG 2.0`
+2. `AmneziaWG 3.1`
+3. `VLESS`
+4. `Админ`
 
 После выбора протокола доступны:
 
@@ -289,10 +293,17 @@ VDS. Доступны периоды `1 час`, `24 часа`, `7 дней` и 
 [
   {
     "id": "amneziawg",
-    "title": "AmneziaWG",
+    "title": "AmneziaWG 2.0",
     "protocol": "amneziawg",
     "transport": "local",
     "command": "/usr/local/sbin/awgctl"
+  },
+  {
+    "id": "amneziawg3",
+    "title": "AmneziaWG 3.1",
+    "protocol": "amneziawg",
+    "transport": "local",
+    "command": "/usr/local/sbin/awg3ctl"
   },
   {
     "id": "vless",
@@ -304,7 +315,7 @@ VDS. Доступны периоды `1 час`, `24 часа`, `7 дней` и 
 ]
 ```
 
-Оба протокола находятся на том же сервере, поэтому используется `transport: local`.
+Все три варианта находятся на том же сервере, поэтому используется `transport: local`.
 
 ## 4. `.env` и авторизация
 
@@ -314,6 +325,7 @@ VDS. Доступны периоды `1 час`, `24 часа`, `7 дней` и 
 BOT_TOKEN=123456:replace-me
 ADMIN_BOT=123456789,987654321
 AWGCTL=/usr/local/sbin/awgctl
+AWG3CTL=/usr/local/sbin/awg3ctl
 
 BOT_TITLE=Личный VPN-бот
 PRIVATE_ONLY=1
@@ -561,6 +573,7 @@ vpnbot.service             основной Telegram polling
 vpnbot-traffic.timer       ежедневное расписание
 vpnbot-traffic.service     одноразовый сбор трафика
 awg-quick@awg0.service     AmneziaWG
+awg-quick@awg3.service     AmneziaWG 3.1
 xray.service               VLESS/Xray
 ```
 

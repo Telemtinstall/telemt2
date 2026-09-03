@@ -33,6 +33,13 @@ AWG_I2="${AWG_I2:-}"
 AWG_I3="${AWG_I3:-}"
 AWG_I4="${AWG_I4:-}"
 AWG_I5="${AWG_I5:-}"
+AWG_HEADER_PROTECTION_KEY="${AWG_HEADER_PROTECTION_KEY:-}"
+AWG_CONTENT_PADDING_ADDITION="${AWG_CONTENT_PADDING_ADDITION:-}"
+AWG_REKEY_AFTER_TIME="${AWG_REKEY_AFTER_TIME:-}"
+AWG_REKEY_TIMEOUT="${AWG_REKEY_TIMEOUT:-}"
+AWG_REJECT_AFTER_TIME="${AWG_REJECT_AFTER_TIME:-}"
+AWG_KEEPALIVE_TIMEOUT="${AWG_KEEPALIVE_TIMEOUT:-}"
+AWG_MAX_HANDSHAKE_ATTEMPTS="${AWG_MAX_HANDSHAKE_ATTEMPTS:-}"
 ENABLE_HTTPS_MASK="${ENABLE_HTTPS_MASK:-0}"
 MASK_DOMAIN="${MASK_DOMAIN:-}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
@@ -44,17 +51,19 @@ AWG_PPA_CODENAME="${AWG_PPA_CODENAME:-}"
 AWG_MIN_KERNEL="${AWG_MIN_KERNEL:-6.7}"
 AWG_RESUME_COMMAND="${AWG_RESUME_COMMAND:-}"
 
-AWG_DIR="/etc/amnezia/amneziawg"
-CLIENT_DIR="$AWG_DIR/clients"
-CLIENT_OUT_DIR="/root/amneziawg-clients"
+AWG_DIR="${AWG_DIR:-/etc/amnezia/amneziawg}"
+CLIENT_DIR="${CLIENT_DIR:-$AWG_DIR/clients}"
+CLIENT_OUT_DIR="${CLIENT_OUT_DIR:-/root/amneziawg-clients}"
 MASK_ROOT_BASE="/var/www"
-ENV_FILE="$AWG_DIR/awgctl.env"
-CTL_PATH="/usr/local/sbin/awgctl"
-CTL_BIN_PATH="/usr/local/bin/awgctl"
-STATE_FILE="/root/.install_amneziawg.state"
-RESUME_CONFIG="/root/.install_amneziawg.config"
-CONFIG_HASH_FILE="/root/.install_amneziawg.config.sha256"
-BACKUP_ROOT="/root/amneziawg-install-backups"
+ENV_FILE="${ENV_FILE:-$AWG_DIR/awgctl.env}"
+CTL_PATH="${CTL_PATH:-/usr/local/sbin/awgctl}"
+CTL_BIN_PATH="${CTL_BIN_PATH:-/usr/local/bin/awgctl}"
+STATE_FILE="${STATE_FILE:-/root/.install_amneziawg.state}"
+RESUME_CONFIG="${RESUME_CONFIG:-/root/.install_amneziawg.config}"
+CONFIG_HASH_FILE="${CONFIG_HASH_FILE:-/root/.install_amneziawg.config.sha256}"
+BACKUP_ROOT="${BACKUP_ROOT:-/root/amneziawg-install-backups}"
+SERVER_PRIVATE_KEY_FILE="${SERVER_PRIVATE_KEY_FILE:-$AWG_DIR/server_private.key}"
+SERVER_PUBLIC_KEY_FILE="${SERVER_PUBLIC_KEY_FILE:-$AWG_DIR/server_public.key}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 step_no=0
@@ -231,6 +240,13 @@ AWG_I2=$(printf '%q' "$AWG_I2")
 AWG_I3=$(printf '%q' "$AWG_I3")
 AWG_I4=$(printf '%q' "$AWG_I4")
 AWG_I5=$(printf '%q' "$AWG_I5")
+AWG_HEADER_PROTECTION_KEY=$(printf '%q' "$AWG_HEADER_PROTECTION_KEY")
+AWG_CONTENT_PADDING_ADDITION=$(printf '%q' "$AWG_CONTENT_PADDING_ADDITION")
+AWG_REKEY_AFTER_TIME=$(printf '%q' "$AWG_REKEY_AFTER_TIME")
+AWG_REKEY_TIMEOUT=$(printf '%q' "$AWG_REKEY_TIMEOUT")
+AWG_REJECT_AFTER_TIME=$(printf '%q' "$AWG_REJECT_AFTER_TIME")
+AWG_KEEPALIVE_TIMEOUT=$(printf '%q' "$AWG_KEEPALIVE_TIMEOUT")
+AWG_MAX_HANDSHAKE_ATTEMPTS=$(printf '%q' "$AWG_MAX_HANDSHAKE_ATTEMPTS")
 ENABLE_HTTPS_MASK=$(printf '%q' "$ENABLE_HTTPS_MASK")
 MASK_DOMAIN=$(printf '%q' "$MASK_DOMAIN")
 LETSENCRYPT_EMAIL=$(printf '%q' "$LETSENCRYPT_EMAIL")
@@ -386,7 +402,7 @@ normalize_obfs_profile() {
   local value
   value="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   case "$value" in
-    plain|compat|mobile|dns|awg1|awg2) printf '%s' "$value" ;;
+    plain|compat|mobile|dns|awg1|awg2|awg3) printf '%s' "$value" ;;
     *) return 1 ;;
   esac
 }
@@ -435,8 +451,16 @@ recommended_dns_i1() {
   printf '%s' '<r 2><b 0x8580000100010000000004796162730679616e6465780272750000010001c00c000100010000026d000457fa27d1>'
 }
 
+random_key32() {
+  if have awg; then
+    awg genkey
+  else
+    dd if=/dev/urandom bs=32 count=1 2>/dev/null | base64 | tr -d '\n'
+  fi
+}
+
 ensure_awg_obfuscation_params() {
-  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, plain."
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, awg3, plain."
 
   case "$AWG_OBFS_PROFILE" in
     plain)
@@ -496,6 +520,19 @@ ensure_awg_obfuscation_params() {
       set_default AWG_S4 "$(rand_range 0 32)"
       ensure_range_headers
       set_default AWG_I1 "$(recommended_dns_i1)"
+      ;;
+    awg3)
+      set_default AWG_JC 6
+      set_default AWG_JMIN 64
+      set_default AWG_JMAX 192
+      set_default AWG_S1 "$(rand_range 15 64)"
+      set_default AWG_S2 "$(rand_range 15 64)"
+      set_default AWG_S3 "$(rand_range 15 64)"
+      set_default AWG_S4 "$(rand_range 12 32)"
+      ensure_unique_fixed_headers
+      set_default AWG_I1 "$(recommended_dns_i1)"
+      set_default AWG_HEADER_PROTECTION_KEY "$(random_key32)"
+      set_default AWG_CONTENT_PADDING_ADDITION "10-50"
       ;;
   esac
 }
@@ -630,9 +667,9 @@ prompt_config() {
   prompt AWG_SUBNET "VPN IPv4-сеть" "$AWG_SUBNET"
   prompt AWG_SERVER_IP "VPN IPv4 сервера" "$AWG_SERVER_IP"
   prompt AWG_DNS "DNS клиентов, IPv4 через запятую" "$AWG_DNS"
-  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, plain."
-  prompt AWG_OBFS_PROFILE "Профиль обфускации (mobile/dns/compat/awg1/awg2/plain)" "$AWG_OBFS_PROFILE"
-  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, plain."
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, awg3, plain."
+  prompt AWG_OBFS_PROFILE "Профиль обфускации (mobile/dns/compat/awg1/awg2/awg3/plain)" "$AWG_OBFS_PROFILE"
+  AWG_OBFS_PROFILE="$(normalize_obfs_profile "$AWG_OBFS_PROFILE")" || die "некорректный профиль обфускации: $AWG_OBFS_PROFILE. Варианты: mobile, dns, compat, awg1, awg2, awg3, plain."
   ensure_awg_obfuscation_params
   prompt AWG_JC "AmneziaWG junk packet count Jc" "$AWG_JC"
   prompt AWG_JMIN "AmneziaWG junk min size Jmin" "$AWG_JMIN"
@@ -685,6 +722,14 @@ prompt_config() {
   fi
   if [[ -n "$AWG_S4" ]]; then
     valid_range_int "$AWG_S4" 0 32 || die "некорректный S4: $AWG_S4. Допустимый диапазон: 0..32."
+  fi
+  if [[ "$AWG_OBFS_PROFILE" == "awg3" ]]; then
+    (( AWG_S1 >= 12 && AWG_S2 >= 12 && AWG_S3 >= 12 && AWG_S4 >= 12 )) ||
+      die "для AWG 3.x параметры S1-S4 должны быть не меньше 12."
+    [[ "$AWG_HEADER_PROTECTION_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] ||
+      die "HeaderProtectionKey должен быть base64-ключом длиной 32 байта."
+    [[ "$AWG_CONTENT_PADDING_ADDITION" =~ ^[0-9]+(-[0-9]+)?$ ]] ||
+      die "ContentPaddingAddition должен быть числом или диапазоном min-max."
   fi
   validate_awg_headers
   valid_awg_text_param "$AWG_I1" && valid_awg_text_param "$AWG_I2" && valid_awg_text_param "$AWG_I3" && valid_awg_text_param "$AWG_I4" && valid_awg_text_param "$AWG_I5" || die "некорректные I1-I5: параметр слишком длинный или содержит перенос строки."
@@ -759,7 +804,7 @@ print_plan() {
   MTU:             ${AWG_MTU}
   профиль:         ${AWG_OBFS_PROFILE}
   обфускация:      Jc=${AWG_JC}, Jmin=${AWG_JMIN}, Jmax=${AWG_JMAX}, S1=${AWG_S1}, S2=${AWG_S2}
-  AWG 2.0:         $([[ -n "${AWG_S3}${AWG_S4}${AWG_I1}${AWG_I2}${AWG_I3}${AWG_I4}${AWG_I5}" ]] && echo "S3=${AWG_S3:-off}, S4=${AWG_S4:-off}, I1=$([[ -n "$AWG_I1" ]] && echo да || echo нет)" || echo нет)
+  AWG 2/3:         $([[ -n "${AWG_S3}${AWG_S4}${AWG_I1}${AWG_I2}${AWG_I3}${AWG_I4}${AWG_I5}" ]] && echo "S3=${AWG_S3:-off}, S4=${AWG_S4:-off}, I1=$([[ -n "$AWG_I1" ]] && echo да || echo нет), HPK=$([[ -n "$AWG_HEADER_PROTECTION_KEY" ]] && echo да || echo нет)" || echo нет)
   HTTPS-маскировка: $([[ "$ENABLE_HTTPS_MASK" == "1" ]] && echo "да, https://${MASK_DOMAIN}/ на TCP 443" || echo нет)
   nginx logs:      $([[ "$ENABLE_NGINX_LOGS" == "1" ]] && echo да || echo нет)
   первый клиент:   ${CLIENT_NAME}
@@ -1274,13 +1319,13 @@ EOF
 
 generate_server_keys() {
   install -d -m 0700 "$AWG_DIR" "$CLIENT_DIR" "$CLIENT_OUT_DIR"
-  if [[ ! -s "$AWG_DIR/server_private.key" ]]; then
+  if [[ ! -s "$SERVER_PRIVATE_KEY_FILE" ]]; then
     umask 077
-    awg genkey > "$AWG_DIR/server_private.key"
-    awg pubkey < "$AWG_DIR/server_private.key" > "$AWG_DIR/server_public.key"
+    awg genkey > "$SERVER_PRIVATE_KEY_FILE"
+    awg pubkey < "$SERVER_PRIVATE_KEY_FILE" > "$SERVER_PUBLIC_KEY_FILE"
   fi
-  chmod 600 "$AWG_DIR/server_private.key"
-  chmod 644 "$AWG_DIR/server_public.key"
+  chmod 600 "$SERVER_PRIVATE_KEY_FILE"
+  chmod 644 "$SERVER_PUBLIC_KEY_FILE"
 }
 
 write_env() {
@@ -1310,11 +1355,20 @@ AWG_I2=$(printf '%q' "$AWG_I2")
 AWG_I3=$(printf '%q' "$AWG_I3")
 AWG_I4=$(printf '%q' "$AWG_I4")
 AWG_I5=$(printf '%q' "$AWG_I5")
+AWG_HEADER_PROTECTION_KEY=$(printf '%q' "$AWG_HEADER_PROTECTION_KEY")
+AWG_CONTENT_PADDING_ADDITION=$(printf '%q' "$AWG_CONTENT_PADDING_ADDITION")
+AWG_REKEY_AFTER_TIME=$(printf '%q' "$AWG_REKEY_AFTER_TIME")
+AWG_REKEY_TIMEOUT=$(printf '%q' "$AWG_REKEY_TIMEOUT")
+AWG_REJECT_AFTER_TIME=$(printf '%q' "$AWG_REJECT_AFTER_TIME")
+AWG_KEEPALIVE_TIMEOUT=$(printf '%q' "$AWG_KEEPALIVE_TIMEOUT")
+AWG_MAX_HANDSHAKE_ATTEMPTS=$(printf '%q' "$AWG_MAX_HANDSHAKE_ATTEMPTS")
 ENABLE_HTTPS_MASK=$(printf '%q' "$ENABLE_HTTPS_MASK")
 MASK_DOMAIN=$(printf '%q' "$MASK_DOMAIN")
 AWG_DIR=$(printf '%q' "$AWG_DIR")
 CLIENT_DIR=$(printf '%q' "$CLIENT_DIR")
 CLIENT_OUT_DIR=$(printf '%q' "$CLIENT_OUT_DIR")
+AWG_CONFIG=$(printf '%q' "$AWG_DIR/${AWG_IFACE}.conf")
+SERVER_PUBLIC_KEY_FILE=$(printf '%q' "$SERVER_PUBLIC_KEY_FILE")
 EOF
 }
 
@@ -1326,6 +1380,13 @@ write_optional_awg_params() {
   [[ -n "$AWG_I3" ]] && printf 'I3 = %s\n' "$AWG_I3"
   [[ -n "$AWG_I4" ]] && printf 'I4 = %s\n' "$AWG_I4"
   [[ -n "$AWG_I5" ]] && printf 'I5 = %s\n' "$AWG_I5"
+  [[ -n "$AWG_HEADER_PROTECTION_KEY" ]] && printf 'HeaderProtectionKey = %s\n' "$AWG_HEADER_PROTECTION_KEY"
+  [[ -n "$AWG_CONTENT_PADDING_ADDITION" ]] && printf 'ContentPaddingAddition = %s\n' "$AWG_CONTENT_PADDING_ADDITION"
+  [[ -n "$AWG_REKEY_AFTER_TIME" ]] && printf 'RekeyAfterTime = %s\n' "$AWG_REKEY_AFTER_TIME"
+  [[ -n "$AWG_REKEY_TIMEOUT" ]] && printf 'RekeyTimeout = %s\n' "$AWG_REKEY_TIMEOUT"
+  [[ -n "$AWG_REJECT_AFTER_TIME" ]] && printf 'RejectAfterTime = %s\n' "$AWG_REJECT_AFTER_TIME"
+  [[ -n "$AWG_KEEPALIVE_TIMEOUT" ]] && printf 'KeepaliveTimeout = %s\n' "$AWG_KEEPALIVE_TIMEOUT"
+  [[ -n "$AWG_MAX_HANDSHAKE_ATTEMPTS" ]] && printf 'MaxHandshakeAttempts = %s\n' "$AWG_MAX_HANDSHAKE_ATTEMPTS"
   return 0
 }
 
@@ -1333,7 +1394,7 @@ write_awg_config() {
   local private_key
   local prefix
   local wan_iface
-  private_key="$(cat "$AWG_DIR/server_private.key")"
+  private_key="$(cat "$SERVER_PRIVATE_KEY_FILE")"
   prefix="${AWG_SUBNET#*/}"
   wan_iface="$(out_iface || true)"
   [[ -n "$wan_iface" ]] || die "не удалось определить внешний сетевой интерфейс для NAT."

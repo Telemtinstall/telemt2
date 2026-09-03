@@ -35,7 +35,7 @@ class InstallerTests(unittest.TestCase):
             source,
         )
         self.assertIn(
-            "Установить/обновить AmneziaWG и VLESS, совместимые с ботом?",
+            "Установить/обновить AmneziaWG 2.0, AmneziaWG 3.1 и VLESS, совместимые с ботом?",
             source,
         )
         self.assertIn("status --porcelain", BOOTSTRAP.read_text(encoding="utf-8"))
@@ -94,10 +94,55 @@ headers_kernel_from_apt_simulation linux-headers-amd64
 
     def test_vpn_shared_answers_are_not_asked_twice(self):
         source = INSTALLER.read_text(encoding="utf-8")
-        self.assertEqual(1, source.count("Публичный IP/host для обоих VPN"))
-        self.assertEqual(1, source.count("Имя первого пользователя в обоих VPN"))
+        self.assertEqual(1, source.count("Публичный IP/host для всех VPN"))
+        self.assertEqual(1, source.count("Имя первого пользователя во всех VPN"))
         self.assertIn("ASSUME_YES=1", source)
+        self.assertIn("AWG_OBFS_PROFILE=awg3", source)
+        self.assertIn("AWG_IFACE=awg3", source)
+        self.assertIn("AWG_PORT=1235", source)
         self.assertIn("./install_vless.sh --direct --auto", source)
+
+    def test_awg3_is_a_separate_resumable_instance(self):
+        source = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn("AWG3CTL_PATH", source)
+        self.assertIn("AWG_IFACE=awg3", source)
+        self.assertIn("AWG_PORT=1235", source)
+        self.assertIn("AWG_SUBNET=10.89.89.0/24", source)
+        self.assertIn("STATE_FILE=/root/.install_amneziawg3.state", source)
+        self.assertIn("server_private_awg3.key", source)
+        self.assertIn("awg-quick@awg3.service", source)
+
+        registry = json.loads((ROOT / "servers.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            ["AmneziaWG 2.0", "AmneziaWG 3.1", "VLESS"],
+            [item["title"] for item in registry],
+        )
+        self.assertEqual("/usr/local/sbin/awg3ctl", registry[1]["command"])
+
+    def test_awg3_profile_has_required_generation_fields(self):
+        script = f'''\
+set -Eeuo pipefail
+export AWG_INSTALLER_LIBRARY_ONLY=1
+source "{AWG_INSTALLER}"
+AWG_OBFS_PROFILE=awg3
+AWG_JC= AWG_JMIN= AWG_JMAX= AWG_S1= AWG_S2= AWG_S3= AWG_S4=
+AWG_H1= AWG_H2= AWG_H3= AWG_H4= AWG_I1=
+AWG_HEADER_PROTECTION_KEY= AWG_CONTENT_PADDING_ADDITION=
+ensure_awg_obfuscation_params
+printf '%s|%s|%s|%s|%s|%s\n' \
+  "$AWG_JC" "$AWG_S1" "$AWG_S3" "$AWG_S4" \
+  "$AWG_CONTENT_PADDING_ADDITION" "$AWG_HEADER_PROTECTION_KEY"
+'''
+        result = subprocess.run(
+            ["bash", "-c", script], check=True, text=True, capture_output=True
+        )
+        jc, s1, s3, s4, padding, key = result.stdout.strip().split("|")
+        self.assertEqual("6", jc)
+        self.assertGreaterEqual(int(s1), 12)
+        self.assertGreaterEqual(int(s3), 12)
+        self.assertGreaterEqual(int(s4), 12)
+        self.assertEqual("10-50", padding)
+        self.assertEqual(44, len(key))
 
     def test_installer_has_resume_state_and_rotated_log(self):
         source = INSTALLER.read_text(encoding="utf-8")

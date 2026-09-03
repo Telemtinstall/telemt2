@@ -1,10 +1,17 @@
 [
   {
     "id": "amneziawg",
-    "title": "AmneziaWG",
+    "title": "AmneziaWG 2.0",
     "protocol": "amneziawg",
     "transport": "local",
     "command": "/usr/local/sbin/awgctl"
+  },
+  {
+    "id": "amneziawg3",
+    "title": "AmneziaWG 3.1",
+    "protocol": "amneziawg",
+    "transport": "local",
+    "command": "/usr/local/sbin/awg3ctl"
   },
   {
     "id": "vless",
