@@ -881,12 +881,12 @@ kernel_headers_ready() {
 }
 
 newest_installed_kernel() {
-  local dir kernel
+  local image kernel
   local kernels=()
 
   shopt -s nullglob
-  for dir in /lib/modules/*; do
-    kernel="${dir##*/}"
+  for image in /boot/vmlinuz-*; do
+    kernel="${image##*/vmlinuz-}"
     [[ -n "$kernel" ]] && kernels+=("$kernel")
   done
   shopt -u nullglob
@@ -896,15 +896,16 @@ newest_installed_kernel() {
 }
 
 newest_other_kernel_with_headers() {
-  local current dir kernel
+  local current image kernel modules
   local kernels=()
   current="$(uname -r)"
 
   shopt -s nullglob
-  for dir in /lib/modules/*; do
-    kernel="${dir##*/}"
+  for image in /boot/vmlinuz-*; do
+    kernel="${image##*/vmlinuz-}"
     [[ "$kernel" == "$current" ]] && continue
-    if [[ -e "$dir/build/Makefile" || -d "$dir/build/include" ]]; then
+    modules="/lib/modules/$kernel"
+    if [[ -e "$modules/build/Makefile" || -d "$modules/build/include" ]]; then
       kernels+=("$kernel")
     fi
   done
@@ -1024,7 +1025,7 @@ headers_kernel_from_apt_simulation() {
   local package="$1"
   apt-get -s install "$package" 2>/dev/null |
     awk '
-      $1 == "Inst" && $2 ~ /^linux-headers-[0-9]/ {
+      $1 == "Inst" && $2 ~ /^linux-headers-[0-9]/ && $2 !~ /-common$/ {
         sub(/^linux-headers-/, "", $2)
         print $2
       }
@@ -1034,7 +1035,8 @@ headers_kernel_from_apt_simulation() {
 }
 
 kernel_headers_reboot_preflight() {
-  local kernel headers_pkg newest_kernel fallback_pkg target_kernel
+  local kernel headers_pkg newest_kernel package
+  local packages=()
 
   kernel="$(uname -r)"
   headers_pkg="linux-headers-${kernel}"
@@ -1047,13 +1049,24 @@ kernel_headers_reboot_preflight() {
     die_reboot_required_for_kernel "$kernel" "$newest_kernel"
   fi
 
-  for fallback_pkg in linux-headers-amd64 linux-headers-generic; do
-    apt_package_has_candidate "$fallback_pkg" || continue
-    target_kernel="$(headers_kernel_from_apt_simulation "$fallback_pkg")"
-    if [[ -n "$target_kernel" && "$target_kernel" != "$kernel" ]]; then
-      die_reboot_required_for_kernel "$kernel" "$target_kernel"
-    fi
-  done
+  warn "headers для загруженного ядра ${kernel} недоступны в текущих репозиториях."
+  confirm "Установить актуальное ядро дистрибутива и linux-headers? y/yes: " ||
+    die "установите актуальные kernel/linux-headers и повторно запустите: $(resume_command)"
+
+  while IFS= read -r package; do
+    [[ -n "$package" ]] && packages+=("$package")
+  done < <(minimum_kernel_packages)
+  ((${#packages[@]} > 0)) ||
+    die "не удалось подобрать пакеты ядра для ${PRETTY_NAME:-этой ОС}"
+
+  apt_update_checked "обновление репозиториев перед установкой ядра" remove
+  retry_command "установка актуального ядра и headers" apt-get install -y "${packages[@]}"
+
+  newest_kernel="$(newest_other_kernel_with_headers)"
+  if kernel_is_newer_than_current "$kernel" "$newest_kernel"; then
+    die_reboot_required_for_kernel "$kernel" "$newest_kernel"
+  fi
+  die "после установки пакетов ${packages[*]} не найдено новое загрузочное ядро с headers в /boot и /lib/modules"
 }
 
 install_kernel_headers() {
