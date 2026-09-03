@@ -62,6 +62,36 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("minimum_kernel_preflight", awg_source)
         self.assertIn("AWG_RESUME_COMMAND", source)
 
+    def test_kernel_detection_ignores_header_common_package(self):
+        script = f'''\
+set -Eeuo pipefail
+export AWG_INSTALLER_LIBRARY_ONLY=1
+source "{AWG_INSTALLER}"
+apt-get() {{
+  printf '%s\\n' \\
+    'Inst linux-headers-6.12.107+deb13-common (6.12.107-1 Debian:13 [all])' \\
+    'Inst linux-headers-6.12.107+deb13-amd64 (6.12.107-1 Debian:13 [amd64])'
+}}
+headers_kernel_from_apt_simulation linux-headers-amd64
+'''
+        result = subprocess.run(
+            ["bash", "-c", script], check=True, text=True, capture_output=True
+        )
+        self.assertEqual("6.12.107+deb13-amd64", result.stdout.strip())
+
+        source = AWG_INSTALLER.read_text(encoding="utf-8")
+        installed_block = source.split("newest_installed_kernel()", 1)[1].split(
+            "newest_other_kernel_with_headers()", 1
+        )[0]
+        self.assertIn("/boot/vmlinuz-*", installed_block)
+        self.assertNotIn("/lib/modules/*", installed_block)
+
+        preflight = source.split("kernel_headers_reboot_preflight()", 1)[1].split(
+            "install_kernel_headers()", 1
+        )[0]
+        self.assertIn('apt-get install -y "${packages[@]}"', preflight)
+        self.assertIn("newest_other_kernel_with_headers", preflight)
+
     def test_vpn_shared_answers_are_not_asked_twice(self):
         source = INSTALLER.read_text(encoding="utf-8")
         self.assertEqual(1, source.count("Публичный IP/host для обоих VPN"))
