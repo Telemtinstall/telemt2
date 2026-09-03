@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# AmneziaWG installer for a fresh Debian 13+ / Ubuntu 24.04+ server.
+# AmneziaWG installer for a fresh Debian 13+ / Ubuntu 22.04+ server.
 # Modes:
 #   1. Plain AmneziaWG: UDP 1234 by default.
 #   2. HTTPS mask site: nginx serves a real HTTPS site on TCP 443,
@@ -41,6 +41,8 @@ ASSUME_YES="${ASSUME_YES:-0}"
 INSTALL_RETRIES="${INSTALL_RETRIES:-3}"
 RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-5}"
 AWG_PPA_CODENAME="${AWG_PPA_CODENAME:-}"
+AWG_MIN_KERNEL="${AWG_MIN_KERNEL:-6.7}"
+AWG_RESUME_COMMAND="${AWG_RESUME_COMMAND:-}"
 
 AWG_DIR="/etc/amnezia/amneziawg"
 CLIENT_DIR="$AWG_DIR/clients"
@@ -567,8 +569,8 @@ detect_os() {
       (( major >= 13 )) || die "нужен Debian 13 или новее. Обнаружено: Debian ${VERSION_ID:-unknown}."
       ;;
     ubuntu)
-      major="$(os_major_version)" || die "не удалось определить версию Ubuntu из /etc/os-release. Нужна Ubuntu 24.04 или новее."
-      (( major >= 24 )) || die "нужна Ubuntu 24.04 или новее. Обнаружено: Ubuntu ${VERSION_ID:-unknown}."
+      major="$(os_major_version)" || die "не удалось определить версию Ubuntu из /etc/os-release. Нужна Ubuntu 22.04 или новее."
+      (( major >= 22 )) || die "нужна Ubuntu 22.04 или новее. Обновите ОС. Обнаружено: Ubuntu ${VERSION_ID:-unknown}."
       ;;
     *) die "поддерживаются только Debian/Ubuntu. Обнаружено: ID=${ID:-unknown}." ;;
   esac
@@ -920,7 +922,72 @@ kernel_is_newer_than_current() {
 }
 
 resume_command() {
+  if [[ -n "$AWG_RESUME_COMMAND" ]]; then
+    printf '%s' "$AWG_RESUME_COMMAND"
+    return 0
+  fi
   printf 'cd %q && ./install_amneziawg.sh' "$SCRIPT_DIR"
+}
+
+kernel_meets_minimum() {
+  local current="${1%%-*}"
+  local current_major current_minor minimum_major minimum_minor
+  [[ "$current" =~ ^([0-9]+)\.([0-9]+) ]] || return 1
+  current_major="${BASH_REMATCH[1]}"
+  current_minor="${BASH_REMATCH[2]}"
+  [[ "$AWG_MIN_KERNEL" =~ ^([0-9]+)\.([0-9]+) ]] ||
+    die "некорректный AWG_MIN_KERNEL: $AWG_MIN_KERNEL"
+  minimum_major="${BASH_REMATCH[1]}"
+  minimum_minor="${BASH_REMATCH[2]}"
+  (( current_major > minimum_major ||
+     (current_major == minimum_major && current_minor >= minimum_minor) ))
+}
+
+minimum_kernel_packages() {
+  local major="${VERSION_ID%%.*}"
+  case "${ID:-}" in
+    ubuntu)
+      if (( major == 22 )); then
+        printf '%s\n' linux-generic-hwe-22.04 linux-headers-generic-hwe-22.04
+      else
+        printf '%s\n' linux-generic linux-headers-generic
+      fi
+      ;;
+    debian)
+      printf '%s\n' linux-image-amd64 linux-headers-amd64
+      ;;
+  esac
+}
+
+minimum_kernel_preflight() {
+  local current target package
+  local packages=()
+  current="$(uname -r)"
+  kernel_meets_minimum "$current" && return 0
+
+  echo
+  warn "ядро ${current} слишком старое для актуального AmneziaWG; требуется ${AWG_MIN_KERNEL} или новее."
+  confirm "Установить подходящее ядро и linux-headers? y/yes: " ||
+    die "обновите ядро до ${AWG_MIN_KERNEL}+ и повторно запустите: $(resume_command)"
+
+  while IFS= read -r package; do
+    [[ -n "$package" ]] && packages+=("$package")
+  done < <(minimum_kernel_packages)
+  ((${#packages[@]} > 0)) || die "не удалось подобрать пакет ядра для ${PRETTY_NAME:-этой ОС}"
+
+  apt_update_checked "обновление репозиториев перед установкой ядра" remove
+  retry_command "установка поддерживаемого ядра и headers" apt-get install -y "${packages[@]}"
+  target="$(newest_installed_kernel)"
+  [[ -n "$target" ]] && kernel_meets_minimum "$target" ||
+    die "новое ядро не найдено после установки пакетов: ${packages[*]}"
+
+  die "установлено ядро ${target}, но сейчас загружено ${current}. Выполните перезагрузку:
+
+  reboot
+
+После повторного входа продолжите той же установкой:
+
+  $(resume_command)"
 }
 
 die_reboot_required_for_kernel() {
@@ -1487,7 +1554,7 @@ verify_install() {
 main() {
   detect_os
   load_resume_config
-  echo "Установщик AmneziaWG для Debian 13+ / Ubuntu 24.04+."
+  echo "Установщик AmneziaWG для Debian 13+ / Ubuntu 22.04+."
   echo
   echo "Перед запуском:"
   echo "  1. Лучше использовать чистый сервер, особенно если HTTPS-маскировка занимает TCP 80/443."
@@ -1496,6 +1563,7 @@ main() {
   echo "  4. Не закрывайте текущую SSH-сессию, пока не проверите второй вход."
   echo
   echo "Проверяю текущее ядро и linux-headers для DKMS..."
+  minimum_kernel_preflight
   kernel_headers_reboot_preflight
   echo
   prompt_config
