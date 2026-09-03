@@ -87,6 +87,35 @@ WhatsApp Chat Proxy             -> proxy/whatsapp/
 
 Each service directory has its own `README.md` with Russian and English instructions.
 
+## VPN Manager Bot / VPN-бот
+
+RU: Войдите на Debian 13+ или Ubuntu 22.04+ как `root` и вставьте весь блок.
+Команда сама установит `curl` и корневые сертификаты, скачает актуальный
+установщик и запустит его. `sudo` на чистом сервере не требуется:
+
+```bash
+apt-get update &&
+apt-get install -y --no-install-recommends ca-certificates curl &&
+curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_bot.sh -o /tmp/install_bot.sh &&
+chmod +x /tmp/install_bot.sh &&
+/tmp/install_bot.sh
+```
+
+Подробная инструкция находится в
+[`bots/vpn-manager_awg/README.md`](bots/vpn-manager_awg/README.md).
+
+EN: Sign in to Debian 13+ or Ubuntu 22.04+ as `root` and paste the complete
+block. It installs `curl` and CA certificates, downloads the current installer,
+and starts it without requiring `sudo`:
+
+```bash
+apt-get update &&
+apt-get install -y --no-install-recommends ca-certificates curl &&
+curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_bot.sh -o /tmp/install_bot.sh &&
+chmod +x /tmp/install_bot.sh &&
+/tmp/install_bot.sh
+```
+
 ## Universal Telemt Installer / Единый установщик Telemt
 
 RU: Для обычной установки или обновления Telemt используйте одну точку входа.

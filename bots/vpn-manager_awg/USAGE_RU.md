@@ -17,13 +17,16 @@
 
 ## 2. Установка из GitHub
 
-Выполните на сервере:
+Войдите на сервер как `root` и вставьте весь блок. Он подходит для Debian и
+Ubuntu с пакетным менеджером `apt`, сам устанавливает средство загрузки и не
+требует `sudo`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_bot.sh \
-  -o /tmp/install_bot.sh
-chmod +x /tmp/install_bot.sh
-sudo /tmp/install_bot.sh
+apt-get update &&
+apt-get install -y --no-install-recommends ca-certificates curl &&
+curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_bot.sh -o /tmp/install_bot.sh &&
+chmod +x /tmp/install_bot.sh &&
+/tmp/install_bot.sh
 ```
 
 Загрузчик скачает репозиторий в `/root/telemt2`, проверит контрольные суммы и
