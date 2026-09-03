@@ -10,14 +10,16 @@
 
 ## Быстрый запуск на новом сервере
 
-Для установки прямо из GitHub скачайте только загрузчик и запустите его от
-`root`:
+Войдите на Debian 13+ или Ubuntu 22.04+ как `root` и вставьте весь блок.
+Команда сама установит `curl` и корневые сертификаты, скачает загрузчик и
+запустит его. `sudo` на чистом сервере не требуется:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_bot.sh \
-  -o /tmp/install_bot.sh
-chmod +x /tmp/install_bot.sh
-sudo /tmp/install_bot.sh
+apt-get update &&
+apt-get install -y --no-install-recommends ca-certificates curl &&
+curl -fsSL https://raw.githubusercontent.com/Telemtinstall/telemt2/main/bots/vpn-manager_awg/install_bot.sh -o /tmp/install_bot.sh &&
+chmod +x /tmp/install_bot.sh &&
+/tmp/install_bot.sh
 ```
 
 Загрузчик скачает или безопасно обновит репозиторий в `/root/telemt2`, проверит
