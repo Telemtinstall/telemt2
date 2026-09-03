@@ -11,6 +11,7 @@ REPO_DIR="${REPO_DIR:-/root/telemt2}"
 INSTALL_DIR="${INSTALL_DIR:-/root/vpnbot}"
 BACKUP_ROOT="${BACKUP_ROOT:-/root/vpnbot-backups}"
 AWGCTL_PATH="${AWGCTL_PATH:-/usr/local/sbin/awgctl}"
+AWG3CTL_PATH="${AWG3CTL_PATH:-/usr/local/sbin/awg3ctl}"
 VLESSCTL_PATH="${VLESSCTL_PATH:-/usr/local/sbin/vlessctl}"
 SERVER_STATUS_PATH="${SERVER_STATUS_PATH:-/usr/local/sbin/server-status}"
 SPEEDTEST_PATH="${SPEEDTEST_PATH:-/usr/local/sbin/vpn-speedtest}"
@@ -239,7 +240,7 @@ usage() {
 Опции:
   --dry-run       проверить пакет и показать план без изменений
   --auto, -y      автоматический режим; токен и ADMIN_BOT передаются через env
-  --skip-awg      не устанавливать AWG, но проверить существующий awgctl
+  --skip-awg      не устанавливать AWG 2.0/3.1, но проверить оба контроллера
   --skip-vless    не устанавливать VLESS, но проверить существующий vlessctl
   --vless-mask    запустить VLESS с доменной HTTPS-маскировкой
   --vless-direct  прямой VLESS WebSocket на TCP 443
@@ -296,7 +297,8 @@ print_plan() {
   каталог бота:       $INSTALL_DIR
   репозиторий VPN:    $REPO_URL ($REPO_BRANCH)
   VPN-компоненты:     аудит и вопрос об установке/обновлении
-  AmneziaWG:          $([[ "$SKIP_AWG" == "1" ]] && echo 'только проверка' || echo 'совместимая версия, DNS-профиль')
+  AmneziaWG 2.0:      $([[ "$SKIP_AWG" == "1" ]] && echo 'только проверка' || echo 'отдельный awg0, DNS-профиль')
+  AmneziaWG 3.1:      $([[ "$SKIP_AWG" == "1" ]] && echo 'только проверка' || echo 'отдельный awg3, AWG 3.x профиль')
   VLESS:              $([[ "$SKIP_VLESS" == "1" ]] && echo 'только проверка' || echo "совместимая версия, режим $VLESS_MODE")
   дополнительное ПО: аудит версий и вопрос об установке/обновлении
   SQLite traffic:     ежедневно в 23:59 UTC
@@ -460,7 +462,8 @@ controller_status() {
 
 audit_vpn_components() {
   echo "VPN-компоненты:"
-  controller_status "AmneziaWG" "$AWGCTL_PATH" "$REPO_DIR/vpn/amneziawg/awgctl.sh"
+  controller_status "AWG 2.0" "$AWGCTL_PATH" "$REPO_DIR/vpn/amneziawg/awgctl.sh"
+  controller_status "AWG 3.1" "$AWG3CTL_PATH" "$REPO_DIR/vpn/amneziawg/awgctl.sh"
   controller_status "VLESS" "$VLESSCTL_PATH" "$REPO_DIR/vpn/vless/vlessctl.sh"
 }
 
@@ -482,15 +485,15 @@ PY
 }
 
 vpn_install_is_needed() {
-  ! valid_ctl "$AWGCTL_PATH" || ! valid_ctl "$VLESSCTL_PATH"
+  ! valid_ctl "$AWGCTL_PATH" || ! valid_ctl "$AWG3CTL_PATH" || ! valid_ctl "$VLESSCTL_PATH"
 }
 
 collect_shared_vpn_settings() {
   local detected=""
   [[ -n "$VPN_PUBLIC_HOST" ]] || detected="$(detect_public_host)"
-  prompt_value VPN_PUBLIC_HOST "Публичный IP/host для обоих VPN" "$detected"
+  prompt_value VPN_PUBLIC_HOST "Публичный IP/host для всех VPN" "$detected"
   [[ -n "$VPN_PUBLIC_HOST" ]] || die "не удалось определить публичный IP/host"
-  prompt_value VPN_INITIAL_CLIENT "Имя первого пользователя в обоих VPN" "vpnuser1"
+  prompt_value VPN_INITIAL_CLIENT "Имя первого пользователя во всех VPN" "vpnuser1"
   [[ "$VPN_INITIAL_CLIENT" =~ ^[A-Za-z0-9_.@-]{1,64}$ ]] ||
     die "имя первого пользователя должно содержать 1-64 символа: буквы, цифры, точка, _, -, @"
   save_resume_config
@@ -514,22 +517,25 @@ prepare_vpn_components() {
   local vless_source="$REPO_DIR/vpn/vless/vlessctl.sh"
   audit_vpn_components
   choose_yes_no INSTALL_VPN_COMPONENTS \
-    "Установить/обновить AmneziaWG и VLESS, совместимые с ботом?"
+    "Установить/обновить AmneziaWG 2.0, AmneziaWG 3.1 и VLESS, совместимые с ботом?"
 
   if [[ "$INSTALL_VPN_COMPONENTS" == "0" ]]; then
     controller_is_current "$AWGCTL_PATH" "$awg_source" ||
-      die "AmneziaWG не соответствует версии бота; разрешите установку/обновление"
+      die "AmneziaWG 2.0 не соответствует версии бота; разрешите установку/обновление"
+    valid_ctl "$AWG3CTL_PATH" && cmp -s "$AWG3CTL_PATH" "$awg_source" ||
+      die "AmneziaWG 3.1 не соответствует версии бота; разрешите установку/обновление"
     controller_is_current "$VLESSCTL_PATH" "$vless_source" ||
       die "VLESS не соответствует версии бота; разрешите установку/обновление"
-    echo "Оба VPN-протокола уже совместимы; их обновление пропущено."
+    echo "Все три VPN-варианта уже совместимы; их обновление пропущено."
     return 0
   fi
 
   if vpn_install_is_needed; then
-    echo "Общие настройки будут использованы для обоих протоколов."
+    echo "Общие endpoint и имя первого пользователя будут использованы для трёх вариантов VPN."
     collect_shared_vpn_settings
   fi
   ensure_awg
+  ensure_awg3
   ensure_vless
 }
 
@@ -554,6 +560,47 @@ ensure_awg() {
     AWG_RESUME_COMMAND="$REPO_DIR/bots/vpn-manager_awg/install_bot.sh" \
     ./install_amneziawg.sh)
   valid_ctl "$AWGCTL_PATH" || die "awgctl не прошёл JSON-проверку"
+}
+
+ensure_awg3() {
+  local awg_source="$REPO_DIR/vpn/amneziawg/awgctl.sh"
+  if valid_ctl "$AWG3CTL_PATH"; then
+    if ! cmp -s "$AWG3CTL_PATH" "$awg_source"; then
+      install -m 0755 "$awg_source" "$AWG3CTL_PATH"
+      ln -sfn "$AWG3CTL_PATH" /usr/local/bin/awg3ctl
+      valid_ctl "$AWG3CTL_PATH" || die "awg3ctl не прошёл проверку после обновления"
+      echo "awg3ctl обновлён до версии из текущего репозитория."
+    else
+      echo "AmneziaWG 3.1 уже готов: $AWG3CTL_PATH"
+    fi
+    return 0
+  fi
+  [[ "$SKIP_AWG" != "1" ]] || die "--skip-awg указан, но рабочий awg3ctl не найден"
+  step "Установка отдельного AmneziaWG 3.1"
+  chmod +x "$REPO_DIR/vpn/amneziawg/install_amneziawg.sh" "$awg_source"
+  (cd "$REPO_DIR/vpn/amneziawg" && \
+    ASSUME_YES=1 \
+    AWG_OBFS_PROFILE=awg3 \
+    AWG_IFACE=awg3 \
+    AWG_PORT=1235 \
+    AWG_SUBNET=10.89.89.0/24 \
+    AWG_SERVER_IP=10.89.89.1 \
+    PUBLIC_ENDPOINT="$VPN_PUBLIC_HOST" \
+    CLIENT_NAME="$VPN_INITIAL_CLIENT" \
+    CLIENT_DIR=/etc/amnezia/amneziawg/clients-awg3 \
+    CLIENT_OUT_DIR=/root/amneziawg3-clients \
+    ENV_FILE=/etc/amnezia/amneziawg/awg3ctl.env \
+    CTL_PATH="$AWG3CTL_PATH" \
+    CTL_BIN_PATH=/usr/local/bin/awg3ctl \
+    STATE_FILE=/root/.install_amneziawg3.state \
+    RESUME_CONFIG=/root/.install_amneziawg3.config \
+    CONFIG_HASH_FILE=/root/.install_amneziawg3.config.sha256 \
+    BACKUP_ROOT=/root/amneziawg3-install-backups \
+    SERVER_PRIVATE_KEY_FILE=/etc/amnezia/amneziawg/server_private_awg3.key \
+    SERVER_PUBLIC_KEY_FILE=/etc/amnezia/amneziawg/server_public_awg3.key \
+    AWG_RESUME_COMMAND="$REPO_DIR/bots/vpn-manager_awg/install_bot.sh" \
+    ./install_amneziawg.sh)
+  valid_ctl "$AWG3CTL_PATH" || die "awg3ctl не прошёл JSON-проверку"
 }
 
 ensure_vless() {
@@ -769,11 +816,13 @@ PY
 verify_installation() {
   python3 -m py_compile "$INSTALL_DIR/bot.py" "$INSTALL_DIR/traffic_collect.py" "$INSTALL_DIR/channel_collect.py" "$INSTALL_DIR"/app/*.py "$SERVER_STATUS_PATH"
   valid_ctl "$AWGCTL_PATH" || die "финальная проверка awgctl не пройдена"
+  valid_ctl "$AWG3CTL_PATH" || die "финальная проверка awg3ctl не пройдена"
   valid_ctl "$VLESSCTL_PATH" || die "финальная проверка vlessctl не пройдена"
   "$SERVER_STATUS_PATH" -j | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("ok") else 1)'
   [[ -x "$SPEEDTEST_PATH" ]] || die "не установлен $SPEEDTEST_PATH"
   systemctl is-active --quiet vpnbot.service || die "vpnbot.service не активен"
   systemctl is-active --quiet awg-quick@awg0.service || die "AWG service не активен"
+  systemctl is-active --quiet awg-quick@awg3.service || die "AWG 3.1 service не активен"
   systemctl is-active --quiet xray.service || die "xray.service не активен"
   systemctl is-active --quiet vpnbot-traffic.timer || die "traffic timer не активен"
   systemctl is-active --quiet vpnbot-channel.timer || die "channel timer не активен"
@@ -794,7 +843,7 @@ main() {
   print_plan
   run_resumable_step extra_software "Проверка дополнительного ПО" prepare_extra_software
   run_resumable_step repository "Загрузка или обновление telemt2" ensure_repo
-  run_resumable_step vpn_components "Проверка AmneziaWG и VLESS" prepare_vpn_components
+  run_resumable_step vpn_components "Проверка AmneziaWG 2.0, AmneziaWG 3.1 и VLESS" prepare_vpn_components
 
   if ! step_done bot_payload; then
     step "Настройки Telegram и канала"

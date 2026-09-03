@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ENV_FILE="/etc/amnezia/amneziawg/awgctl.env"
+case "$(basename "$0")" in
+  awg3ctl) ENV_FILE="${AWG_ENV_FILE:-/etc/amnezia/amneziawg/awg3ctl.env}" ;;
+  *) ENV_FILE="${AWG_ENV_FILE:-/etc/amnezia/amneziawg/awgctl.env}" ;;
+esac
 JSON_OUTPUT="${JSON_OUTPUT:-0}"
 
 json_escape() {
@@ -363,13 +366,22 @@ for key in required_awg:
         raise SystemExit("missing required AmneziaWG field: " + key)
     last_config[key] = values[key]
 
-optional_awg = ["S3", "S4", "I1", "I2", "I3", "I4", "I5"]
+optional_awg = [
+    "S3", "S4", "I1", "I2", "I3", "I4", "I5",
+    "HeaderProtectionKey", "ContentPaddingAddition", "RekeyAfterTime",
+    "RekeyTimeout", "RejectAfterTime", "KeepaliveTimeout",
+    "MaxHandshakeAttempts",
+]
 for key in optional_awg:
     if values.get(key):
         last_config[key] = values[key]
 
 protocol_version = ""
-if values.get("S3") and values.get("S4"):
+container = "amnezia-awg"
+if values.get("HeaderProtectionKey"):
+    protocol_version = "3"
+    container = "amnezia-awg3"
+elif values.get("S3") and values.get("S4"):
     protocol_version = "2"
 elif any(values.get(key) for key in ["I1", "I2", "I3", "I4", "I5"]):
     protocol_version = "1.5"
@@ -388,11 +400,11 @@ server_json = {
     "hostName": host,
     "containers": [
         {
-            "container": "amnezia-awg",
+            "container": container,
             "awg": awg_config,
         }
     ],
-    "defaultContainer": "amnezia-awg",
+    "defaultContainer": container,
 }
 if len(dns_values) >= 1:
     server_json["dns1"] = dns_values[0]
@@ -482,8 +494,8 @@ load_env() {
   [[ -r "$ENV_FILE" ]] || die_with_status 404 not_found "env-файл не найден: $ENV_FILE"
   # shellcheck disable=SC1090
   . "$ENV_FILE"
-  AWG_CONFIG="${AWG_DIR}/${AWG_IFACE}.conf"
-  SERVER_PUBLIC_KEY_FILE="${AWG_DIR}/server_public.key"
+  AWG_CONFIG="${AWG_CONFIG:-${AWG_DIR}/${AWG_IFACE}.conf}"
+  SERVER_PUBLIC_KEY_FILE="${SERVER_PUBLIC_KEY_FILE:-${AWG_DIR}/server_public.key}"
 }
 
 ensure_dirs() {
@@ -670,6 +682,13 @@ write_optional_awg_params() {
   [[ -n "${AWG_I3:-}" ]] && printf 'I3 = %s\n' "$AWG_I3"
   [[ -n "${AWG_I4:-}" ]] && printf 'I4 = %s\n' "$AWG_I4"
   [[ -n "${AWG_I5:-}" ]] && printf 'I5 = %s\n' "$AWG_I5"
+  [[ -n "${AWG_HEADER_PROTECTION_KEY:-}" ]] && printf 'HeaderProtectionKey = %s\n' "$AWG_HEADER_PROTECTION_KEY"
+  [[ -n "${AWG_CONTENT_PADDING_ADDITION:-}" ]] && printf 'ContentPaddingAddition = %s\n' "$AWG_CONTENT_PADDING_ADDITION"
+  [[ -n "${AWG_REKEY_AFTER_TIME:-}" ]] && printf 'RekeyAfterTime = %s\n' "$AWG_REKEY_AFTER_TIME"
+  [[ -n "${AWG_REKEY_TIMEOUT:-}" ]] && printf 'RekeyTimeout = %s\n' "$AWG_REKEY_TIMEOUT"
+  [[ -n "${AWG_REJECT_AFTER_TIME:-}" ]] && printf 'RejectAfterTime = %s\n' "$AWG_REJECT_AFTER_TIME"
+  [[ -n "${AWG_KEEPALIVE_TIMEOUT:-}" ]] && printf 'KeepaliveTimeout = %s\n' "$AWG_KEEPALIVE_TIMEOUT"
+  [[ -n "${AWG_MAX_HANDSHAKE_ATTEMPTS:-}" ]] && printf 'MaxHandshakeAttempts = %s\n' "$AWG_MAX_HANDSHAKE_ATTEMPTS"
   return 0
 }
 

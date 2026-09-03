@@ -112,7 +112,7 @@ First client name [pipiska1]
 Enable nginx access logs for mask site? yes/no [no]
 ```
 
-`S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`. Для профиля `awg2` также могут генерироваться `S3`, `S4`, `I1-I5`.
+`S1`, `S2`, `H1`, `H2`, `H3`, `H4` генерируются автоматически и сохраняются в `/etc/amnezia/amneziawg/awgctl.env`. Для профиля `awg2` также могут генерироваться `S3`, `S4`, `I1-I5`. Профиль `awg3` добавляет `HeaderProtectionKey` и `ContentPaddingAddition`, требует `S1-S4 >= 12` и предназначен для клиентов AWG 3.x/3.1.
 MTU по умолчанию — `1280`. При необходимости его можно переопределить переменной окружения `AWG_MTU`.
 Автоматические значения соблюдают диапазоны из документации AmneziaWG 2.0: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, `H1-H4` не пересекаются. Для диагностического профиля `plain` допускаются нулевые значения.
 По умолчанию используется UDP-порт `1234`, потому что в официальном troubleshooting отмечено: некоторые провайдеры в РФ могут блокировать UDP-порты выше `9999`. Если порт `1234` не подходит, пробуйте `AWG_PORT=443`.
@@ -485,7 +485,7 @@ First client name [pipiska1]
 Enable nginx access logs for mask site? yes/no [no]
 ```
 
-`S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`. The `awg2` profile may also generate `S3`, `S4`, and `I1-I5`.
+`S1`, `S2`, `H1`, `H2`, `H3`, `H4` are generated automatically and saved in `/etc/amnezia/amneziawg/awgctl.env`. The `awg2` profile may also generate `S3`, `S4`, and `I1-I5`. The `awg3` profile adds `HeaderProtectionKey` and `ContentPaddingAddition`, enforces `S1-S4 >= 12`, and targets AWG 3.x/3.1 clients.
 The default MTU is `1280`. Override it with the `AWG_MTU` environment variable if needed.
 Generated values follow AmneziaWG 2.0 documentation ranges: `Jc=1..10`, `Jmin/Jmax=64..1024`, `S1/S2/S3=0..64`, `S4=0..32`, and non-overlapping `H1-H4`. The diagnostic `plain` profile allows zero values.
 The default UDP port is `1234` because the official troubleshooting notes that some providers in Russia may block UDP ports above `9999`. If `1234` does not work, try `AWG_PORT=443`.

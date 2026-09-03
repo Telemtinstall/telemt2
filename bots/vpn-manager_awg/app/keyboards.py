@@ -20,10 +20,6 @@ CHANNEL_30D = "30 дней"
 
 
 def protocol_label(server) -> str:
-    if server.protocol == "amneziawg":
-        return "AmneziaWG"
-    if server.protocol == "vless":
-        return "VLESS"
     return server.title
 
 
