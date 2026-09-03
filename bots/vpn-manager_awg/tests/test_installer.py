@@ -40,6 +40,15 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("speedtest-cli", source)
         self.assertIn("apt-cache policy", source)
 
+    def test_package_candidate_does_not_trigger_pipefail_sigpipe(self):
+        source = INSTALLER.read_text(encoding="utf-8")
+        block = source.split("package_candidate()", 1)[1].split(
+            "audit_extra_software()", 1
+        )[0]
+        self.assertNotIn("apt-cache policy \"$1\" 2>/dev/null |", block)
+        self.assertIn("policy=\"$(apt-cache policy", block)
+        self.assertIn("<<< \"$policy\"", block)
+
     def test_vpn_shared_answers_are_not_asked_twice(self):
         source = INSTALLER.read_text(encoding="utf-8")
         self.assertEqual(1, source.count("Публичный IP/host для обоих VPN"))
