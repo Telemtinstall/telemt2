@@ -813,6 +813,27 @@ if not data.get("ok"):
 PY
 }
 
+protocol_expected_enabled() {
+  local server_id="$1"
+  python3 - "$INSTALL_DIR/access.sqlite3" "$server_id" <<'PY'
+import sqlite3
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    raise SystemExit(0)
+try:
+    with sqlite3.connect(path) as db:
+        row = db.execute(
+            "SELECT enabled FROM protocol_states WHERE server_id = ?", (sys.argv[2],)
+        ).fetchone()
+except sqlite3.Error:
+    raise SystemExit(0)
+raise SystemExit(0 if row is None or bool(row[0]) else 1)
+PY
+}
+
 verify_installation() {
   python3 -m py_compile "$INSTALL_DIR/bot.py" "$INSTALL_DIR/traffic_collect.py" "$INSTALL_DIR/channel_collect.py" "$INSTALL_DIR"/app/*.py "$SERVER_STATUS_PATH"
   valid_ctl "$AWGCTL_PATH" || die "финальная проверка awgctl не пройдена"
@@ -821,9 +842,15 @@ verify_installation() {
   "$SERVER_STATUS_PATH" -j | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("ok") else 1)'
   [[ -x "$SPEEDTEST_PATH" ]] || die "не установлен $SPEEDTEST_PATH"
   systemctl is-active --quiet vpnbot.service || die "vpnbot.service не активен"
-  systemctl is-active --quiet awg-quick@awg0.service || die "AWG service не активен"
-  systemctl is-active --quiet awg-quick@awg3.service || die "AWG 3.1 service не активен"
-  systemctl is-active --quiet xray.service || die "xray.service не активен"
+  if protocol_expected_enabled amneziawg; then
+    systemctl is-active --quiet awg-quick@awg0.service || die "AWG service не активен"
+  fi
+  if protocol_expected_enabled amneziawg3; then
+    systemctl is-active --quiet awg-quick@awg3.service || die "AWG 3.1 service не активен"
+  fi
+  if protocol_expected_enabled vless; then
+    systemctl is-active --quiet xray.service || die "xray.service не активен"
+  fi
   systemctl is-active --quiet vpnbot-traffic.timer || die "traffic timer не активен"
   systemctl is-active --quiet vpnbot-channel.timer || die "channel timer не активен"
 }

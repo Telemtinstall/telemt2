@@ -75,9 +75,123 @@ class AccessStore:
 
             CREATE INDEX IF NOT EXISTS invite_tokens_profile
             ON invite_tokens (server_id, vpn_user_name, created_at);
+
+            CREATE TABLE IF NOT EXISTS bot_admins (
+                telegram_user_id TEXT PRIMARY KEY,
+                telegram_username TEXT,
+                telegram_first_name TEXT,
+                telegram_last_name TEXT,
+                added_at TIMESTAMP NOT NULL,
+                added_by TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS protocol_states (
+                server_id TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+                changed_at TIMESTAMP NOT NULL,
+                changed_by TEXT NOT NULL
+            );
             """
         )
         db.commit()
+
+    def is_dynamic_admin(self, telegram_user_id: str) -> bool:
+        with closing(self.connect()) as db:
+            row = db.execute(
+                "SELECT 1 FROM bot_admins WHERE telegram_user_id = ?",
+                (str(telegram_user_id),),
+            ).fetchone()
+        return bool(row)
+
+    def add_admin(self, telegram_user: dict, added_by: str) -> dict:
+        telegram_user_id = str(telegram_user.get("id") or "").strip()
+        if not telegram_user_id.isdigit():
+            raise ValueError("нужен числовой Telegram ID")
+        added_at = self.timestamp(self.now())
+        values = (
+            telegram_user_id,
+            telegram_user.get("username"),
+            telegram_user.get("first_name"),
+            telegram_user.get("last_name"),
+            added_at,
+            str(added_by),
+        )
+        with closing(self.connect()) as db:
+            with db:
+                db.execute(
+                    """
+                    INSERT INTO bot_admins (
+                        telegram_user_id, telegram_username, telegram_first_name,
+                        telegram_last_name, added_at, added_by
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(telegram_user_id) DO UPDATE SET
+                        telegram_username = excluded.telegram_username,
+                        telegram_first_name = excluded.telegram_first_name,
+                        telegram_last_name = excluded.telegram_last_name,
+                        added_at = excluded.added_at,
+                        added_by = excluded.added_by
+                    """,
+                    values,
+                )
+        return {
+            "telegram_user_id": telegram_user_id,
+            "telegram_username": telegram_user.get("username"),
+            "telegram_first_name": telegram_user.get("first_name"),
+            "telegram_last_name": telegram_user.get("last_name"),
+            "added_at": added_at,
+            "added_by": str(added_by),
+        }
+
+    def list_admins(self) -> list[dict]:
+        with closing(self.connect()) as db:
+            rows = db.execute(
+                "SELECT * FROM bot_admins ORDER BY added_at, telegram_user_id"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def remove_admin(self, telegram_user_id: str) -> bool:
+        with closing(self.connect()) as db:
+            with db:
+                cursor = db.execute(
+                    "DELETE FROM bot_admins WHERE telegram_user_id = ?",
+                    (str(telegram_user_id),),
+                )
+        return cursor.rowcount > 0
+
+    def protocol_enabled(self, server_id: str) -> bool:
+        with closing(self.connect()) as db:
+            row = db.execute(
+                "SELECT enabled FROM protocol_states WHERE server_id = ?",
+                (server_id,),
+            ).fetchone()
+        return True if row is None else bool(row["enabled"])
+
+    def set_protocol_enabled(self, server_id: str, enabled: bool, changed_by: str) -> None:
+        with closing(self.connect()) as db:
+            with db:
+                db.execute(
+                    """
+                    INSERT INTO protocol_states (server_id, enabled, changed_at, changed_by)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(server_id) DO UPDATE SET
+                        enabled = excluded.enabled,
+                        changed_at = excluded.changed_at,
+                        changed_by = excluded.changed_by
+                    """,
+                    (
+                        server_id,
+                        1 if enabled else 0,
+                        self.timestamp(self.now()),
+                        str(changed_by),
+                    ),
+                )
+
+    def disabled_protocol_ids(self) -> set[str]:
+        with closing(self.connect()) as db:
+            rows = db.execute(
+                "SELECT server_id FROM protocol_states WHERE enabled = 0"
+            ).fetchall()
+        return {str(row["server_id"]) for row in rows}
 
     def create_invite(
         self,

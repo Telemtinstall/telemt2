@@ -42,6 +42,11 @@ def main() -> None:
     state = BotState()
     traffic_store = TrafficStore(settings.traffic_db_dir, settings.traffic_timezone)
     access_store = AccessStore(settings.access_db_path, settings.access_invite_hours)
+    for server_id in access_store.disabled_protocol_ids():
+        try:
+            servers.get(server_id).set_enabled(False)
+        except Exception as exc:
+            log.error("could not enforce disabled protocol %s: %s", server_id, exc)
     channel_store = ChannelStore(
         settings.channel_db_path,
         settings.channel_interface,
@@ -66,6 +71,8 @@ def main() -> None:
 
     try:
         telegram.set_bot_commands()
+        for admin in access_store.list_admins():
+            telegram.set_admin_commands(admin["telegram_user_id"])
     except Exception as exc:
         log.warning("could not set bot commands: %s", exc)
 

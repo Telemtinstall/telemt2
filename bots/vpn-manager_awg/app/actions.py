@@ -27,13 +27,26 @@ class Actions:
         self.access_store = access_store
         self.channel_store = channel_store
 
+    def protocol_enabled(self, server_id: str) -> bool:
+        return not self.access_store or self.access_store.protocol_enabled(server_id)
+
+    def enabled_servers(self) -> list:
+        return [server for server in self.servers.servers if self.protocol_enabled(server.id)]
+
+    def require_protocol_enabled(self, server_id: str) -> None:
+        if not self.protocol_enabled(server_id):
+            raise RuntimeError("этот VPN-протокол временно отключён администратором")
+
     def show_menu(self, chat_id: int, message_id: int | None = None) -> None:
+        admin_ids = set(self.settings.allowed_users)
+        if self.access_store:
+            admin_ids.update(item["telegram_user_id"] for item in self.access_store.list_admins())
         text = formatters.menu_text(
             self.settings.bot_title,
-            self.settings.allowed_users,
+            admin_ids,
             self.menu_stats(),
         )
-        markup = keyboards.main_menu(self.servers.servers)
+        markup = keyboards.main_menu(self.enabled_servers())
         self.telegram.send_message(chat_id, text, markup)
 
     def show_protocol_menu(
@@ -42,6 +55,7 @@ class Actions:
         server_id: str,
         message_id: int | None = None,
     ) -> None:
+        self.require_protocol_enabled(server_id)
         server = self.servers.get(server_id)
         text = (
             f"<b>{formatters.h(server.title)}</b>\n\n"
@@ -59,7 +73,7 @@ class Actions:
         self.telegram.send_message(
             chat_id,
             f"<b>Выберите протокол</b>\n\nПротокол для {purpose}:",
-            keyboards.protocol_picker(self.servers.servers),
+            keyboards.protocol_picker(self.enabled_servers()),
         )
 
     def show_admin_menu(self, chat_id: int) -> None:
@@ -68,6 +82,165 @@ class Actions:
             "<b>Администрирование</b>\n\nВыберите действие:",
             keyboards.admin_menu(),
         )
+
+    def show_admin_traffic_menu(self, chat_id: int) -> None:
+        self.telegram.send_message(
+            chat_id,
+            "<b>Трафик и сеть</b>\n\n"
+            "Графики и CSV отправляются при входе через кнопку «Трафик». "
+            "Выберите действие:",
+            keyboards.traffic_admin_menu(),
+        )
+
+    def show_settings_menu(self, chat_id: int) -> None:
+        self.telegram.send_message(
+            chat_id,
+            "<b>Настройки</b>\n\nВыберите раздел:",
+            keyboards.settings_menu(),
+        )
+
+    def show_protocol_settings(self, chat_id: int) -> None:
+        lines = ["<b>Протоколы</b>", "", "🟢 включён · 🔴 отключён", "Нажмите протокол для изменения состояния."]
+        self.telegram.send_message(
+            chat_id,
+            "\n".join(lines),
+            keyboards.protocols_menu(self.servers.servers, self.protocol_enabled),
+        )
+
+    def ask_protocol_toggle(self, chat_id: int, server_id: str) -> None:
+        server = self.servers.get(server_id)
+        currently_enabled = self.protocol_enabled(server_id)
+        target = not currently_enabled
+        action = "включить" if target else "отключить"
+        note = (
+            "После включения все ранее выданные профили снова заработают."
+            if target
+            else "Новые и текущие VPN-соединения перестанут работать. Пользователи и конфиги сохранятся."
+        )
+        self.telegram.send_message(
+            chat_id,
+            f"<b>{action.capitalize()} {formatters.h(server.title)}?</b>\n\n{note}",
+            keyboards.protocol_toggle_confirm(server_id, target),
+        )
+
+    def toggle_protocol(self, chat_id: int, server_id: str, enabled: bool, changed_by: str) -> None:
+        if not self.access_store:
+            raise RuntimeError("хранилище настроек не настроено")
+        server = self.servers.get(server_id)
+        previous = self.protocol_enabled(server_id)
+        try:
+            server.set_enabled(enabled)
+            self.access_store.set_protocol_enabled(server_id, enabled, changed_by)
+        except Exception:
+            try:
+                server.set_enabled(previous)
+            except Exception:
+                pass
+            raise
+        status = "включён" if enabled else "отключён"
+        self.telegram.send_message(
+            chat_id,
+            f"<b>{formatters.h(server.title)}</b> {status}.\n"
+            + ("Ранее выданные профили снова работают." if enabled else "Конфиги и пользователи сохранены."),
+        )
+        self.show_protocol_settings(chat_id)
+
+    def show_administrators_menu(self, chat_id: int) -> None:
+        self.telegram.send_message(
+            chat_id,
+            "<b>Администраторы</b>\n\nАдминистраторы из .env защищены от удаления.",
+            keyboards.administrators_menu(),
+        )
+
+    def prompt_add_admin(self, chat_id: int) -> None:
+        self.telegram.send_message(
+            chat_id,
+            "<b>Добавление администратора</b>\n\n"
+            "Введите числовой Telegram ID или перешлите сообщение нужного пользователя.\n"
+            "Если Telegram скрыл автора пересылки, потребуется ввести ID вручную.",
+            keyboards.admin_add_navigation(),
+        )
+
+    def show_admin_candidate(self, chat_id: int, candidate: dict) -> None:
+        details = formatters.telegram_person({
+            "telegram_user_id": candidate.get("id"),
+            "telegram_username": candidate.get("username"),
+            "telegram_first_name": candidate.get("first_name"),
+            "telegram_last_name": candidate.get("last_name"),
+        })
+        self.telegram.send_message(
+            chat_id,
+            "<b>Добавить администратора?</b>\n\n"
+            f"Пользователь: {details}\n"
+            f"Telegram ID: <code>{formatters.h(candidate.get('id'))}</code>",
+            keyboards.admin_add_confirm(str(candidate.get("id"))),
+        )
+
+    def add_admin(self, chat_id: int, candidate: dict, added_by: str) -> None:
+        if not self.access_store:
+            raise RuntimeError("хранилище настроек не настроено")
+        if str(candidate.get("id")) in self.settings.allowed_users:
+            raise ValueError("этот пользователь уже является администратором из .env")
+        admin = self.access_store.add_admin(candidate, added_by)
+        self.telegram.set_admin_commands(admin["telegram_user_id"])
+        self.telegram.send_message(
+            chat_id,
+            f"Администратор <code>{formatters.h(admin['telegram_user_id'])}</code> добавлен.",
+        )
+        self.show_administrators_menu(chat_id)
+
+    def all_admins(self) -> list[dict]:
+        protected = [
+            {"telegram_user_id": user_id, "source": "env"}
+            for user_id in sorted(self.settings.allowed_users, key=int)
+        ]
+        dynamic = self.access_store.list_admins() if self.access_store else []
+        return protected + [{**item, "source": "sqlite"} for item in dynamic]
+
+    def show_admin_list(self, chat_id: int) -> None:
+        admins = self.all_admins()
+        lines = ["<b>Администраторы</b>", ""]
+        for admin in admins:
+            marker = "🔒" if admin["source"] == "env" else "👤"
+            username = admin.get("telegram_username")
+            suffix = f" · @{formatters.h(username)}" if username else ""
+            lines.append(f"{marker} <code>{formatters.h(admin['telegram_user_id'])}</code>{suffix}")
+        self.telegram.send_message(chat_id, "\n".join(lines), keyboards.administrators_menu())
+
+    def show_admin_delete_list(self, chat_id: int) -> None:
+        admins = self.access_store.list_admins() if self.access_store else []
+        if not admins:
+            self.telegram.send_message(
+                chat_id,
+                "Удаляемых администраторов нет. Администраторы из .env защищены.",
+                keyboards.administrators_menu(),
+            )
+            return
+        self.telegram.send_message(
+            chat_id,
+            "<b>Удалить администратора</b>\n\nВыберите пользователя:",
+            keyboards.admin_delete_list(admins),
+        )
+
+    def ask_delete_admin(self, chat_id: int, telegram_user_id: str) -> None:
+        if telegram_user_id in self.settings.allowed_users:
+            raise ValueError("администратора из .env удалить через бот нельзя")
+        self.telegram.send_message(
+            chat_id,
+            f"Удалить администратора <code>{formatters.h(telegram_user_id)}</code>?",
+            keyboards.admin_delete_confirm(telegram_user_id),
+        )
+
+    def delete_admin(self, chat_id: int, telegram_user_id: str, current_user_id: str) -> None:
+        if telegram_user_id in self.settings.allowed_users:
+            raise ValueError("администратора из .env удалить через бот нельзя")
+        if str(telegram_user_id) == str(current_user_id):
+            raise ValueError("нельзя удалить самого себя; попросите другого администратора")
+        if not self.access_store or not self.access_store.remove_admin(telegram_user_id):
+            raise ValueError("администратор уже удалён или не найден")
+        self.telegram.set_user_commands(telegram_user_id)
+        self.telegram.send_message(chat_id, f"Администратор <code>{formatters.h(telegram_user_id)}</code> удалён.")
+        self.show_administrators_menu(chat_id)
 
     def show_server_status(self, chat_id: int) -> None:
         data = collect_status(self.settings.server_status_command)
@@ -122,7 +295,7 @@ class Actions:
 
     def menu_stats(self) -> dict | None:
         servers = []
-        for server in self.servers.servers:
+        for server in self.enabled_servers():
             try:
                 traffic = server.traffic()
                 servers.append(self.server_menu_stats(server, traffic))
@@ -156,12 +329,14 @@ class Actions:
         }
 
     def prompt_create(self, chat_id: int, user_id: str, server_id: str, message_id: int | None = None) -> None:
+        self.require_protocol_enabled(server_id)
         server = self.servers.get(server_id)
         self.state.set_pending_create(user_id, chat_id, server_id)
         text = formatters.create_prompt_text_for_server(server.title)
         self.telegram.send_message(chat_id, text, keyboards.create_navigation())
 
     def show_list(self, chat_id: int, server_id: str, message_id: int | None = None) -> None:
+        self.require_protocol_enabled(server_id)
         server = self.servers.get(server_id)
         clients = server.list_clients()
         if clients:
@@ -221,9 +396,16 @@ class Actions:
     def show_user_menu(self, chat_id: int, telegram_user_id: str) -> None:
         if not self.access_store:
             raise RuntimeError("хранилище доступа не настроено")
-        grants = self.access_store.grants_for_user(telegram_user_id)
+        grants = [
+            grant
+            for grant in self.access_store.grants_for_user(telegram_user_id)
+            if self.protocol_enabled(grant["server_id"])
+        ]
         if not grants:
-            self.telegram.send_message(chat_id, "Доступ к VPN-профилям не выдан.")
+            self.telegram.send_message(
+                chat_id,
+                "Доступные VPN-профили отсутствуют. Возможно, протокол временно отключён.",
+            )
             return
         self.telegram.send_message(
             chat_id,
@@ -239,6 +421,7 @@ class Actions:
         ref: str,
         message_id: int | None = None,
     ) -> None:
+        self.require_protocol_enabled(server_id)
         if not self.access_store or not self.access_store.owns(telegram_user_id, server_id, ref):
             raise PermissionError("нет доступа к этому VPN-профилю")
         server = self.servers.get(server_id)
@@ -324,6 +507,7 @@ class Actions:
         )
 
     def create_client(self, chat_id: int, server_id: str, name: str | None = None) -> str:
+        self.require_protocol_enabled(server_id)
         server = self.servers.get(server_id)
         data = server.add(name)
         client_name = data["name"]
@@ -360,6 +544,7 @@ class Actions:
         return client_name
 
     def send_qr_for_client(self, chat_id: int, server_id: str, ref: str, platform: str | None = None) -> None:
+        self.require_protocol_enabled(server_id)
         server = self.servers.get(server_id)
         data = server.qr(ref)
         name = data["name"]
@@ -550,7 +735,7 @@ class Actions:
         if not self.traffic_store:
             raise RuntimeError("хранилище трафика не настроено")
         server = self.servers.get(server_id)
-        data = server.traffic()
+        data = server.traffic() if self.protocol_enabled(server_id) else {}
         daily_chart, monthly_chart = self.traffic_store.chart_series(server, data=data)
         self.send_traffic_charts(chat_id, server, daily_chart, monthly_chart)
         daily, monthly = self.traffic_store.report_files(server, data)
@@ -652,6 +837,9 @@ class Actions:
     def show_all_online(self, chat_id: int) -> None:
         blocks = ["<b>Кто онлайн · все протоколы</b>"]
         for server in self.servers.servers:
+            if not self.protocol_enabled(server.id):
+                blocks.append(f"<b>{formatters.h(server.title)}</b>\n\n🔴 Протокол отключён")
+                continue
             try:
                 if server.is_vless:
                     data = server.online(self.settings.vless_online_interval_seconds)

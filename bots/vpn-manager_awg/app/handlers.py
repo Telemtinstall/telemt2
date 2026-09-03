@@ -33,9 +33,7 @@ class Handlers:
 
         user_id = auth.user_id_from_update(message)
         text = (message.get("text") or "").strip()
-        if not text:
-            return
-        command = text.split()[0].split("@", 1)[0].lower()
+        command = text.split()[0].split("@", 1)[0].lower() if text else ""
 
         if command == "/start" and len(text.split(maxsplit=1)) == 2:
             payload = text.split(maxsplit=1)[1].strip()
@@ -43,21 +41,31 @@ class Handlers:
                 self.claim_access(message, chat_id, user_id, payload[6:])
                 return
 
-        is_admin = auth.is_admin_id(self.settings, user_id)
+        is_admin = auth.is_admin_id(self.settings, user_id, self.access_store)
         has_user_access = bool(self.access_store and self.access_store.has_access(user_id))
         if not is_admin and not has_user_access:
             self.telegram.send_message(chat_id, "Доступ к боту не выдан.")
             return
         if not is_admin:
+            if not text:
+                return
             self.handle_user_message(chat_id, user_id, command, text)
             return
 
         try:
+            context = self.state.context(user_id, chat_id)
+            if context.get("screen") == "admin_add" and text not in {
+                keyboards.BACK,
+                keyboards.MAIN_MENU,
+            }:
+                self.accept_admin_candidate(message, chat_id, user_id, text)
+                return
+            if not text:
+                return
             if command in {"/start", "/help", "/menu"} or text == keyboards.MAIN_MENU:
                 self.show_main(chat_id, user_id)
                 return
 
-            context = self.state.context(user_id, chat_id)
             server = self.server_for_reply(text)
             if server:
                 pending_action = context.get("ref") if context.get("screen") == "choose_protocol" else None
@@ -90,16 +98,67 @@ class Handlers:
                 self.show_server_status(chat_id, user_id)
                 return
 
-            if text == keyboards.SPEEDTEST:
+            if text == keyboards.SETTINGS:
                 if context.get("screen") != "admin":
                     self.show_admin(chat_id, user_id)
+                    return
+                self.show_settings(chat_id, user_id)
+                return
+
+            if text == keyboards.PROTOCOLS:
+                if context.get("screen") != "admin_settings":
+                    self.show_settings(chat_id, user_id)
+                    return
+                self.show_protocol_settings(chat_id, user_id)
+                return
+
+            protocol_server = self.server_for_protocol_setting(text)
+            if protocol_server:
+                if context.get("screen") != "admin_protocols":
+                    self.show_protocol_settings(chat_id, user_id)
+                    return
+                self.actions.ask_protocol_toggle(chat_id, protocol_server.id)
+                return
+
+            if text == keyboards.ADMINISTRATORS:
+                if context.get("screen") != "admin_settings":
+                    self.show_settings(chat_id, user_id)
+                    return
+                self.show_administrators(chat_id, user_id)
+                return
+
+            if text == keyboards.ADD_ADMIN:
+                if context.get("screen") != "admin_administrators":
+                    self.show_administrators(chat_id, user_id)
+                    return
+                self.state.set_context(user_id, chat_id, "admin_add")
+                self.actions.prompt_add_admin(chat_id)
+                return
+
+            if text == keyboards.DELETE_ADMIN:
+                if context.get("screen") != "admin_administrators":
+                    self.show_administrators(chat_id, user_id)
+                    return
+                self.actions.show_admin_delete_list(chat_id)
+                return
+
+            if text == keyboards.ADMIN_LIST:
+                if context.get("screen") != "admin_administrators":
+                    self.show_administrators(chat_id, user_id)
+                    return
+                self.actions.show_admin_list(chat_id)
+                return
+
+            if text == keyboards.SPEEDTEST:
+                if context.get("screen") != "admin_traffic":
+                    self.show_admin_traffic(chat_id, user_id, send_reports=False)
                     return
                 self.show_speedtest(chat_id, user_id)
                 return
 
             if text == keyboards.CHANNEL_LOAD:
-                if context.get("screen") != "admin":
-                    self.show_admin(chat_id, user_id)
+                if context.get("screen") != "admin_traffic":
+                    self.show_admin_traffic(chat_id, user_id, send_reports=False)
                     return
                 self.show_channel_load(chat_id, user_id, "24")
                 return
@@ -150,17 +209,14 @@ class Handlers:
                 "онлайн",
                 "online",
             }:
-                if context.get("screen") == "admin":
+                if context.get("screen") in {"admin", "admin_traffic"}:
                     self.show_all_online(chat_id, user_id)
                 else:
                     self.open_online(chat_id, user_id, server_id)
                 return
 
             if command == "/traffic" or text == keyboards.TRAFFIC:
-                self.state.clear_pending_create(user_id, chat_id)
-                self.state.set_context(user_id, chat_id, "admin")
-                self.actions.send_all_traffic_reports(chat_id)
-                self.actions.show_admin_menu(chat_id)
+                self.show_admin_traffic(chat_id, user_id, send_reports=True)
                 return
 
             if text == keyboards.DOWNLOAD_CSV:
@@ -225,7 +281,7 @@ class Handlers:
     def show_main(self, chat_id: int, user_id: str) -> None:
         self.state.clear_pending_create(user_id, chat_id)
         self.state.set_context(user_id, chat_id, "main")
-        if auth.is_admin_id(self.settings, user_id):
+        if auth.is_admin_id(self.settings, user_id, self.access_store):
             self.actions.show_menu(chat_id)
         else:
             self.actions.show_user_menu(chat_id, user_id)
@@ -263,7 +319,11 @@ class Handlers:
             f"Telegram ID: <code>{formatters.h(grant['telegram_user_id'])}</code>\n"
             f"Активирован: <code>{formatters.h(grant['granted_at'])} UTC</code>"
         )
-        for admin_id in self.settings.allowed_users:
+        list_admins = getattr(self.access_store, "list_admins", None)
+        dynamic_admins = (
+            {item["telegram_user_id"] for item in list_admins()} if list_admins else set()
+        )
+        for admin_id in self.settings.allowed_users | dynamic_admins:
             try:
                 self.telegram.send_message(int(admin_id), notification)
             except Exception as exc:
@@ -280,6 +340,27 @@ class Handlers:
         self.state.clear_pending_create(user_id, chat_id)
         self.state.set_context(user_id, chat_id, "admin")
         self.actions.show_admin_menu(chat_id)
+
+    def show_admin_traffic(self, chat_id: int, user_id: str, send_reports: bool) -> None:
+        self.state.clear_pending_create(user_id, chat_id)
+        self.state.set_context(user_id, chat_id, "admin_traffic")
+        if send_reports:
+            self.actions.send_all_traffic_reports(chat_id)
+        self.actions.show_admin_traffic_menu(chat_id)
+
+    def show_settings(self, chat_id: int, user_id: str) -> None:
+        self.state.clear_pending_admin(user_id, chat_id)
+        self.state.set_context(user_id, chat_id, "admin_settings")
+        self.actions.show_settings_menu(chat_id)
+
+    def show_protocol_settings(self, chat_id: int, user_id: str) -> None:
+        self.state.set_context(user_id, chat_id, "admin_protocols")
+        self.actions.show_protocol_settings(chat_id)
+
+    def show_administrators(self, chat_id: int, user_id: str) -> None:
+        self.state.clear_pending_admin(user_id, chat_id)
+        self.state.set_context(user_id, chat_id, "admin_administrators")
+        self.actions.show_administrators_menu(chat_id)
 
     def show_server_status(self, chat_id: int, user_id: str) -> None:
         self.state.clear_pending_create(user_id, chat_id)
@@ -307,10 +388,49 @@ class Handlers:
         self.actions.show_protocol_picker(chat_id, action)
 
     def server_for_reply(self, text: str):
+        checker = getattr(type(self.actions), "protocol_enabled", None)
         for server in self.actions.servers.servers:
+            if checker and not self.actions.protocol_enabled(server.id):
+                continue
             if text.casefold() == keyboards.protocol_label(server).casefold():
                 return server
         return None
+
+    def server_for_protocol_setting(self, text: str):
+        normalized = text.strip()
+        if normalized.startswith(("🟢 ", "🔴 ")):
+            normalized = normalized[2:]
+        for server in self.actions.servers.servers:
+            if normalized.casefold() == keyboards.protocol_label(server).casefold():
+                return server
+        return None
+
+    @staticmethod
+    def forwarded_user(message: dict) -> dict | None:
+        legacy = message.get("forward_from")
+        if isinstance(legacy, dict) and legacy.get("id"):
+            return legacy
+        origin = message.get("forward_origin") or {}
+        sender = origin.get("sender_user") if origin.get("type") == "user" else None
+        if isinstance(sender, dict) and sender.get("id"):
+            return sender
+        return None
+
+    def accept_admin_candidate(self, message: dict, chat_id: int, user_id: str, text: str) -> None:
+        candidate = self.forwarded_user(message)
+        if not candidate and text.isdigit():
+            candidate = {"id": text}
+        if not candidate:
+            self.telegram.send_message(
+                chat_id,
+                "Не удалось определить Telegram ID. Введите числовой ID вручную или перешлите сообщение без скрытия автора.",
+                keyboards.admin_add_navigation(),
+            )
+            return
+        candidate = dict(candidate)
+        candidate["id"] = str(candidate.get("id"))
+        self.state.set_pending_admin(user_id, chat_id, candidate)
+        self.actions.show_admin_candidate(chat_id, candidate)
 
     def open_list(self, chat_id: int, user_id: str, server_id: str | None) -> None:
         if not server_id:
@@ -358,6 +478,14 @@ class Handlers:
             self.actions.show_channel_load(chat_id, ref or "24")
         elif screen == "admin_online":
             self.actions.show_all_online(chat_id)
+        elif screen == "admin_traffic":
+            self.actions.show_admin_traffic_menu(chat_id)
+        elif screen == "admin_settings":
+            self.actions.show_settings_menu(chat_id)
+        elif screen == "admin_protocols":
+            self.actions.show_protocol_settings(chat_id)
+        elif screen == "admin_administrators":
+            self.actions.show_administrators_menu(chat_id)
         elif screen == "admin":
             self.actions.show_admin_menu(chat_id)
         elif server_id:
@@ -381,7 +509,17 @@ class Handlers:
         screen = context.get("screen")
         server_id = context.get("server_id")
         ref = context.get("ref")
-        if screen in {"admin_status", "admin_speedtest", "admin_channel", "admin_online"}:
+        if screen in {"admin_speedtest", "admin_channel", "admin_online"}:
+            self.show_admin_traffic(chat_id, user_id, send_reports=False)
+        elif screen == "admin_status":
+            self.show_admin(chat_id, user_id)
+        elif screen in {"admin_protocols", "admin_administrators"}:
+            self.show_settings(chat_id, user_id)
+        elif screen == "admin_add":
+            self.show_administrators(chat_id, user_id)
+        elif screen == "admin_settings":
+            self.show_admin(chat_id, user_id)
+        elif screen == "admin_traffic":
             self.show_admin(chat_id, user_id)
         elif screen == "choose_protocol":
             self.show_main(chat_id, user_id)
@@ -416,7 +554,7 @@ class Handlers:
             self.telegram.answer_callback(callback_id, "Откройте бота в личном чате.", True)
             return
 
-        is_admin = auth.is_admin_id(self.settings, user_id)
+        is_admin = auth.is_admin_id(self.settings, user_id, self.access_store)
         has_user_access = bool(self.access_store and self.access_store.has_access(user_id))
         if not is_admin and not has_user_access:
             self.telegram.answer_callback(callback_id, "Нет доступа.", True)
@@ -435,6 +573,31 @@ class Handlers:
             self.telegram.answer_callback(callback_id)
             if data == "menu":
                 self.show_main(chat_id, user_id)
+            elif data == "protocolsettings":
+                self.show_protocol_settings(chat_id, user_id)
+            elif data == "admins":
+                self.show_administrators(chat_id, user_id)
+            elif data.startswith("ptoggle:"):
+                _, server_id, enabled_raw = callback_parts(data, "ptoggle", 2)
+                if enabled_raw not in {"0", "1"}:
+                    raise ValueError("некорректное состояние протокола")
+                self.state.set_context(user_id, chat_id, "admin_protocols")
+                self.actions.toggle_protocol(chat_id, server_id, enabled_raw == "1", user_id)
+            elif data.startswith("adminadd:"):
+                _, candidate_id = callback_parts(data, "adminadd", 1)
+                candidate = self.state.pending_admin_candidate(user_id, chat_id)
+                if not candidate or str(candidate.get("id")) != candidate_id:
+                    raise ValueError("подтверждение устарело; начните добавление заново")
+                self.state.clear_pending_admin(user_id, chat_id)
+                self.state.set_context(user_id, chat_id, "admin_administrators")
+                self.actions.add_admin(chat_id, candidate, user_id)
+            elif data.startswith("admindel:"):
+                _, target_id = callback_parts(data, "admindel", 1)
+                self.actions.ask_delete_admin(chat_id, target_id)
+            elif data.startswith("admindelyes:"):
+                _, target_id = callback_parts(data, "admindelyes", 1)
+                self.state.set_context(user_id, chat_id, "admin_administrators")
+                self.actions.delete_admin(chat_id, target_id, user_id)
             elif data.startswith("protocol:"):
                 _, server_id = callback_parts(data, "protocol", 1)
                 self.show_protocol(chat_id, user_id, server_id)
@@ -575,6 +738,7 @@ class Handlers:
         else:
             raise PermissionError("эта операция недоступна")
 
+        self.actions.require_protocol_enabled(server_id)
         if not self.access_store or not self.access_store.owns(user_id, server_id, ref):
             raise PermissionError("нет доступа к этому VPN-профилю")
         if action == "qr":

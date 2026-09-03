@@ -163,6 +163,27 @@ class TelegramAPI:
         for user_id in self.settings.allowed_users:
             self._set_private_chat_commands(user_id, admin_commands_json)
 
+    def set_admin_commands(self, user_id: str) -> None:
+        commands = [
+            {"command": "start", "description": "Главное меню"},
+            {"command": "create", "description": "Создать клиента"},
+            {"command": "list", "description": "Список клиентов"},
+            {"command": "online", "description": "Кто онлайн"},
+            {"command": "traffic", "description": "Трафик"},
+            {"command": "cancel", "description": "Отмена"},
+        ]
+        self._set_private_chat_commands(
+            str(user_id),
+            json.dumps(commands, ensure_ascii=False),
+        )
+
+    def set_user_commands(self, user_id: str) -> None:
+        commands = [{"command": "start", "description": "Мои VPN"}]
+        self._set_private_chat_commands(
+            str(user_id),
+            json.dumps(commands, ensure_ascii=False),
+        )
+
     def _set_private_chat_commands(self, user_id: str, commands_json: str) -> None:
         try:
             chat_id = int(user_id)
