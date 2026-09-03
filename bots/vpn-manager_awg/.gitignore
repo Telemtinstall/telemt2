@@ -1,4 +1,13 @@
 .env
+.env.*
+!.env.example
 __pycache__/
-*.pyc
-
+*.py[cod]
+*.sqlite
+*.sqlite3
+*.db
+traffic-data/
+reports/
+*.conf
+*.key
+.DS_Store

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "amneziawg",
+    "title": "AmneziaWG",
+    "protocol": "amneziawg",
+    "transport": "local",
+    "command": "/usr/local/sbin/awgctl"
+  },
+  {
+    "id": "vless",
+    "title": "VLESS",
+    "protocol": "vless",
+    "transport": "local",
+    "command": "/usr/local/sbin/vlessctl"
+  }
+]

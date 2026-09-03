@@ -5,18 +5,21 @@ import sys
 import time
 
 from app.actions import Actions
-from app.awgctl import Awgctl
+from app.access_store import AccessStore
 from app.config import load_settings
+from app.channel_store import ChannelStore
 from app.handlers import Handlers
+from app.servers import ServerRegistry
 from app.state import BotState
 from app.telegram_api import TelegramAPI
+from app.traffic_store import TrafficStore
 
 
 logging.basicConfig(
     level="CRITICAL",
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format="%(asctime)s %(levelname)s %(message)s",
 )
-log = logging.getLogger("vpnbotawg")
+log = logging.getLogger("vpnbot")
 running = True
 
 
@@ -35,12 +38,31 @@ def main() -> None:
     logging.getLogger().setLevel(settings.log_level)
 
     telegram = TelegramAPI(settings)
-    awgctl = Awgctl(settings.awgctl)
+    servers = ServerRegistry.from_file(settings.servers_path)
     state = BotState()
-    actions = Actions(settings, telegram, awgctl, state)
-    handlers = Handlers(settings, telegram, actions, state)
+    traffic_store = TrafficStore(settings.traffic_db_dir, settings.traffic_timezone)
+    access_store = AccessStore(settings.access_db_path, settings.access_invite_hours)
+    channel_store = ChannelStore(
+        settings.channel_db_path,
+        settings.channel_interface,
+        settings.channel_retention_days,
+    )
+    actions = Actions(
+        settings,
+        telegram,
+        servers,
+        state,
+        traffic_store,
+        access_store,
+        channel_store,
+    )
+    handlers = Handlers(settings, telegram, actions, state, access_store)
 
-    log.info("vpnbotawg started, admins=%s, awgctl=%s", len(settings.allowed_users), settings.awgctl)
+    log.info(
+        "vpnbot started, allowed_users=%s, servers=%s",
+        len(settings.allowed_users),
+        ",".join(server.id for server in servers.servers),
+    )
 
     try:
         telegram.set_bot_commands()
@@ -57,7 +79,7 @@ def main() -> None:
             log.warning("polling error: %s", exc)
             time.sleep(5)
 
-    log.info("vpnbotawg stopped")
+    log.info("vpnbot stopped")
 
 
 if __name__ == "__main__":

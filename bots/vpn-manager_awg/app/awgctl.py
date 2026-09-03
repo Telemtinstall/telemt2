@@ -5,23 +5,16 @@ import logging
 import subprocess
 
 
-log = logging.getLogger("vpnbotawg.awgctl")
+log = logging.getLogger("vpnbot.awgctl")
 
 
 class Awgctl:
-    def __init__(self, path: str, timeout: int = 120):
+    def __init__(self, path: str):
         self.path = path
-        self.timeout = timeout
 
     def run(self, *args: str) -> dict:
         cmd = [self.path, "-j", *args]
-        proc = subprocess.run(
-            cmd,
-            text=True,
-            capture_output=True,
-            stdin=subprocess.DEVNULL,
-            timeout=self.timeout,
-        )
+        proc = subprocess.run(cmd, text=True, capture_output=True, timeout=90)
         raw = proc.stdout.strip() or proc.stderr.strip()
         try:
             data = json.loads(raw)
@@ -41,15 +34,20 @@ class Awgctl:
     def delete(self, ref: str) -> dict:
         return self.run("delete", ref)
 
+    def list(self) -> dict:
+        return self.run("list")
+
     def list_clients(self) -> list[dict]:
-        return self.run("list").get("clients") or []
+        return self.list().get("clients") or []
 
     def qr(self, ref: str) -> dict:
         return self.run("qr", ref)
+
+    def vpn_key(self, ref: str) -> dict:
+        return self.run("vpnkey", ref)
 
     def show(self, ref: str) -> dict:
         return self.run("show", ref)
 
     def traffic(self) -> dict:
         return self.run("traffic")
-
