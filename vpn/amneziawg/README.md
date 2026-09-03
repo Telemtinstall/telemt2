@@ -5,9 +5,12 @@
 
 ## RU
 
-Каталог содержит два самостоятельных скрипта для Debian 13+ / Ubuntu 24.04+:
+Каталог содержит два самостоятельных скрипта для Debian 13+ / Ubuntu 22.04+:
 
-Поддерживаемые ОС: Debian 13 или новее, Ubuntu 24.04 или новее. На более старых релизах установщик остановится сразу, чтобы не получить полусломанную установку из-за старого ядра, headers или репозиториев.
+Поддерживаемые ОС: Debian 13 или новее, Ubuntu 22.04 или новее. Для актуального
+AmneziaWG требуется ядро 6.7+. На Ubuntu 22.04 со штатным старым ядром
+установщик предложит поставить HWE-ядро и headers, после чего остановится для
+перезагрузки. Повторный запуск продолжит установку с сохранённого места.
 
 ### Быстрый старт
 
@@ -170,7 +173,8 @@ awgctl qr dns1
 
 ```text
 1. Проверяет DNS A-запись домена, если включена HTTPS-маскировка.
-2. Проверяет, что сервер работает на Debian 13+ или Ubuntu 24.04+.
+2. Проверяет, что сервер работает на Debian 13+ или Ubuntu 22.04+, а ядро имеет
+   версию 6.7 или новее; при необходимости устанавливает новое ядро и headers.
 3. Ставит базовые пакеты.
 4. Добавляет AmneziaWG PPA, ставит пакет amneziawg, проверяет linux-headers и собирает DKMS-модуль ядра. Для Ubuntu-релизов без своей ветки PPA, например 26.04/resolute, используется поддерживаемая ветка `noble`.
 5. Создает /etc/amnezia/amneziawg/awg0.conf.
@@ -401,9 +405,12 @@ RESET_INSTALL_STATE=1 ./install_amneziawg.sh
 
 ## EN
 
-This directory contains two standalone scripts for Debian 13+ / Ubuntu 24.04+:
+This directory contains two standalone scripts for Debian 13+ / Ubuntu 22.04+:
 
-Supported OS versions: Debian 13 or newer, Ubuntu 24.04 or newer. Older releases stop early to avoid half-installed systems caused by old kernels, missing headers, or incompatible repositories.
+Supported OS versions: Debian 13 or newer, Ubuntu 22.04 or newer. Current
+AmneziaWG requires kernel 6.7+. On Ubuntu 22.04 with an older stock kernel, the
+installer offers to install the HWE kernel and headers, then stops for a reboot.
+A repeated run resumes from the saved installation state.
 
 ```bash
 chmod +x ./install_amneziawg.sh ./awgctl.sh
@@ -527,7 +534,8 @@ Important: the obfuscation profile cannot be changed only on the server. Paramet
 
 ```text
 1. Checks DNS A record if HTTPS masking is enabled.
-2. Checks that the server runs Debian 13+ or Ubuntu 24.04+.
+2. Checks that the server runs Debian 13+ or Ubuntu 22.04+ and kernel 6.7+;
+   when needed, it installs a newer kernel and matching headers.
 3. Installs base packages.
 4. Adds the AmneziaWG PPA, installs the amneziawg package, checks linux-headers, and builds the DKMS kernel module. Ubuntu releases without their own PPA suite, for example 26.04/resolute, use the supported `noble` suite.
 5. Creates /etc/amnezia/amneziawg/awg0.conf.

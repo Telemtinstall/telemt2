@@ -9,12 +9,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "install.sh"
 BOOTSTRAP = ROOT / "install_bot.sh"
+AWG_INSTALLER = ROOT.parents[1] / "vpn" / "amneziawg" / "install_amneziawg.sh"
 
 
 class InstallerTests(unittest.TestCase):
     def test_bash_syntax(self):
         subprocess.run(["bash", "-n", str(INSTALLER)], check=True)
         subprocess.run(["bash", "-n", str(BOOTSTRAP)], check=True)
+        subprocess.run(["bash", "-n", str(AWG_INSTALLER)], check=True)
 
     def test_bootstrap_updates_safely_and_delegates(self):
         source = BOOTSTRAP.read_text(encoding="utf-8")
@@ -48,6 +50,17 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn("apt-cache policy \"$1\" 2>/dev/null |", block)
         self.assertIn("policy=\"$(apt-cache policy", block)
         self.assertIn("<<< \"$policy\"", block)
+
+    def test_supported_os_and_old_kernel_upgrade_flow(self):
+        source = INSTALLER.read_text(encoding="utf-8")
+        awg_source = AWG_INSTALLER.read_text(encoding="utf-8")
+        self.assertIn("(( major >= 13 ))", source)
+        self.assertIn("(( major >= 22 ))", source)
+        self.assertIn('AWG_MIN_KERNEL="${AWG_MIN_KERNEL:-6.7}"', awg_source)
+        self.assertIn("linux-generic-hwe-22.04", awg_source)
+        self.assertIn("linux-image-amd64", awg_source)
+        self.assertIn("minimum_kernel_preflight", awg_source)
+        self.assertIn("AWG_RESUME_COMMAND", source)
 
     def test_vpn_shared_answers_are_not_asked_twice(self):
         source = INSTALLER.read_text(encoding="utf-8")

@@ -309,13 +309,23 @@ EOF
 }
 
 require_root_and_os() {
+  local major=""
   [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "запустите установщик от root"
   [[ -r /etc/os-release ]] || die "не найден /etc/os-release"
   # shellcheck disable=SC1091
   . /etc/os-release
-  case "${ID:-}:${VERSION_ID:-}" in
-    debian:13*|ubuntu:24*|ubuntu:25*|ubuntu:26*) ;;
-    *) die "поддерживаются Debian 13 и Ubuntu 24-26; обнаружено ${PRETTY_NAME:-unknown}" ;;
+  major="${VERSION_ID%%.*}"
+  [[ "$major" =~ ^[0-9]+$ ]] || die "не удалось определить версию ОС: ${PRETTY_NAME:-unknown}"
+  case "${ID:-}" in
+    debian)
+      (( major >= 13 )) ||
+        die "нужен Debian 13 или новее. Обновите ОС; обнаружено ${PRETTY_NAME:-Debian $VERSION_ID}"
+      ;;
+    ubuntu)
+      (( major >= 22 )) ||
+        die "нужна Ubuntu 22.04 или новее. Обновите ОС; обнаружено ${PRETTY_NAME:-Ubuntu $VERSION_ID}"
+      ;;
+    *) die "поддерживаются Debian 13+ и Ubuntu 22.04+; обнаружено ${PRETTY_NAME:-unknown}" ;;
   esac
   [[ -d /run/systemd/system ]] || die "нужен systemd"
 }
@@ -541,6 +551,7 @@ ensure_awg() {
     AWG_OBFS_PROFILE=dns \
     PUBLIC_ENDPOINT="$VPN_PUBLIC_HOST" \
     CLIENT_NAME="$VPN_INITIAL_CLIENT" \
+    AWG_RESUME_COMMAND="$REPO_DIR/bots/vpn-manager_awg/install_bot.sh" \
     ./install_amneziawg.sh)
   valid_ctl "$AWGCTL_PATH" || die "awgctl не прошёл JSON-проверку"
 }
