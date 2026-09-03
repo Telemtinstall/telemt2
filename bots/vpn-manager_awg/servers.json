@@ -4,20 +4,23 @@
     "title": "AmneziaWG 2.0",
     "protocol": "amneziawg",
     "transport": "local",
-    "command": "/usr/local/sbin/awgctl"
+    "command": "/usr/local/sbin/awgctl",
+    "service": "awg-quick@awg0.service"
   },
   {
     "id": "amneziawg3",
     "title": "AmneziaWG 3.1",
     "protocol": "amneziawg",
     "transport": "local",
-    "command": "/usr/local/sbin/awg3ctl"
+    "command": "/usr/local/sbin/awg3ctl",
+    "service": "awg-quick@awg3.service"
   },
   {
     "id": "vless",
     "title": "VLESS",
     "protocol": "vless",
     "transport": "local",
-    "command": "/usr/local/sbin/vlessctl"
+    "command": "/usr/local/sbin/vlessctl",
+    "service": "xray.service"
   }
 ]

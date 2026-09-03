@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 import json
 import sqlite3
 import tempfile
@@ -275,6 +276,7 @@ class HandlerLogicTests(unittest.TestCase):
 
     def test_admin_speedtest_reply_refresh_and_back(self):
         self.handlers.handle_message(message(keyboards.ADMIN))
+        self.handlers.handle_message(message(keyboards.TRAFFIC))
         self.handlers.handle_message(message(keyboards.SPEEDTEST))
 
         self.assertEqual("admin_speedtest", self.state.context("1", 10)["screen"])
@@ -284,17 +286,17 @@ class HandlerLogicTests(unittest.TestCase):
         self.assertEqual("show_speedtest", self.actions.calls[-1][0])
 
         self.handlers.handle_message(message(keyboards.BACK))
-        self.assertEqual("admin", self.state.context("1", 10)["screen"])
-        self.assertEqual("show_admin_menu", self.actions.calls[-1][0])
+        self.assertEqual("admin_traffic", self.state.context("1", 10)["screen"])
+        self.assertEqual("show_admin_traffic_menu", self.actions.calls[-1][0])
 
     def test_admin_traffic_sends_all_reports_and_keeps_admin_menu(self):
         self.handlers.handle_message(message(keyboards.ADMIN))
         self.handlers.handle_message(message(keyboards.TRAFFIC))
 
-        self.assertEqual("admin", self.state.context("1", 10)["screen"])
+        self.assertEqual("admin_traffic", self.state.context("1", 10)["screen"])
         self.assertEqual("send_all_traffic_reports", self.actions.calls[-2][0])
         self.assertEqual((10,), self.actions.calls[-2][1])
-        self.assertEqual("show_admin_menu", self.actions.calls[-1][0])
+        self.assertEqual("show_admin_traffic_menu", self.actions.calls[-1][0])
 
     def test_online_command_shows_all_protocols_without_selected_server(self):
         self.handlers.handle_message(message("/online"))
@@ -305,6 +307,7 @@ class HandlerLogicTests(unittest.TestCase):
 
     def test_admin_online_reply_shows_all_protocols_and_supports_refresh(self):
         self.handlers.handle_message(message(keyboards.ADMIN))
+        self.handlers.handle_message(message(keyboards.TRAFFIC))
         self.handlers.handle_message(message(keyboards.ONLINE))
 
         self.assertEqual("admin_online", self.state.context("1", 10)["screen"])
@@ -314,11 +317,12 @@ class HandlerLogicTests(unittest.TestCase):
         self.assertEqual("show_all_online", self.actions.calls[-1][0])
 
         self.handlers.handle_message(message(keyboards.BACK))
-        self.assertEqual("admin", self.state.context("1", 10)["screen"])
-        self.assertEqual("show_admin_menu", self.actions.calls[-1][0])
+        self.assertEqual("admin_traffic", self.state.context("1", 10)["screen"])
+        self.assertEqual("show_admin_traffic_menu", self.actions.calls[-1][0])
 
     def test_admin_channel_period_and_back_navigation(self):
         self.handlers.handle_message(message(keyboards.ADMIN))
+        self.handlers.handle_message(message(keyboards.TRAFFIC))
         self.handlers.handle_message(message(keyboards.CHANNEL_LOAD))
 
         self.assertEqual("admin_channel", self.state.context("1", 10)["screen"])
@@ -330,8 +334,39 @@ class HandlerLogicTests(unittest.TestCase):
         self.assertEqual((10, "168"), self.actions.calls[-1][1])
 
         self.handlers.handle_message(message(keyboards.BACK))
-        self.assertEqual("admin", self.state.context("1", 10)["screen"])
-        self.assertEqual("show_admin_menu", self.actions.calls[-1][0])
+        self.assertEqual("admin_traffic", self.state.context("1", 10)["screen"])
+        self.assertEqual("show_admin_traffic_menu", self.actions.calls[-1][0])
+
+    def test_forwarded_user_can_be_confirmed_as_admin(self):
+        self.handlers.handle_message(message(keyboards.ADMIN))
+        self.handlers.handle_message(message(keyboards.SETTINGS))
+        self.handlers.handle_message(message(keyboards.ADMINISTRATORS))
+        self.handlers.handle_message(message(keyboards.ADD_ADMIN))
+
+        forwarded = message("forwarded")
+        forwarded["forward_origin"] = {
+            "type": "user",
+            "sender_user": {"id": 777, "username": "newadmin", "first_name": "Ivan"},
+        }
+        self.handlers.handle_message(forwarded)
+        candidate = self.state.pending_admin_candidate("1", 10)
+        self.assertEqual("777", candidate["id"])
+        self.assertEqual("show_admin_candidate", self.actions.calls[-1][0])
+
+        self.handlers.handle_callback(callback("adminadd:777"))
+        self.assertIsNone(self.state.pending_admin_candidate("1", 10))
+        self.assertEqual("add_admin", self.actions.calls[-1][0])
+
+    def test_protocol_toggle_confirmation_uses_all_protocols(self):
+        self.handlers.handle_message(message(keyboards.ADMIN))
+        self.handlers.handle_message(message(keyboards.SETTINGS))
+        self.handlers.handle_message(message(keyboards.PROTOCOLS))
+        self.handlers.handle_message(message("🟢 AmneziaWG"))
+        self.assertEqual("ask_protocol_toggle", self.actions.calls[-1][0])
+        self.assertEqual((10, "awg"), self.actions.calls[-1][1])
+
+        self.handlers.handle_callback(callback("ptoggle:awg:0"))
+        self.assertEqual("toggle_protocol", self.actions.calls[-1][0])
 
     def test_client_traffic_csv_reply_uses_selected_user(self):
         self.state.set_context("1", 10, "client_traffic", "awg", "alice")
@@ -478,21 +513,29 @@ class MenuAndStatusTests(unittest.TestCase):
         self.assertEqual(
             {
                 keyboards.SERVER_STATUS,
-                keyboards.SPEEDTEST,
                 keyboards.TRAFFIC,
-                keyboards.CHANNEL_LOAD,
-                keyboards.ONLINE,
+                keyboards.SETTINGS,
                 keyboards.BACK,
             },
             self.reply_texts(markup),
         )
         self.assertEqual(
             [
-                [keyboards.SERVER_STATUS, keyboards.SPEEDTEST],
-                [keyboards.TRAFFIC, keyboards.CHANNEL_LOAD],
-                [keyboards.ONLINE, keyboards.BACK],
+                [keyboards.SERVER_STATUS, keyboards.TRAFFIC],
+                [keyboards.SETTINGS, keyboards.BACK],
             ],
             self.reply_rows(markup),
+        )
+        self.assertEqual(
+            [[keyboards.SPEEDTEST, keyboards.CHANNEL_LOAD], [keyboards.ONLINE, keyboards.BACK]],
+            self.reply_rows(keyboards.traffic_admin_menu()),
+        )
+        self.assertEqual(
+            [
+                [keyboards.ADD_ADMIN, keyboards.DELETE_ADMIN],
+                [keyboards.ADMIN_LIST, keyboards.BACK],
+            ],
+            self.reply_rows(keyboards.administrators_menu()),
         )
         text = formatters.server_status_text(
             {
@@ -886,6 +929,24 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "duplicate ids"):
             ServerRegistry([VpnServer(config), VpnServer(config)])
 
+    def test_protocol_switch_uses_systemd_without_deleting_configuration(self):
+        config = load_server_config(
+            {
+                "id": "vless",
+                "protocol": "vless",
+                "transport": "local",
+                "command": "/usr/local/sbin/vlessctl",
+                "service": "xray.service",
+            }
+        )
+        completed = SimpleNamespace(returncode=0, stdout="", stderr="")
+        with mock.patch("app.servers.subprocess.run", return_value=completed) as run:
+            VpnServer(config).set_enabled(False)
+        self.assertEqual(
+            ["systemctl", "disable", "--now", "xray.service"],
+            run.call_args.args[0],
+        )
+
     def test_unsafe_server_id_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "server id"):
             load_server_config(
@@ -935,6 +996,24 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
 
 
 class AccessStoreTests(unittest.TestCase):
+    def test_dynamic_admins_and_protocol_states_persist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "access.sqlite3"
+            store = AccessStore(path)
+            store.add_admin(
+                {"id": 777, "username": "newadmin", "first_name": "Ivan"},
+                "1",
+            )
+            store.set_protocol_enabled("vless", False, "1")
+
+            reopened = AccessStore(path)
+            self.assertTrue(reopened.is_dynamic_admin("777"))
+            self.assertEqual("newadmin", reopened.list_admins()[0]["telegram_username"])
+            self.assertFalse(reopened.protocol_enabled("vless"))
+            self.assertEqual({"vless"}, reopened.disabled_protocol_ids())
+            self.assertTrue(reopened.remove_admin("777"))
+            self.assertFalse(reopened.is_dynamic_admin("777"))
+
     def test_invite_claim_is_one_time_and_profile_shows_recipient(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "access.sqlite3"

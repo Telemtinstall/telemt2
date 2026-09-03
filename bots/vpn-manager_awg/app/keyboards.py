@@ -10,6 +10,12 @@ REFRESH = "Обновить"
 DOWNLOAD_CSV = "Скачать CSV"
 DOWNLOAD_USER_CSV = "Скачать CSV пользователя"
 ADMIN = "Админ"
+SETTINGS = "Настройки"
+PROTOCOLS = "Протоколы"
+ADMINISTRATORS = "Администраторы"
+ADD_ADMIN = "Добавить администратора"
+DELETE_ADMIN = "Удалить администратора"
+ADMIN_LIST = "Список администраторов"
 SERVER_STATUS = "Состояние сервера"
 SPEEDTEST = "Замер скорости"
 CHANNEL_LOAD = "Загрузка канала"
@@ -53,9 +59,81 @@ def protocol_picker(servers: list) -> dict:
 
 def admin_menu() -> dict:
     return reply_keyboard(
-        compact_rows([SERVER_STATUS, SPEEDTEST, TRAFFIC, CHANNEL_LOAD, ONLINE, BACK]),
+        compact_rows([SERVER_STATUS, TRAFFIC, SETTINGS, BACK]),
         "Администрирование",
     )
+
+
+def traffic_admin_menu() -> dict:
+    return reply_keyboard(
+        compact_rows([SPEEDTEST, CHANNEL_LOAD, ONLINE, BACK]),
+        "Трафик и сеть",
+    )
+
+
+def settings_menu() -> dict:
+    return reply_keyboard(
+        compact_rows([PROTOCOLS, ADMINISTRATORS, BACK]),
+        "Настройки",
+    )
+
+
+def protocols_menu(servers: list, enabled) -> dict:
+    buttons = [
+        f"{'🟢' if enabled(server.id) else '🔴'} {protocol_label(server)}"
+        for server in servers
+    ]
+    buttons.append(BACK)
+    return reply_keyboard(compact_rows(buttons), "Включение протоколов")
+
+
+def administrators_menu() -> dict:
+    return reply_keyboard(
+        compact_rows([ADD_ADMIN, DELETE_ADMIN, ADMIN_LIST, BACK]),
+        "Администраторы",
+    )
+
+
+def admin_add_navigation() -> dict:
+    return reply_keyboard([[BACK]], "Введите Telegram ID или перешлите сообщение")
+
+
+def protocol_toggle_confirm(server_id: str, enabled: bool) -> dict:
+    action = "включить" if enabled else "отключить"
+    return {
+        "inline_keyboard": [[
+            {"text": f"Да, {action}", "callback_data": f"ptoggle:{server_id}:{1 if enabled else 0}"},
+            {"text": "Отмена", "callback_data": "protocolsettings"},
+        ]]
+    }
+
+
+def admin_add_confirm(telegram_user_id: str) -> dict:
+    return {
+        "inline_keyboard": [[
+            {"text": "Да, добавить", "callback_data": f"adminadd:{telegram_user_id}"},
+            {"text": "Отмена", "callback_data": "admins"},
+        ]]
+    }
+
+
+def admin_delete_list(admins: list[dict]) -> dict:
+    rows = []
+    for admin in admins:
+        user_id = str(admin["telegram_user_id"])
+        username = admin.get("telegram_username")
+        label = f"@{username} · {user_id}" if username else user_id
+        rows.append([{"text": label[:60], "callback_data": f"admindel:{user_id}"}])
+    return {"inline_keyboard": rows}
+
+
+def admin_delete_confirm(telegram_user_id: str) -> dict:
+    return {
+        "inline_keyboard": [[
+            {"text": "Да, удалить", "callback_data": f"admindelyes:{telegram_user_id}"},
+            {"text": "Отмена", "callback_data": "admins"},
+        ]]
+    }
 
 
 def channel_period_menu() -> dict:

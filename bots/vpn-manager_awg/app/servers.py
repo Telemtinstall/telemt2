@@ -21,6 +21,7 @@ class ServerConfig:
     protocol: str
     transport: str
     command: str
+    service: str
     host: str | None = None
     user: str = "root"
 
@@ -48,6 +49,25 @@ class VpnServer:
     @property
     def is_vless(self) -> bool:
         return self.protocol == "vless"
+
+    @property
+    def service(self) -> str:
+        return self.config.service
+
+    def set_enabled(self, enabled: bool) -> None:
+        if self.config.transport != "local":
+            raise RuntimeError("переключение удалённого VPN-сервера не поддерживается")
+        action = "enable" if enabled else "disable"
+        cmd = ["systemctl", action, "--now", self.service]
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError((proc.stderr or proc.stdout).strip() or f"systemctl {action} failed")
 
     def run(self, *args: str) -> dict:
         cmd = self._build_command("-j", *args)
@@ -179,6 +199,16 @@ def load_server_config(item: dict) -> ServerConfig:
     protocol = str(item.get("protocol") or "")
     transport = str(item.get("transport") or "local")
     command = str(item.get("command") or "")
+    default_service = (
+        "xray.service"
+        if protocol == "vless"
+        else (
+            "awg-quick@awg3.service"
+            if server_id == "amneziawg3"
+            else "awg-quick@awg0.service"
+        )
+    )
+    service = str(item.get("service") or default_service)
     host = item.get("host")
     if not SERVER_ID_RE.fullmatch(server_id):
         raise RuntimeError(
@@ -190,6 +220,8 @@ def load_server_config(item: dict) -> ServerConfig:
         raise RuntimeError(f"unsupported transport for {server_id}: {transport}")
     if not command:
         raise RuntimeError(f"command is missing for server {server_id}")
+    if not re.fullmatch(r"[A-Za-z0-9@_.-]{1,100}", service):
+        raise RuntimeError(f"service is missing or invalid for server {server_id}")
     if transport == "ssh" and not host:
         raise RuntimeError(f"host is missing for ssh server {server_id}")
     return ServerConfig(
@@ -198,6 +230,7 @@ def load_server_config(item: dict) -> ServerConfig:
         protocol=protocol,
         transport=transport,
         command=command,
+        service=service,
         host=str(host) if host else None,
         user=str(item.get("user") or "root"),
     )

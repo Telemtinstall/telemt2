@@ -1,6 +1,7 @@
 class BotState:
     def __init__(self):
         self.pending_create: dict[tuple[str, int], dict] = {}
+        self.pending_admin: dict[tuple[str, int], dict] = {}
         self.navigation: dict[tuple[str, int], dict] = {}
 
     @staticmethod
@@ -50,3 +51,13 @@ class BotState:
 
     def clear_context(self, user_id: str, chat_id: int) -> None:
         self.navigation.pop(self.key(user_id, chat_id), None)
+
+    def set_pending_admin(self, user_id: str, chat_id: int, candidate: dict) -> None:
+        self.pending_admin[self.key(user_id, chat_id)] = dict(candidate)
+
+    def pending_admin_candidate(self, user_id: str, chat_id: int) -> dict | None:
+        candidate = self.pending_admin.get(self.key(user_id, chat_id))
+        return dict(candidate) if candidate else None
+
+    def clear_pending_admin(self, user_id: str, chat_id: int) -> None:
+        self.pending_admin.pop(self.key(user_id, chat_id), None)
