@@ -9,13 +9,14 @@ import uuid
 from app.formatters import split_text
 
 
-log = logging.getLogger("vpnbotawg.telegram")
+log = logging.getLogger("vpnbot.telegram")
 
 
 class TelegramAPI:
     def __init__(self, settings):
         self.settings = settings
         self.api_base = f"https://api.telegram.org/bot{settings.token}/"
+        self._bot_username: str | None = None
 
     def call(self, method: str, data: dict | None = None, files: dict | None = None) -> dict:
         url = self.api_base + method
@@ -59,20 +60,24 @@ class TelegramAPI:
             self.call("sendMessage", data)
 
     def edit_message(self, chat_id: int, message_id: int, text: str, markup: dict | None = None) -> None:
+        parts = split_text(text, self.settings.max_message)
         data = {
             "chat_id": chat_id,
             "message_id": message_id,
-            "text": text[: self.settings.max_message],
+            "text": parts[0],
             "parse_mode": "HTML",
             "disable_web_page_preview": "true",
         }
-        if markup:
+        if len(parts) == 1 and markup:
             data["reply_markup"] = reply_markup(markup)
         try:
             self.call("editMessageText", data)
         except RuntimeError as exc:
             if "message is not modified" not in str(exc):
                 raise
+        for index, part in enumerate(parts[1:], start=1):
+            part_markup = markup if index == len(parts) - 1 else None
+            self.send_message(chat_id, part, part_markup)
 
     def answer_callback(self, callback_id: str, text: str = "", show_alert: bool = False) -> None:
         data = {"callback_query_id": callback_id, "show_alert": "true" if show_alert else "false"}
@@ -82,17 +87,36 @@ class TelegramAPI:
 
     def send_qr(self, chat_id: int, name: str, qr_base64: str, caption: str) -> None:
         image = base64.b64decode(qr_base64)
+        self.send_photo(chat_id, f"{name}.png", image, caption)
+
+    def send_photo(self, chat_id: int, filename: str, image: bytes, caption: str) -> None:
         self.call(
             "sendPhoto",
             {"chat_id": chat_id, "caption": caption[:1024], "parse_mode": "HTML"},
-            {"photo": (f"{name}.png", image, "image/png")},
+            {"photo": (filename, image, "image/png")},
         )
 
     def send_config_file(self, chat_id: int, name: str, config: str) -> None:
+        self.send_document(
+            chat_id,
+            f"{name}.conf",
+            config.encode("utf-8"),
+            f"{name}.conf",
+            "text/plain",
+        )
+
+    def send_document(
+        self,
+        chat_id: int,
+        filename: str,
+        content: bytes,
+        caption: str,
+        mime: str = "application/octet-stream",
+    ) -> None:
         self.call(
             "sendDocument",
-            {"chat_id": chat_id, "caption": f"{name}.conf"},
-            {"document": (f"{name}.conf", config.encode("utf-8"), "text/plain")},
+            {"chat_id": chat_id, "caption": caption[:1024]},
+            {"document": (filename, content, mime)},
         )
 
     def get_updates(self, offset: int | None) -> list[dict]:
@@ -104,8 +128,19 @@ class TelegramAPI:
             data["offset"] = offset
         return self.call("getUpdates", data).get("result", [])
 
+    def get_bot_username(self) -> str:
+        if not self._bot_username:
+            username = str((self.call("getMe").get("result") or {}).get("username") or "")
+            if not username:
+                raise RuntimeError("Telegram не вернул username бота")
+            self._bot_username = username
+        return self._bot_username
+
     def set_bot_commands(self) -> None:
-        commands = [
+        user_commands = [
+            {"command": "start", "description": "Мои VPN"},
+        ]
+        admin_commands = [
             {"command": "start", "description": "Главное меню"},
             {"command": "create", "description": "Создать клиента"},
             {"command": "list", "description": "Список клиентов"},
@@ -113,19 +148,20 @@ class TelegramAPI:
             {"command": "traffic", "description": "Трафик"},
             {"command": "cancel", "description": "Отмена"},
         ]
-        commands_json = json.dumps(commands, ensure_ascii=False)
-        self.call("setMyCommands", {"commands": commands_json})
+        user_commands_json = json.dumps(user_commands, ensure_ascii=False)
+        admin_commands_json = json.dumps(admin_commands, ensure_ascii=False)
+        self.call("setMyCommands", {"commands": user_commands_json})
         self.call(
             "setMyCommands",
             {
-                "commands": commands_json,
+                "commands": user_commands_json,
                 "scope": json.dumps({"type": "all_private_chats"}),
             },
         )
         self.call("setChatMenuButton", {"menu_button": json.dumps({"type": "commands"})})
 
         for user_id in self.settings.allowed_users:
-            self._set_private_chat_commands(user_id, commands_json)
+            self._set_private_chat_commands(user_id, admin_commands_json)
 
     def _set_private_chat_commands(self, user_id: str, commands_json: str) -> None:
         try:
@@ -159,7 +195,7 @@ def reply_markup(markup: dict | None) -> str | None:
 
 
 def encode_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
-    boundary = "----vpnbotawg-" + uuid.uuid4().hex
+    boundary = "----vpnbot-" + uuid.uuid4().hex
     chunks: list[bytes] = []
 
     for name, value in fields.items():
@@ -183,4 +219,3 @@ def encode_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
 
     chunks.append(f"--{boundary}--\r\n".encode())
     return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
-
