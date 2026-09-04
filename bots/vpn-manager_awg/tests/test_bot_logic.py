@@ -696,7 +696,56 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
 
         actions.send_vpn_key_for_client(10, "awg", "alice")
 
-        self.assertIn("<code>vpn://copy-me_123</code>", telegram.messages[-1][1])
+        text = telegram.messages[-1][1]
+        self.assertIn("Пользователь: <b>alice</b>", text)
+        self.assertIn("Протокол: <b>AmneziaWG</b>", text)
+        self.assertIn("Подходит для:", text)
+        self.assertIn("<code>vpn://copy-me_123</code>", text)
+        self.assertNotIn("Сервер:", text)
+
+    def test_vless_link_has_full_profile_details_without_server_name(self):
+        server = SimpleNamespace(title="VLESS", is_amneziawg=False, is_vless=True)
+        data = {"name": "alice", "link": "vless://copy-me"}
+
+        text = formatters.vless_link_text(server, data)
+
+        self.assertIn("Пользователь: <b>alice</b>", text)
+        self.assertIn("VPN-IP: <code>не назначается (VLESS)</code>", text)
+        self.assertIn("Протокол: <b>VLESS</b>", text)
+        self.assertIn("v2rayNG", text)
+        self.assertIn("<code>vless://copy-me</code>", text)
+        self.assertNotIn("Сервер:", text)
+
+    def test_config_file_caption_has_profile_details_without_server_name(self):
+        server = SimpleNamespace(
+            id="amneziawg3",
+            title="AmneziaWG 3.1",
+            is_amneziawg=True,
+            show=lambda _ref: {
+                "name": "pavel",
+                "ip": "10.89.89.2",
+                "config": "[Interface]\nAddress = 10.89.89.2/32\n",
+            },
+        )
+
+        class Telegram:
+            def __init__(self):
+                self.file = None
+
+            def send_config_file(self, *args):
+                self.file = args
+
+        telegram = Telegram()
+        actions = Actions(None, telegram, SimpleNamespace(get=lambda _server_id: server), None)
+
+        actions.send_config_file_for_client(10, "amneziawg3", "pavel")
+
+        caption = telegram.file[3]
+        self.assertIn("Пользователь: pavel", caption)
+        self.assertIn("VPN-IP: 10.89.89.2", caption)
+        self.assertIn("Протокол: AmneziaWG 3.1", caption)
+        self.assertIn("Подходит для:", caption)
+        self.assertNotIn("Сервер:", caption)
 
     def test_access_invite_uses_bot_deep_link(self):
         server = SimpleNamespace(
@@ -906,7 +955,7 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
         self.assertEqual("native-vpn", vpn["base64"])
         self.assertIn("AmneziaVPN", vpn["note"])
 
-    def test_amnezia_qr_caption_ends_with_user_without_profile_controls(self):
+    def test_amnezia_qr_caption_contains_profile_details_without_server(self):
         class Server:
             id = "awg"
             title = "Test AmneziaWG"
@@ -915,6 +964,7 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
             def qr(self, _ref):
                 return {
                     "name": "alice",
+                    "ip": "10.89.89.2",
                     "qr_png_base64": "image",
                     "config": "[Peer]\nEndpoint = 194.87.148.23:1234\n",
                 }
@@ -936,14 +986,12 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
         telegram = Telegram()
         actions = Actions(None, telegram, Registry(), None)
         actions.send_qr_for_client(1, "awg", "alice", "android")
-        self.assertTrue(telegram.caption.endswith("Пользователь: <b>alice</b>"))
-        self.assertEqual(
-            telegram.caption,
-            "QR-код\n"
-            "Сервер: <b>Test 194.87.148.23 AmneziaWG</b>\n"
-            "Android: QR .conf для приложения AmneziaWG.\n\n"
-            "Пользователь: <b>alice</b>",
-        )
+        self.assertIn("Пользователь: <b>alice</b>", telegram.caption)
+        self.assertIn("VPN-IP: <code>10.89.89.2</code>", telegram.caption)
+        self.assertIn("Протокол: <b>Test AmneziaWG</b>", telegram.caption)
+        self.assertIn("Формат: <b>QR-код для Android</b>", telegram.caption)
+        self.assertIn("Подходит для:", telegram.caption)
+        self.assertNotIn("Сервер:", telegram.caption)
 
     def test_duplicate_server_ids_are_rejected(self):
         config = load_server_config(

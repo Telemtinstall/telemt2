@@ -195,31 +195,93 @@ def created_caption_for_server(server, data: dict) -> str:
     return "\n".join(lines)
 
 
-def vless_link_text(server, data: dict) -> str:
-    return "\n".join(
-        [
-            f"<b>VLESS-ссылка: {h(data.get('name'))}</b>",
-            f"Сервер: <b>{h(server.title)}</b>",
+def profile_ip(server, data: dict) -> str:
+    ip = str(data.get("ip") or "").strip()
+    if not ip and server.is_amneziawg:
+        config = str(data.get("config") or "")
+        match = re.search(r"(?mi)^Address\s*=\s*([^,\s/]+)", config)
+        ip = match.group(1) if match else ""
+    if ip:
+        return ip
+    if getattr(server, "is_vless", False):
+        return "не назначается (VLESS)"
+    return "не указан"
+
+
+def profile_delivery_text(
+    server,
+    data: dict,
+    format_name: str,
+    applications: str,
+    instruction: str,
+    *,
+    html: bool = True,
+) -> str:
+    name = str(data.get("name") or "")
+    ip = profile_ip(server, data)
+    protocol = str(server.title)
+    if html:
+        lines = [
+            "<b>🔐 Настройки VPN</b>",
             "",
-            f"<code>{h(data.get('link'))}</code>",
+            f"Пользователь: <b>{h(name)}</b>",
+            f"VPN-IP: <code>{h(ip)}</code>",
+            f"Протокол: <b>{h(protocol)}</b>",
+            "",
+            f"📱 Формат: <b>{h(format_name)}</b>",
+            f"Подходит для: {h(applications)}",
+            "",
+            h(instruction),
+            "Не передавайте настройки другим пользователям.",
         ]
+    else:
+        lines = [
+            "🔐 Настройки VPN",
+            "",
+            f"Пользователь: {name}",
+            f"VPN-IP: {ip}",
+            f"Протокол: {protocol}",
+            "",
+            f"Формат: {format_name}",
+            f"Подходит для: {applications}",
+            "",
+            instruction,
+            "Не передавайте настройки другим пользователям.",
+        ]
+    return "\n".join(lines)
+
+
+def vless_link_text(server, data: dict) -> str:
+    details = profile_delivery_text(
+        server,
+        data,
+        "VLESS-ссылка",
+        "v2rayNG для Android, Streisand для iPhone и другие клиенты с поддержкой VLESS",
+        "Скопируйте ссылку и импортируйте ее в совместимое приложение.",
     )
+    return f"{details}\n\nНажмите на строку ниже, чтобы скопировать:\n<code>{h(data.get('link'))}</code>"
 
 
 def vpn_key_text(server, data: dict, vpn_key: str) -> str:
-    return "\n".join(
-        [
-            f"<b>VPN-ключ: {h(data.get('name'))}</b>",
-            f"Сервер: <b>{h(server.title)}</b>",
-            "",
-            "Нажмите на строку ниже, чтобы скопировать:",
-            f"<code>{h(vpn_key)}</code>",
-        ]
+    details = profile_delivery_text(
+        server,
+        data,
+        "VPN-ключ",
+        "официальное приложение AmneziaVPN",
+        "Добавьте новое подключение в AmneziaVPN по ключу.",
     )
+    return f"{details}\n\nНажмите на строку ниже, чтобы скопировать:\n<code>{h(vpn_key)}</code>"
 
 
-def router_config_text(name: str, config: str) -> str:
-    return f"<b>Настройки для роутера: {h(name)}</b>\n\n<pre>{h(config)}</pre>"
+def router_config_text(server, data: dict) -> str:
+    details = profile_delivery_text(
+        server,
+        data,
+        "текст .conf для роутера",
+        "роутеры и клиенты с поддержкой указанной версии AmneziaWG",
+        "Скопируйте конфигурацию в совместимый VPN-клиент или роутер.",
+    )
+    return f"{details}\n\n<pre>{h(data.get('config'))}</pre>"
 
 
 def channel_summary_text(summary: dict, period_title: str, capacity_mbit: float) -> str:
