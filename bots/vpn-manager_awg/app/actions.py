@@ -335,6 +335,12 @@ class Actions:
         text = formatters.create_prompt_text_for_server(server.title)
         self.telegram.send_message(chat_id, text, keyboards.create_navigation())
 
+    def show_create_method(self, chat_id: int, server_id: str) -> None:
+        self.require_protocol_enabled(server_id)
+        server = self.servers.get(server_id)
+        text = formatters.create_method_text_for_server(server.title)
+        self.telegram.send_message(chat_id, text, keyboards.create_method_menu())
+
     def show_list(self, chat_id: int, server_id: str, message_id: int | None = None) -> None:
         self.require_protocol_enabled(server_id)
         server = self.servers.get(server_id)
