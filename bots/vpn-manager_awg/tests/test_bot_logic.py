@@ -218,8 +218,14 @@ class HandlerLogicTests(unittest.TestCase):
 
         self.handlers.handle_message(message("AmneziaWG"))
 
-        self.assertEqual("create", self.state.context("1", 10)["screen"])
+        self.assertEqual("create_method", self.state.context("1", 10)["screen"])
         self.assertEqual("awg", self.state.context("1", 10)["server_id"])
+        self.assertEqual("show_create_method", self.actions.calls[-1][0])
+        self.assertEqual((10, "awg"), self.actions.calls[-1][1])
+
+        self.handlers.handle_message(message(keyboards.ENTER_NAME))
+
+        self.assertEqual("create", self.state.context("1", 10)["screen"])
         self.assertEqual("prompt_create", self.actions.calls[-1][0])
         self.assertEqual((10, "1", "awg"), self.actions.calls[-1][1])
 
@@ -238,6 +244,25 @@ class HandlerLogicTests(unittest.TestCase):
 
         self.assertEqual("main", self.state.context("1", 10)["screen"])
         self.assertEqual("show_menu", self.actions.calls[-1][0])
+
+    def test_back_from_create_method_cancels_and_returns_to_protocol(self):
+        self.state.set_context("1", 10, "protocol", "awg")
+        self.handlers.handle_message(message(keyboards.CREATE_USER))
+        self.assertEqual("create_method", self.state.context("1", 10)["screen"])
+
+        self.handlers.handle_message(message(keyboards.BACK))
+
+        self.assertEqual("protocol", self.state.context("1", 10)["screen"])
+        self.assertEqual("show_protocol_menu", self.actions.calls[-1][0])
+        self.assertFalse(self.state.is_pending_create("1", 10))
+
+    def test_automatic_creation_is_available_from_create_method(self):
+        self.state.set_context("1", 10, "protocol", "awg")
+        self.handlers.handle_message(message(keyboards.CREATE_USER))
+        self.handlers.handle_message(message(keyboards.CREATE_DEFAULT))
+
+        self.assertEqual("create_client", self.actions.calls[-1][0])
+        self.assertEqual((10, "awg"), self.actions.calls[-1][1])
 
     def test_inline_user_selection_then_reply_back_returns_to_list(self):
         self.state.set_context("1", 10, "list", "awg")
@@ -458,14 +483,17 @@ class MenuAndStatusTests(unittest.TestCase):
             self.reply_rows(markup),
         )
 
-    def test_create_navigation_uses_two_by_two_grid(self):
+    def test_create_method_menu_offers_named_or_automatic_creation(self):
         self.assertEqual(
             [
-                [keyboards.CREATE_DEFAULT, keyboards.CANCEL],
-                [keyboards.BACK, keyboards.MAIN_MENU],
+                [keyboards.ENTER_NAME, keyboards.CREATE_DEFAULT],
+                [keyboards.BACK],
             ],
-            self.reply_rows(keyboards.create_navigation()),
+            self.reply_rows(keyboards.create_method_menu()),
         )
+
+    def test_create_name_input_has_single_cancel_button(self):
+        self.assertEqual([[keyboards.BACK]], self.reply_rows(keyboards.create_navigation()))
 
     def test_traffic_reply_keyboard_has_csv_download(self):
         markup = keyboards.section_navigation(download=True)

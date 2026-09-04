@@ -70,8 +70,7 @@ class Handlers:
             if server:
                 pending_action = context.get("ref") if context.get("screen") == "choose_protocol" else None
                 if pending_action == "create":
-                    self.state.set_context(user_id, chat_id, "create", server.id)
-                    self.actions.prompt_create(chat_id, user_id, server.id)
+                    self.show_create_method(chat_id, user_id, server.id)
                 elif pending_action == "list":
                     self.open_list(chat_id, user_id, server.id)
                 else:
@@ -180,12 +179,19 @@ class Handlers:
                 if not server_id:
                     self.choose_protocol(chat_id, user_id, "create")
                     return
+                self.show_create_method(chat_id, user_id, server_id)
+                return
+
+            if text == keyboards.ENTER_NAME:
+                if not server_id or context.get("screen") != "create_method":
+                    self.show_main(chat_id, user_id)
+                    return
                 self.state.set_context(user_id, chat_id, "create", server_id)
                 self.actions.prompt_create(chat_id, user_id, server_id)
                 return
 
             if text == keyboards.CREATE_DEFAULT:
-                if not server_id or context.get("screen") != "create":
+                if not server_id or context.get("screen") != "create_method":
                     self.show_main(chat_id, user_id)
                     return
                 self.state.clear_pending_create(user_id, chat_id)
@@ -268,7 +274,9 @@ class Handlers:
                 )
                 return
 
-            if server_id:
+            if server_id and context.get("screen") == "create_method":
+                self.actions.show_create_method(chat_id, server_id)
+            elif server_id:
                 self.show_protocol(chat_id, user_id, server_id)
             else:
                 self.show_main(chat_id, user_id)
@@ -285,6 +293,11 @@ class Handlers:
             self.actions.show_menu(chat_id)
         else:
             self.actions.show_user_menu(chat_id, user_id)
+
+    def show_create_method(self, chat_id: int, user_id: str, server_id: str) -> None:
+        self.state.clear_pending_create(user_id, chat_id)
+        self.state.set_context(user_id, chat_id, "create_method", server_id)
+        self.actions.show_create_method(chat_id, server_id)
 
     def handle_user_message(self, chat_id: int, user_id: str, command: str, text: str) -> None:
         if command in {"/start", "/help", "/menu"} or text in {
@@ -527,7 +540,7 @@ class Handlers:
             self.show_main(chat_id, user_id)
         elif screen == "protocol" or not server_id:
             self.show_main(chat_id, user_id)
-        elif screen in {"create", "list", "online", "traffic"}:
+        elif screen in {"create_method", "create", "list", "online", "traffic"}:
             self.show_protocol(chat_id, user_id, server_id)
         elif screen == "client":
             self.open_list(chat_id, user_id, server_id)
@@ -604,8 +617,7 @@ class Handlers:
             elif data.startswith("server:"):
                 _, action, server_id = callback_parts(data, "server", 2)
                 if action == "create":
-                    self.state.set_context(user_id, chat_id, "create", server_id)
-                    self.actions.prompt_create(chat_id, user_id, server_id)
+                    self.show_create_method(chat_id, user_id, server_id)
                 elif action == "list":
                     self.open_list(chat_id, user_id, server_id)
                 elif action == "online":

@@ -2,6 +2,7 @@ MAIN_MENU = "Главное меню"
 BACK = "Назад"
 CANCEL = "Отмена"
 CREATE_USER = "Создать пользователя"
+ENTER_NAME = "Указать имя"
 CREATE_DEFAULT = "Создать автоматически"
 USER_LIST = "Список пользователей"
 ONLINE = "Кто онлайн"
@@ -150,9 +151,16 @@ def protocol_menu(_server) -> dict:
     )
 
 
+def create_method_menu() -> dict:
+    return reply_keyboard(
+        compact_rows([ENTER_NAME, CREATE_DEFAULT, BACK]),
+        "Выберите способ создания",
+    )
+
+
 def create_navigation() -> dict:
     return reply_keyboard(
-        compact_rows([CREATE_DEFAULT, CANCEL, BACK, MAIN_MENU]),
+        [[BACK]],
         "Введите имя пользователя",
     )
 
