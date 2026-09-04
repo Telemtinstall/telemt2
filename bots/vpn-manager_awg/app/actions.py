@@ -718,6 +718,8 @@ class Actions:
         vpn_key = str(data.get("vpn_key") or "").strip()
         if not vpn_key.startswith("vpn://"):
             raise RuntimeError("awgctl не вернул корректный VPN-ключ")
+        profile = server.show(ref)
+        data = {**profile, **data}
         self.telegram.send_message(
             chat_id,
             formatters.vpn_key_text(server, data, vpn_key),
