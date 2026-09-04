@@ -685,6 +685,11 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
                 "name": "alice",
                 "vpn_key": "vpn://copy-me_123",
             },
+            show=lambda _ref: {
+                "name": "alice",
+                "ip": "10.88.88.2",
+                "config": "[Peer]\nEndpoint = 194.87.148.23:1234\n",
+            },
         )
         telegram = FakeTelegram()
         actions = Actions(
@@ -698,6 +703,7 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
 
         text = telegram.messages[-1][1]
         self.assertIn("Пользователь: <b>alice</b>", text)
+        self.assertIn("IP сервера: <code>194.87.148.23</code>", text)
         self.assertIn("Протокол: <b>AmneziaWG</b>", text)
         self.assertIn("Подходит для:", text)
         self.assertIn("<code>vpn://copy-me_123</code>", text)
@@ -705,15 +711,19 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
 
     def test_vless_link_has_full_profile_details_without_server_name(self):
         server = SimpleNamespace(title="VLESS", is_amneziawg=False, is_vless=True)
-        data = {"name": "alice", "link": "vless://copy-me"}
+        data = {
+            "name": "alice",
+            "link": "vless://copy-me@194.87.148.23:443?security=reality",
+        }
 
         text = formatters.vless_link_text(server, data)
 
         self.assertIn("Пользователь: <b>alice</b>", text)
         self.assertIn("VPN-IP: <code>не назначается (VLESS)</code>", text)
+        self.assertIn("IP сервера: <code>194.87.148.23</code>", text)
         self.assertIn("Протокол: <b>VLESS</b>", text)
         self.assertIn("v2rayNG", text)
-        self.assertIn("<code>vless://copy-me</code>", text)
+        self.assertIn("<code>vless://copy-me@194.87.148.23:443", text)
         self.assertNotIn("Сервер:", text)
 
     def test_config_file_caption_has_profile_details_without_server_name(self):
@@ -724,7 +734,10 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
             show=lambda _ref: {
                 "name": "pavel",
                 "ip": "10.89.89.2",
-                "config": "[Interface]\nAddress = 10.89.89.2/32\n",
+                "config": (
+                    "[Interface]\nAddress = 10.89.89.2/32\n"
+                    "[Peer]\nEndpoint = 194.87.148.23:1235\n"
+                ),
             },
         )
 
@@ -743,6 +756,7 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
         caption = telegram.file[3]
         self.assertIn("Пользователь: pavel", caption)
         self.assertIn("VPN-IP: 10.89.89.2", caption)
+        self.assertIn("IP сервера: 194.87.148.23", caption)
         self.assertIn("Протокол: AmneziaWG 3.1", caption)
         self.assertIn("Подходит для:", caption)
         self.assertNotIn("Сервер:", caption)
@@ -988,6 +1002,7 @@ class ConfigurationAndTelegramTests(unittest.TestCase):
         actions.send_qr_for_client(1, "awg", "alice", "android")
         self.assertIn("Пользователь: <b>alice</b>", telegram.caption)
         self.assertIn("VPN-IP: <code>10.89.89.2</code>", telegram.caption)
+        self.assertIn("IP сервера: <code>194.87.148.23</code>", telegram.caption)
         self.assertIn("Протокол: <b>Test AmneziaWG</b>", telegram.caption)
         self.assertIn("Формат: <b>QR-код для Android</b>", telegram.caption)
         self.assertIn("Подходит для:", telegram.caption)

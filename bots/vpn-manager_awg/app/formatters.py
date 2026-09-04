@@ -1,6 +1,7 @@
 import re
 import time
 from datetime import datetime
+from urllib.parse import urlsplit
 
 
 CLIENT_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
@@ -208,6 +209,30 @@ def profile_ip(server, data: dict) -> str:
     return "не указан"
 
 
+def profile_server_ip(data: dict) -> str:
+    explicit = str(data.get("server_ip") or "").strip()
+    if explicit:
+        return explicit
+
+    config = str(data.get("config") or "")
+    match = re.search(
+        r"(?mi)^Endpoint\s*=\s*(?:\[([^\]]+)\]|([^:\s]+)):\d+\s*$",
+        config,
+    )
+    if match:
+        return str(match.group(1) or match.group(2))
+
+    link = str(data.get("link") or "").strip()
+    if link:
+        try:
+            host = urlsplit(link).hostname
+        except ValueError:
+            host = None
+        if host:
+            return host
+    return "не указан"
+
+
 def profile_delivery_text(
     server,
     data: dict,
@@ -219,6 +244,7 @@ def profile_delivery_text(
 ) -> str:
     name = str(data.get("name") or "")
     ip = profile_ip(server, data)
+    server_ip = profile_server_ip(data)
     protocol = str(server.title)
     if html:
         lines = [
@@ -226,6 +252,7 @@ def profile_delivery_text(
             "",
             f"Пользователь: <b>{h(name)}</b>",
             f"VPN-IP: <code>{h(ip)}</code>",
+            f"IP сервера: <code>{h(server_ip)}</code>",
             f"Протокол: <b>{h(protocol)}</b>",
             "",
             f"📱 Формат: <b>{h(format_name)}</b>",
@@ -240,6 +267,7 @@ def profile_delivery_text(
             "",
             f"Пользователь: {name}",
             f"VPN-IP: {ip}",
+            f"IP сервера: {server_ip}",
             f"Протокол: {protocol}",
             "",
             f"Формат: {format_name}",
