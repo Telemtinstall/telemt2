@@ -96,12 +96,18 @@ class TelegramAPI:
             {"photo": (filename, image, "image/png")},
         )
 
-    def send_config_file(self, chat_id: int, name: str, config: str) -> None:
+    def send_config_file(
+        self,
+        chat_id: int,
+        name: str,
+        config: str,
+        caption: str | None = None,
+    ) -> None:
         self.send_document(
             chat_id,
             f"{name}.conf",
             config.encode("utf-8"),
-            f"{name}.conf",
+            caption or f"{name}.conf",
             "text/plain",
         )
 

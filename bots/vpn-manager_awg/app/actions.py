@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from app import formatters, keyboards
 from app.server_status import collect_status
 from app.speedtest_status import run_speedtest
@@ -372,7 +370,7 @@ class Actions:
             self.telegram.send_message(chat_id, text, markup)
 
     def apply_list_statuses(self, server, clients: list[dict]) -> list[dict]:
-        if server.is_vless:
+        if getattr(server, "is_vless", False):
             data = server.online(self.settings.vless_online_interval_seconds)
         else:
             data = server.traffic()
@@ -554,12 +552,11 @@ class Actions:
         server = self.servers.get(server_id)
         data = server.qr(ref)
         name = data["name"]
-        qr_server_title = self.qr_server_title(server, data)
-        caption = f"QR-код\nСервер: <b>{formatters.h(qr_server_title)}</b>"
         if platform:
-            footer = None
-            if server.is_amneziawg:
-                footer = f"Пользователь: <b>{formatters.h(name)}</b>"
+            format_name, applications, instruction = self.qr_delivery_details(server, platform)
+            caption = formatters.profile_delivery_text(
+                server, data, format_name, applications, instruction
+            )
             self.send_qr_image_for_platform(
                 chat_id,
                 server,
@@ -567,32 +564,46 @@ class Actions:
                 data,
                 caption,
                 platform,
-                footer,
             )
         else:
-            self.send_qr_images(chat_id, server, name, data, caption)
+            self.send_qr_images(chat_id, server, name, data, "")
 
     @staticmethod
-    def qr_server_title(server, data: dict) -> str:
-        title = str(server.title)
-        if not server.is_amneziawg:
-            return title
-
-        config = str(data.get("config") or "")
-        match = re.search(
-            r"(?m)^Endpoint\s*=\s*(\[[^\]]+\]|[^:\s]+):\d+\s*$",
-            config,
+    def qr_delivery_details(server, platform: str) -> tuple[str, str, str]:
+        is_awg3 = server.id == "amneziawg3" or "3.1" in str(server.title)
+        if getattr(server, "is_vless", False):
+            return (
+                "QR-код VLESS",
+                "v2rayNG для Android, Streisand для iPhone и другие клиенты с поддержкой VLESS",
+                "Отсканируйте QR-код внутри совместимого приложения.",
+            )
+        if platform == "vpn":
+            return (
+                "QR-код AmneziaVPN",
+                "официальное приложение AmneziaVPN",
+                "Откройте AmneziaVPN и добавьте подключение по QR-коду.",
+            )
+        if platform == "iphone":
+            applications = (
+                "AmneziaWG для iOS 3.1.4 и новее"
+                if is_awg3
+                else "AmneziaWG для iPhone с поддержкой AmneziaWG 2.0"
+            )
+            return (
+                "QR-код для iPhone",
+                applications,
+                "Откройте AmneziaWG и отсканируйте QR-код.",
+            )
+        applications = (
+            "Android-клиент с поддержкой AWG 3.1; AmneziaWG Android 2.0.1 не подходит"
+            if is_awg3
+            else "AmneziaWG для Android с поддержкой AmneziaWG 2.0"
         )
-        if not match:
-            return title
-
-        endpoint_host = match.group(1).strip("[]")
-        if endpoint_host in title:
-            return title
-        first, separator, remainder = title.partition(" ")
-        if separator:
-            return f"{first} {endpoint_host} {remainder}"
-        return f"{title} {endpoint_host}"
+        return (
+            "QR-код для Android",
+            applications,
+            "Откройте AmneziaWG и отсканируйте QR-код.",
+        )
 
     def send_qr_image_for_platform(
         self,
@@ -602,17 +613,11 @@ class Actions:
         data: dict,
         caption: str,
         platform: str,
-        footer: str | None = None,
     ) -> None:
         for item in self.qr_items_for_server(server, data):
             if item.get("suffix") == platform:
                 image_name = f"{name}-{item['suffix']}"
-                image_caption = caption
-                if item.get("note"):
-                    image_caption = f"{image_caption}\n{item['note']}"
-                if footer:
-                    image_caption = f"{image_caption}\n\n{footer}"
-                self.telegram.send_qr(chat_id, image_name, item["base64"], image_caption)
+                self.telegram.send_qr(chat_id, image_name, item["base64"], caption)
                 return
         raise RuntimeError(f"QR для {platform} не найден в ответе сервера")
 
@@ -622,9 +627,12 @@ class Actions:
         qr_items = self.qr_items_for_server(server, data)
         for item in qr_items:
             image_name = f"{name}-{item['suffix']}" if item.get("suffix") else name
-            image_caption = caption
-            if item.get("note"):
-                image_caption = f"{image_caption}\n{item['note']}"
+            format_name, applications, instruction = self.qr_delivery_details(
+                server, item.get("suffix") or "vless"
+            )
+            image_caption = formatters.profile_delivery_text(
+                server, data, format_name, applications, instruction
+            )
             qr_base64 = item["base64"]
             self.telegram.send_qr(chat_id, image_name, qr_base64, image_caption)
 
@@ -685,7 +693,21 @@ class Actions:
             self.telegram.send_message(chat_id, "Файл .conf доступен только для AmneziaWG.")
             return
         data = server.show(ref)
-        self.telegram.send_config_file(chat_id, data["name"], data["config"])
+        is_awg3 = server.id == "amneziawg3" or "3.1" in str(server.title)
+        applications = (
+            "AmneziaWG для iOS 3.1.4+ и другие клиенты с поддержкой AWG 3.1"
+            if is_awg3
+            else "AmneziaWG для iPhone/Android и роутеры с поддержкой AmneziaWG 2.0"
+        )
+        caption = formatters.profile_delivery_text(
+            server,
+            data,
+            "файл .conf",
+            applications,
+            "Импортируйте файл через функцию «Добавить туннель из файла».",
+            html=False,
+        )
+        self.telegram.send_config_file(chat_id, data["name"], data["config"], caption)
 
     def send_vpn_key_for_client(self, chat_id: int, server_id: str, ref: str) -> None:
         server = self.servers.get(server_id)
@@ -707,7 +729,7 @@ class Actions:
             self.telegram.send_message(chat_id, "Текст .conf для роутера доступен только для AmneziaWG.")
             return
         data = server.show(ref)
-        self.send_router_config(chat_id, data["name"], data["config"])
+        self.send_router_config(chat_id, server, data)
 
     def send_vless_link_for_client(self, chat_id: int, server_id: str, ref: str) -> None:
         server = self.servers.get(server_id)
@@ -717,8 +739,9 @@ class Actions:
         data = server.show(ref)
         self.telegram.send_message(chat_id, formatters.vless_link_text(server, data))
 
-    def send_router_config(self, chat_id: int, name: str, config: str) -> None:
-        text = formatters.router_config_text(name, config)
+    def send_router_config(self, chat_id: int, server, data: dict) -> None:
+        name = data["name"]
+        text = formatters.router_config_text(server, data)
         if len(text) > self.settings.max_message:
             self.telegram.send_message(
                 chat_id,
