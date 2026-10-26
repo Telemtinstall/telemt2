@@ -39,7 +39,7 @@ VPN_PUBLIC_HOST="${VPN_PUBLIC_HOST:-}"
 VPN_INITIAL_CLIENT="${VPN_INITIAL_CLIENT:-}"
 
 EXTRA_PACKAGES=(
-  git ca-certificates python3 python3-pil fonts-dejavu-core logrotate speedtest-cli util-linux nftables conntrack dnsutils bind9-host
+  git ca-certificates python3 python3-pil fonts-dejavu-core logrotate speedtest-cli util-linux nftables conntrack bind9-dnsutils bind9-host
 )
 
 step_no=0

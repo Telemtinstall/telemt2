@@ -27,6 +27,29 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("локальная копия Глобал", result.stdout)
         self.assertNotIn("https://github.com", result.stdout)
 
+    def test_debian13_real_dns_package_satisfies_dependency_check(self):
+        source = INSTALLER.read_text(encoding="utf-8").rsplit('main "$@"', 1)[0]
+        script = source + r"""
+package_version() {
+  case "$1" in
+    dnsutils) return 0 ;;
+    *) printf '1.0' ;;
+  esac
+}
+have() { return 0; }
+python3() { return 0; }
+verify_extra_software
+"""
+        # host is verified independently; this test isolates dpkg package names.
+        script = script.replace('[[ -x /usr/bin/host ]]', 'true')
+        result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("bind9-dnsutils", source.split("EXTRA_PACKAGES=(", 1)[1].split(")", 1)[0])
+        missing = script.replace("dnsutils) return 0", "dnsutils|bind9-dnsutils) return 0")
+        result = subprocess.run(["bash", "-c", missing], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("bind9-dnsutils", result.stderr)
+
     def test_installer_asks_before_vpn_and_software_updates(self):
         source = INSTALLER.read_text(encoding="utf-8")
         self.assertIn(

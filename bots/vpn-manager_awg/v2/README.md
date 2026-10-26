@@ -12,13 +12,13 @@ A-запись меняет сам администратор. Генерато�
 
 ```bash
 apt-get update && apt-get install -y ca-certificates curl python3
-curl -fL https://raw.githubusercontent.com/Telemtinstall/telemt2/global-v2-2026.10.26.1/bots/vpn-manager_awg/v2/install.sh -o /root/install-vpnbot-v2.sh
+curl -fL https://raw.githubusercontent.com/Telemtinstall/telemt2/global-v2-2026.10.26.2/bots/vpn-manager_awg/v2/install.sh -o /root/install-vpnbot-v2.sh
 bash /root/install-vpnbot-v2.sh --check
 bash /root/install-vpnbot-v2.sh
 ```
 
-Загрузчик скачивает фиксированный тег `global-v2-2026.10.26.1`, проверяет SHA256SUMS
-и оставляет пакет в `/root/vpnbot-global-v2-global-v2-2026.10.26.1`.
+Загрузчик скачивает фиксированный тег `global-v2-2026.10.26.2`, проверяет SHA256SUMS
+и оставляет пакет в `/root/vpnbot-global-v2-global-v2-2026.10.26.2`.
 Контрольные суммы проверяют целостность файлов пакета; доверие к источнику обеспечивается HTTPS/GitHub.
 Если потребуется перезагрузка из-за ядра/headers, после неё повторите последнюю команду.
 Токен вводится скрыто на сервере. TGID администраторов — через запятую.
@@ -28,7 +28,7 @@ bash /root/install-vpnbot-v2.sh
 ## Проверка после установки
 
 ```bash
-bash /root/vpnbot-global-v2-global-v2-2026.10.26.1/check-server.sh
+bash /root/vpnbot-global-v2-global-v2-2026.10.26.2/check-server.sh
 ```
 
 В Telegram: `/start`, три протокола, создание тестового профиля, импорт QR и подключение
@@ -46,3 +46,11 @@ bash /root/vpnbot-global-v2-global-v2-2026.10.26.1/check-server.sh
 154 автоматических теста прошли. Проверены Bash-синтаксис, контрольные суммы,
 распаковка загрузчиком и повторная проверка пакета (загрузка HTTPS подменялась
 локальным архивом). QR-контроллеры и маршрутизация выдачи совпадают с исходной Global.
+
+## Исправление установщика .2
+
+На Debian 13 пакет dnsutils может удовлетворяться поставщиком bind9-dnsutils.
+Установщик теперь устанавливает и проверяет реальный пакет bind9-dnsutils.
+Если сборка .1 остановилась на проверке dnsutils, скачайте загрузчик .2 и запустите его.
+Уже установленные пакеты сохраняются. Старые контрольные точки установщика сбросятся
+при смене версии; наличие готовых VPN-компонентов проверяется перед установкой.
