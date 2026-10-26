@@ -50,6 +50,56 @@ class InstallerFailureTests(unittest.TestCase):
         self.assertNotIn('MUST_NOT_RUN', result.stdout)
         self.assertFalse(state.exists())
 
+    def test_pending_token_resumes_and_is_deleted_on_success(self):
+        config = self.root/'resume'
+        state = self.root/'state'
+        result = self.run_script(BOT/'install.sh', f"""
+INSTALL_RESUME_CONFIG={shlex.quote(str(config))}
+INSTALL_STATE_FILE={shlex.quote(str(state))}
+current_installer_version() {{ echo fixture; }}
+BOT_TOKEN='123:fixture-secret'
+save_pending_token
+BOT_TOKEN=''
+load_pending_token
+[[ "$BOT_TOKEN" == '123:fixture-secret' ]]
+finish_installation_tracking
+""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('fixture-secret', result.stdout + result.stderr)
+        self.assertFalse(Path(str(config)+'.token').exists())
+        self.assertTrue(Path(str(state)+'.completed').exists())
+
+    def test_pending_token_rejects_readable_file(self):
+        config = self.root/'resume'; token=Path(str(config)+'.token')
+        token.write_text('secret');token.chmod(0o644)
+        result=self.run_script(BOT/'install.sh', f'INSTALL_RESUME_CONFIG={shlex.quote(str(config))}\nBOT_TOKEN=""\nload_pending_token\necho MUST_NOT_RUN\n')
+        self.assertNotEqual(result.returncode,0)
+        self.assertNotIn('MUST_NOT_RUN',result.stdout)
+
+    def test_completed_install_is_detected_without_running_install(self):
+        state=self.root/'state'; installed=self.root/'bot';installed.mkdir()
+        (installed/'VPNBOT_VERSION').write_text((BOT/'VPNBOT_VERSION').read_text())
+        result=self.run_script(BOT/'install.sh', f"""
+SCRIPT_DIR={shlex.quote(str(BOT))}
+INSTALL_DIR={shlex.quote(str(installed))}
+INSTALL_STATE_FILE={shlex.quote(str(state))}
+printf '%s|%s\\n' "$(current_installer_version)" "$INSTALL_DIR" > "${{INSTALL_STATE_FILE}}.completed"
+installation_already_complete
+echo detected
+printf 'extra_software\\n' > "$INSTALL_STATE_FILE"
+if installation_already_complete; then exit 99; fi
+""")
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('detected',result.stdout)
+
+    def test_v3_checkpoints_survive_resume_version_change(self):
+        config=self.root/'resume';state=self.root/'state'
+        config.write_text('RESUME_INSTALLER_VERSION=global-v2-2026.10.26.3\nVPN_INITIAL_CLIENT=alice\nADMIN_BOT=123\n')
+        state.write_text('extra_software\nrepository\nendpoint_backup\n')
+        result=self.run_script(BOT/'install.sh',f'INSTALL_RESUME_CONFIG={shlex.quote(str(config))}\nINSTALL_STATE_FILE={shlex.quote(str(state))}\ncurrent_installer_version() {{ echo global-v2-2026.10.27.4; }}\nload_resume_config\n[[ "$VPN_INITIAL_CLIENT" == alice ]]\nstep_done extra_software\n')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertTrue(state.exists())
+
     def test_exhausted_retry_preserves_failure_for_both_installers(self):
         for path in (AWG, VLESS):
             with self.subTest(path=path):

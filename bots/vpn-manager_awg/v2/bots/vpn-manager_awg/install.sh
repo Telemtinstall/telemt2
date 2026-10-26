@@ -91,7 +91,7 @@ load_resume_config() {
   # shellcheck disable=SC1090
   . "$INSTALL_RESUME_CONFIG"
   saved_version="${RESUME_INSTALLER_VERSION:-}"
-  if [[ "$saved_version" != "$(current_installer_version)" ]]; then
+  if [[ "$saved_version" != "$(current_installer_version)" && ! "$saved_version" =~ ^global-v2-2026\.10\.26\.[123]$ ]]; then
     warn "версия установщика изменилась; старые контрольные точки сброшены"
     rm -f "$INSTALL_STATE_FILE" "$INSTALL_RESUME_CONFIG"
     INSTALL_EXTRA_SOFTWARE=""
@@ -100,6 +100,36 @@ load_resume_config() {
     VPN_INITIAL_CLIENT=""
     SERVER_CHANNEL_MBIT=""
   fi
+}
+
+save_pending_token() {
+  local token_file="${INSTALL_RESUME_CONFIG}.token" tmp
+  umask 077
+  tmp="$(mktemp "${token_file}.XXXXXX")"
+  printf '%s' "$BOT_TOKEN" > "$tmp"
+  chmod 600 "$tmp"
+  mv -f -- "$tmp" "$token_file"
+}
+
+load_pending_token() {
+  [[ -z "$BOT_TOKEN" ]] || return 0
+  local token_file="${INSTALL_RESUME_CONFIG}.token"
+  [[ -f "$token_file" ]] || return 0
+  # Refuse symlinks, another owner, or group/world-readable credentials.
+  python3 - "$token_file" <<'PYTOKEN'
+import os, stat, sys
+s=os.lstat(sys.argv[1])
+if not stat.S_ISREG(s.st_mode) or s.st_uid != os.geteuid() or stat.S_IMODE(s.st_mode) != 0o600:
+    raise SystemExit('Небезопасные права файла продолжения токена; ожидаются владелец root и режим 0600.')
+PYTOKEN
+  BOT_TOKEN="$(cat -- "$token_file")"
+}
+
+installation_already_complete() {
+  local receipt="${INSTALL_STATE_FILE}.completed"
+  [[ ! -s "$INSTALL_STATE_FILE" && -f "$receipt" && -f "$INSTALL_DIR/VPNBOT_VERSION" ]] || return 1
+  [[ "$(cat "$receipt")" == "$(current_installer_version)|$INSTALL_DIR" ]] || return 1
+  cmp -s "$SCRIPT_DIR/VPNBOT_VERSION" "$INSTALL_DIR/VPNBOT_VERSION" || return 1
 }
 
 step_done() {
@@ -176,7 +206,8 @@ start_installation_tracking() {
 }
 
 finish_installation_tracking() {
-  rm -f "$INSTALL_STATE_FILE" "$INSTALL_RESUME_CONFIG"
+  (umask 077; printf '%s|%s\n' "$(current_installer_version)" "$INSTALL_DIR" > "${INSTALL_STATE_FILE}.completed")
+  rm -f "$INSTALL_STATE_FILE" "$INSTALL_RESUME_CONFIG" "${INSTALL_RESUME_CONFIG}.token"
   echo "Контрольные точки очищены: установка полностью завершена."
 }
 
@@ -982,25 +1013,40 @@ main() {
   fi
 
   require_root_and_os
+  if installation_already_complete; then
+    echo "Эта сборка уже установлена. Повторная установка не запускается."
+    echo "Для диагностики: bash $REPO_DIR/check-server.sh"
+    exit 0
+  fi
   start_installation_tracking
   # Explicit flags on this invocation take precedence over saved answers.
   parse_args "$@"
   LOCAL_SOURCE=1
   REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
   if ! step_done bot_payload; then
-    step "Начальные настройки"
+    if [[ -s "$INSTALL_STATE_FILE" ]]; then
+      step "Продолжаю незавершённую установку; готовые этапы будут пропущены"
+    else
+      step "Начальные настройки"
+    fi
+    load_pending_token
     prompt_value ADMIN_BOT "Telegram ID администраторов через запятую"
     validate_admins
     collect_shared_vpn_settings
     prompt_secret BOT_TOKEN "Telegram BOT_TOKEN (скрытый ввод)"
     validate_token
+    save_pending_token
     save_resume_config
   fi
   print_plan
   echo "Будут установлены: VPN-бот, AmneziaWG 2.0, AmneziaWG 3.1 и VLESS Reality."
   echo "Зависимости бота: ${EXTRA_PACKAGES[*]}"
   echo "AWG может потребовать новое ядро, headers и перезагрузку."
-  confirm "Ставим перечисленное ПО?" "yes" || { echo "Установка отменена до изменения системных пакетов."; exit 0; }
+  if [[ ! -s "$INSTALL_STATE_FILE" ]]; then
+    confirm "Ставим перечисленное ПО?" "yes" || { rm -f "${INSTALL_RESUME_CONFIG}.token"; echo "Установка отменена до изменения системных пакетов."; exit 0; }
+  else
+    echo "Продолжаю с первого незавершённого этапа. Сохранённые ответы используются повторно."
+  fi
   run_resumable_step extra_software "Проверка дополнительного ПО" prepare_extra_software
   run_resumable_step repository "Проверка локального пакета Глобал" ensure_repo
   run_resumable_step endpoint_backup "Резервное копирование VPN-компонентов" backup_endpoint_components
