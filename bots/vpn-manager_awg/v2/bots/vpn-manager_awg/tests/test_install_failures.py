@@ -33,6 +33,23 @@ class InstallerFailureTests(unittest.TestCase):
         script.write_text(text + '\ntrap - ERR\n' + body)
         return subprocess.run(['bash', str(script)], capture_output=True, text=True)
 
+    def test_kernel_pause_has_distinct_exit_code_and_resume_command(self):
+        result = self.run_script(AWG, 'AWG_RESUME_COMMAND="bash /root/install-v2.sh"\ndie_reboot_required_for_kernel old new\necho MUST_NOT_RUN\n')
+        self.assertEqual(result.returncode, 75)
+        self.assertIn('reboot', result.stdout)
+        self.assertIn('bash /root/install-v2.sh', result.stdout)
+        self.assertNotIn('ОШИБКА', result.stdout + result.stderr)
+        self.assertNotIn('MUST_NOT_RUN', result.stdout)
+
+    def test_parent_preserves_pause_and_does_not_complete_step(self):
+        state = self.root/'state'
+        result = self.run_script(BOT/'install.sh', f"INSTALL_STATE_FILE={shlex.quote(str(state))}\ntrap installation_exit_report EXIT\nrun_resumable_step vpn fixture bash -c 'exit 75'\necho MUST_NOT_RUN\n")
+        self.assertEqual(result.returncode, 75)
+        self.assertIn('штатная пауза', result.stdout)
+        self.assertNotIn('Установка прервана с кодом', result.stdout)
+        self.assertNotIn('MUST_NOT_RUN', result.stdout)
+        self.assertFalse(state.exists())
+
     def test_exhausted_retry_preserves_failure_for_both_installers(self):
         for path in (AWG, VLESS):
             with self.subTest(path=path):

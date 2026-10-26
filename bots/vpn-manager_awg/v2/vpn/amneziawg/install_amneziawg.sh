@@ -89,6 +89,7 @@ on_unhandled_error() {
   local rc="$1"
   local line="$2"
   local cmd="$3"
+  [[ "$rc" != "75" ]] || exit 75
 
   echo >&2
   echo "ОШИБКА: скрипт остановился неожиданно." >&2
@@ -1028,29 +1029,18 @@ minimum_kernel_preflight() {
   [[ -n "$target" ]] && kernel_meets_minimum "$target" ||
     die "новое ядро не найдено после установки пакетов: ${packages[*]}"
 
-  die "установлено ядро ${target}, но сейчас загружено ${current}. Выполните перезагрузку:
-
-  reboot
-
-После повторного входа продолжите той же установкой:
-
-  $(resume_command)"
+  die_reboot_required_for_kernel "$current" "$target"
 }
 
 die_reboot_required_for_kernel() {
   local current="$1"
   local target="$2"
-  local resume_note
-  if [[ -s "$RESUME_CONFIG" ]]; then
-    resume_note="Установка продолжится без повторного ручного ввода, потому что ответы сохранены в ${RESUME_CONFIG}."
-  else
-    resume_note="Если это первый запуск, после reboot установщик задаст вопросы как обычно."
-  fi
-  die "сейчас загружено ядро ${current}, но для AmneziaWG нужен DKMS-модуль под ядро с доступными headers (${target}). Перезагрузите сервер сейчас, затем зайдите по SSH и запустите установщик из правильного каталога:
-
-  $(resume_command)
-
-После reboot команда uname -r должна показать ${target}. ${resume_note}"
+  printf '\nТРЕБУЕТСЯ ПЕРЕЗАГРУЗКА — установка приостановлена, это не сбой.\n'
+  printf 'Текущее ядро: %s. Подготовленное ядро с headers: %s.\n' "$current" "$target"
+  printf 'Выполните: reboot\nПосле повторного входа проверьте: uname -r (ожидается %s).\n' "$target"
+  printf 'Продолжить установку:\n  %s\n' "$(resume_command)"
+  printf 'Готовые этапы сохранены. Если токен ещё не записан в бота, введите его снова.\n'
+  exit 75
 }
 
 die_missing_current_kernel_headers() {
@@ -1090,7 +1080,7 @@ kernel_headers_reboot_preflight() {
   kernel_headers_ready && return 0
   apt_package_has_candidate "$headers_pkg" && return 0
 
-  newest_kernel="$(newest_installed_kernel)"
+  newest_kernel="$(newest_other_kernel_with_headers)"
   if kernel_is_newer_than_current "$kernel" "$newest_kernel"; then
     die_reboot_required_for_kernel "$kernel" "$newest_kernel"
   fi

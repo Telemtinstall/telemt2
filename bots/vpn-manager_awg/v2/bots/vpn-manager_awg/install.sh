@@ -70,6 +70,7 @@ save_resume_config() {
     printf 'RESUME_INSTALLER_VERSION=%q\n' "$(current_installer_version)"
     printf 'INSTALL_EXTRA_SOFTWARE=%q\n' "$INSTALL_EXTRA_SOFTWARE"
     printf 'INSTALL_VPN_COMPONENTS=%q\n' "$INSTALL_VPN_COMPONENTS"
+    printf 'ADMIN_BOT=%q\n' "$ADMIN_BOT"
     printf 'VPN_PUBLIC_HOST=%q\n' "$VPN_PUBLIC_HOST"
     printf 'VPN_INITIAL_CLIENT=%q\n' "$VPN_INITIAL_CLIENT"
     printf 'SERVER_CHANNEL_MBIT=%q\n' "$SERVER_CHANNEL_MBIT"
@@ -125,6 +126,7 @@ run_resumable_step() {
   "$@"
   mark_step_done "$step_id"
   save_resume_config
+  printf 'Завершено: %s\n' "$title"
 }
 
 configure_installer_log() {
@@ -148,7 +150,11 @@ EOF
 installation_exit_report() {
   local rc="$?"
   trap - EXIT
-  if (( rc != 0 )); then
+  if (( rc == 75 )); then
+    printf '\nУстановка ожидает перезагрузки. Это штатная пауза, а не ошибка.\n'
+    printf 'Выполните reboot, снова войдите по SSH и продолжите:\n  %s\n' "$(bot_resume_command)"
+    printf 'Автоматическая перезагрузка не выполнялась.\n'
+  elif (( rc != 0 )); then
     printf '\nУстановка прервана с кодом %s.\n' "$rc"
     printf 'Журнал: %s\n' "$INSTALL_LOG"
     printf 'Повторный запуск продолжит работу с последнего завершённого шага.\n'
@@ -353,7 +359,9 @@ require_root_and_os() {
 
 install_base_packages() {
   export DEBIAN_FRONTEND=noninteractive
+  echo "Начинаю установку зависимостей бота: ${EXTRA_PACKAGES[*]}"
   apt-get install -y "${EXTRA_PACKAGES[@]}"
+  echo "Установка пакетов завершена; проверяю зависимости."
 }
 
 normalize_yes_no_value() {
@@ -515,12 +523,20 @@ vpn_install_is_needed() {
 
 collect_shared_vpn_settings() {
   local detected=""
-  [[ -n "$VPN_PUBLIC_HOST" ]] || detected="$(detect_public_host)"
-  prompt_value VPN_PUBLIC_HOST "Публичный IP/host для всех VPN" "$detected"
-  [[ -n "$VPN_PUBLIC_HOST" ]] || die "не удалось определить публичный IP/host"
   prompt_value VPN_INITIAL_CLIENT "Имя первого пользователя во всех VPN" "vpnuser1"
   [[ "$VPN_INITIAL_CLIENT" =~ ^[A-Za-z0-9_.-]{1,32}$ ]] ||
-    die "имя первого пользователя должно содержать 1-64 символа: буквы, цифры, точка, _, -, @"
+    die "имя первого пользователя: 1-32 символа, латинские буквы, цифры, точка, _, -"
+  [[ -n "$VPN_PUBLIC_HOST" ]] || detected="$(detect_public_host)"
+  prompt_value VPN_PUBLIC_HOST "Публичный IP/host для всех VPN" "$detected"
+  python3 - "$VPN_PUBLIC_HOST" <<'PYIP'
+import ipaddress, sys
+try:
+    address=ipaddress.IPv4Address(sys.argv[1])
+except ValueError:
+    raise SystemExit('Введите IPv4 сервера. Домен можно настроить позже в боте.')
+if not address.is_global:
+    raise SystemExit('Нужен публичный IPv4 сервера.')
+PYIP
   save_resume_config
 }
 
@@ -559,9 +575,15 @@ prepare_vpn_components() {
     echo "Общие endpoint и имя первого пользователя будут использованы для трёх вариантов VPN."
     collect_shared_vpn_settings
   fi
+  echo 'Начинаю AmneziaWG 2.0. Зависимости: ядро и headers, DKMS, инструменты AWG, qrencode, сетевые утилиты.'
   ensure_awg
+  echo 'AmneziaWG 2.0: завершено.'
+  echo 'Начинаю AmneziaWG 3.1: отдельный интерфейс и профили; зависимости проверяются установщиком AWG.'
   ensure_awg3
+  echo 'AmneziaWG 3.1: завершено.'
+  echo 'Начинаю VLESS Reality. Зависимости: Xray, curl, jq, OpenSSL, qrencode.'
   ensure_vless
+  echo 'VLESS Reality: завершено.'
 }
 
 incomplete_protocol_install() {
@@ -965,7 +987,20 @@ main() {
   parse_args "$@"
   LOCAL_SOURCE=1
   REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+  if ! step_done bot_payload; then
+    step "Начальные настройки"
+    prompt_value ADMIN_BOT "Telegram ID администраторов через запятую"
+    validate_admins
+    collect_shared_vpn_settings
+    prompt_secret BOT_TOKEN "Telegram BOT_TOKEN (скрытый ввод)"
+    validate_token
+    save_resume_config
+  fi
   print_plan
+  echo "Будут установлены: VPN-бот, AmneziaWG 2.0, AmneziaWG 3.1 и VLESS Reality."
+  echo "Зависимости бота: ${EXTRA_PACKAGES[*]}"
+  echo "AWG может потребовать новое ядро, headers и перезагрузку."
+  confirm "Ставим перечисленное ПО?" "yes" || { echo "Установка отменена до изменения системных пакетов."; exit 0; }
   run_resumable_step extra_software "Проверка дополнительного ПО" prepare_extra_software
   run_resumable_step repository "Проверка локального пакета Глобал" ensure_repo
   run_resumable_step endpoint_backup "Резервное копирование VPN-компонентов" backup_endpoint_components
@@ -973,10 +1008,6 @@ main() {
 
   if ! step_done bot_payload; then
     step "Настройки Telegram и канала"
-    prompt_secret BOT_TOKEN "Telegram BOT_TOKEN"
-    prompt_value ADMIN_BOT "Telegram ID администраторов через запятую"
-    validate_admins
-    validate_token
     configure_channel
     save_resume_config
   else

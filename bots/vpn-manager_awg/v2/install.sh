@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Standalone downloader for the Global v2 release. No registrar API.
 set -Eeuo pipefail
-VERSION=global-v2-2026.10.26.2
+VERSION=global-v2-2026.10.26.3
 DEST="/root/vpnbot-global-v2-${VERSION}"
 URL="https://github.com/Telemtinstall/telemt2/archive/refs/tags/${VERSION}.tar.gz"
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +25,7 @@ if [[ ! -f "$DEST/install-global.sh" ]]; then
  python3 - "$stage" <<'PYEXTRACT'
 from pathlib import Path, PurePosixPath
 import sys, tarfile
-stage=Path(sys.argv[1]); prefix="telemt2-global-v2-2026.10.26.2/bots/vpn-manager_awg/v2/"
+stage=Path(sys.argv[1]); prefix="telemt2-global-v2-2026.10.26.3/bots/vpn-manager_awg/v2/"
 with tarfile.open(stage/'source.tar.gz', 'r:gz') as archive:
     members=[]
     for member in archive.getmembers():
