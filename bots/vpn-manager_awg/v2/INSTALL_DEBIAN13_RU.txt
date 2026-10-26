@@ -1,0 +1,4 @@
+Инструкция актуальной v2 находится в README.md.
+Запуск загруженного пакета: bash install-global.sh
+Проверка целостности без установки: bash install-global.sh --check
+После установки: bash check-server.sh
