@@ -11,7 +11,7 @@ FIELDS={
  'amnezia31':{'port':'AWG31_PORT'},
  'vless':{'port':'VLESS_PORT','mode':'VLESS_MODE','domain':'VLESS_DOMAIN','reality_target':'REALITY_TARGET','reality_sni':'REALITY_SERVER_NAME'},
  'hysteria2':{'port':'HY_PORT','domain':'HY_DOMAIN','obfs':'HY_OBFS','obfs_password':'HY_OBFS_PASSWORD',
-   'masquerade_url':'HY_MASQUERADE','version':'HY_VERSION','min_packet_size':'HY_MIN_PACKET','max_packet_size':'HY_MAX_PACKET'},
+   'masquerade_mode':'HY_MASQUERADE_MODE','masquerade_url':'HY_MASQUERADE','version':'HY_VERSION','min_packet_size':'HY_MIN_PACKET','max_packet_size':'HY_MAX_PACKET'},
 }
 
 def load_ini(path):
@@ -86,6 +86,12 @@ def build_plan(answers, protocols):
             plan.extend([('tcp', 80, 'vless:acme'), ('tcp', 12710, 'vless:backend')])
     if 'hysteria2' in protocols:
         plan.extend([('tcp', 80, 'hysteria2:acme'), ('tcp', 19090, 'hysteria2:api')])
+        if answers.get('HY_OBFS') == 'none' and answers.get('HY_MASQUERADE_MODE') == 'local':
+            from masquerade import normalize_url
+            from urllib.parse import urlsplit
+            raw = answers.get('HY_MASQUERADE') or answers.get('HY_DOMAIN')
+            port = (urlsplit(normalize_url(raw)).port or 443) if raw else 443
+            plan.append(('tcp', port, 'hysteria2:https'))
     return plan
 
 
@@ -145,7 +151,7 @@ def validate_common(answers, protocols=None, require=False):
             required.append('VLESS_DOMAIN')
     if 'hysteria2' in protocols:
         required.extend(['HY_DOMAIN', 'HY_OBFS'])
-        if answers.get('HY_OBFS') == 'none':
+        if answers.get('HY_OBFS') == 'none' and answers.get('HY_MASQUERADE_MODE', 'proxy') != 'local':
             required.append('HY_MASQUERADE')
     missing = [key for key in required if not answers.get(key)]
     if require and missing:
@@ -187,10 +193,11 @@ def validate_common(answers, protocols=None, require=False):
             raise ValueError('[hysteria2] version: нужен точный тег app/v2.x.y')
         if answers.get('HY_OBFS') == 'gecko' and tuple(map(int, version[5:].split('.'))) < (2, 9, 2):
             raise ValueError('Gecko требует Hysteria 2.9.2+')
+        if answers.get('HY_MASQUERADE_MODE', 'proxy') not in {'proxy', 'local'}:
+            raise ValueError('[hysteria2] masquerade_mode: proxy / local')
         if answers.get('HY_OBFS') == 'none' and answers.get('HY_MASQUERADE'):
-            url = urlsplit(answers['HY_MASQUERADE'])
-            if url.scheme not in {'http', 'https'} or not url.hostname or url.username or url.password:
-                raise ValueError('[hysteria2] masquerade_url: нужен HTTP/HTTPS URL без логина и пароля')
+            from masquerade import normalize_url
+            normalize_url(answers['HY_MASQUERADE'])
     for key in domains:
         if answers.get(key):
             domain_name(answers[key])

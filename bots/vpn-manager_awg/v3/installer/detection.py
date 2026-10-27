@@ -65,14 +65,14 @@ def channel_speed(report=print):
         return str(FALLBACK_MBIT), 'fallback'
 
 
-def resolve_auto(state, report=print):
+def resolve_auto(state, report=print, include_speed=True):
     answers = state.data['answers']
     resolved = state.data.setdefault('resolved', {})
     if answers.get('VPN_PUBLIC_HOST') == 'auto' and 'VPN_PUBLIC_HOST' not in resolved:
         resolved['VPN_PUBLIC_HOST'] = public_ipv4()
         state.save()
         report('Автоматически выбран IPv4: ' + resolved['VPN_PUBLIC_HOST'])
-    if answers.get('SERVER_CHANNEL_MBIT') == 'auto' and 'SERVER_CHANNEL_MBIT' not in resolved:
+    if include_speed and answers.get('SERVER_CHANNEL_MBIT') == 'auto' and 'SERVER_CHANNEL_MBIT' not in resolved:
         value, source = channel_speed(report)
         resolved['SERVER_CHANNEL_MBIT'] = value
         state.data.setdefault('detection', {})['channel_source'] = source

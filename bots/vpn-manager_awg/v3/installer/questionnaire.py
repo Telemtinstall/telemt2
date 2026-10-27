@@ -1,6 +1,7 @@
 """Explicit protocol choices; every accepted answer is checkpointed immediately."""
 import getpass
 import secrets
+from masquerade import normalize_url
 from ini_config import selected_valid, validate_answers, validate_common
 
 PROTOCOLS = ('amnezia20', 'amnezia31', 'vless', 'hysteria2')
@@ -98,15 +99,12 @@ class Questionnaire:
                 print('Домен нужен для TLS-сертификата во всех режимах Hysteria 2.')
                 print('A-запись должна вести на IPv4 сервера; получение и продление сертификата используют TCP-порт 80.')
             self.ask('HY_DOMAIN', 'Домен Hysteria 2 (A-запись должна вести на сервер)')
-            if not self.silent and not self.answers.get('HY_OBFS'):
-                print('Маскировка Hysteria 2:')
-                print('none — обычный HTTP/3 с сайтом-маскировкой, как в инструкции VDSina.')
-                print('salamander — пакеты выглядят как случайные данные; нужен пароль обфускации.')
-                print('gecko — экспериментальный: Salamander с фрагментацией и дополнением пакетов рукопожатия.')
-                print('При Salamander/Gecko обычная HTTP/3-маскировка недоступна; проверьте поддержку режима в клиенте.')
-            mode = self.ask('HY_OBFS', 'Выберите none/salamander/gecko', choices={'none', 'salamander', 'gecko'})
+            mode = self.hysteria_mode()
             if mode == 'none':
-                self.ask('HY_MASQUERADE', 'URL сайта-маскировки')
+                self.answers.setdefault('HY_MASQUERADE_MODE', 'proxy')
+                if self.answers['HY_MASQUERADE_MODE'] == 'local' and not self.answers.get('HY_MASQUERADE'):
+                    self.answers['HY_MASQUERADE'] = normalize_url(self.answers['HY_DOMAIN'])
+                self.ask_site_url()
             else:
                 self.ask('HY_OBFS_PASSWORD', 'Пароль обфускации (Enter — сгенерировать)',
                          lambda: secrets.token_urlsafe(32), secret=True)
@@ -117,3 +115,40 @@ class Questionnaire:
             self.state.save()
         validate_common(self.answers, chosen, require=True)
         validate_answers(self.answers, chosen)
+
+    def hysteria_mode(self):
+        mode = self.answers.get('HY_OBFS')
+        if mode:
+            if mode not in {'none', 'salamander', 'gecko'}:
+                raise ValueError('HY_OBFS: none / salamander / gecko')
+            return mode
+        if not self.silent:
+            print('Режим Hysteria:')
+            print('1 — none — обычный HTTP/3 с сайтом-маскировкой.')
+            print('2 — salamander — пакеты выглядят как случайные данные; нужен пароль обфускации.')
+            print('3 — gecko — экспериментальный: Salamander с фрагментацией и дополнением пакетов рукопожатия.')
+        choice = self.choose('hysteria_obfs', 'Выберите 1/2/3', {'1', '2', '3'})
+        mode = {'1': 'none', '2': 'salamander', '3': 'gecko'}[choice]
+        self.answers['HY_OBFS'] = mode
+        self.state.save()
+        return mode
+
+    def ask_site_url(self):
+        while True:
+            value = self.answers.get('HY_MASQUERADE')
+            if not value:
+                if self.silent:
+                    raise ValueError('Для --silent требуется [hysteria2] masquerade_url')
+                value = input('Сайт-маскировка (домен или HTTPS-адрес): ').strip()
+            try:
+                url = normalize_url(value)
+            except ValueError as error:
+                if self.silent:
+                    raise
+                print(str(error))
+                self.answers.pop('HY_MASQUERADE', None)
+                self.state.save()
+                continue
+            self.answers['HY_MASQUERADE'] = url
+            self.state.save()
+            return url

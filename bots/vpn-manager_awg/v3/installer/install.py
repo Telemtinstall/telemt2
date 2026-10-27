@@ -12,6 +12,7 @@ from detection import assigned_ipv4, resolve_auto
 from execution import StageRunner
 from ini_config import load_ini, merge_protocols, selected_valid, validate_answers, validate_common, validate_silent, build_plan
 from ports import occupied_ports, validate
+from masquerade import normalize_url, prepare_site
 from questionnaire import Questionnaire, PROTOCOLS
 from state import InstallState, atomic_json
 from system_prepare import PACKAGES, install_speedtest, kernel_preflight, kernel_ready, require_platform, run
@@ -23,7 +24,7 @@ OPTIONS = {'bot-token': 'BOT_TOKEN', 'admin-bot': 'ADMIN_BOT', 'public-ip': 'VPN
            'reality-server-name': 'REALITY_SERVER_NAME', 'awg20-port': 'AWG20_PORT', 'awg31-port': 'AWG31_PORT',
            'vless-port': 'VLESS_PORT', 'hysteria-port': 'HY_PORT', 'hysteria-domain': 'HY_DOMAIN',
            'hysteria-obfs': 'HY_OBFS', 'hysteria-obfs-password': 'HY_OBFS_PASSWORD',
-           'hysteria-masquerade-url': 'HY_MASQUERADE', 'hysteria-version': 'HY_VERSION',
+           'hysteria-masquerade-mode': 'HY_MASQUERADE_MODE', 'hysteria-masquerade-url': 'HY_MASQUERADE', 'hysteria-version': 'HY_VERSION',
            'hysteria-min-packet-size': 'HY_MIN_PACKET', 'hysteria-max-packet-size': 'HY_MAX_PACKET'}
 
 
@@ -50,6 +51,8 @@ def input_settings(args):
     answers.update({key: os.environ[key] for key in OPTIONS.values() if key in os.environ})
     answers.update({key: getattr(args, option.replace('-', '_')) for option, key in OPTIONS.items()
                     if getattr(args, option.replace('-', '_')) is not None})
+    if 'hysteria2' in (protocols or []) and answers.get('HY_OBFS') == 'none' and answers.get('HY_MASQUERADE'):
+        answers['HY_MASQUERADE'] = normalize_url(answers['HY_MASQUERADE'])
     validate_common(answers, protocols)
     validate_answers(answers, protocols)
     return answers, protocols
@@ -93,7 +96,8 @@ def install(args, supplied, protocols):
             return
         if args.stage_result:
             raise ValueError('--stage-result используется только вместе с --resolve-stage')
-        state.merge(supplied, protocols, args.silent)
+        explicit_keys = {key for option, key in OPTIONS.items() if getattr(args, option.replace('-', '_')) is not None}
+        state.merge(supplied, protocols, args.silent, force_keys=explicit_keys)
         silent = bool(state.data.get('silent'))
         chosen = state.data.get('protocols')
         if silent:
@@ -118,7 +122,10 @@ def install(args, supplied, protocols):
         chosen = questionnaire.select_protocols()
         reject_opposite(chosen)
         questionnaire.collect(chosen)
-        plan = build_plan(state.data['answers'], chosen)
+        initial = resolve_auto(state, include_speed=False)
+        if 'hysteria2' in chosen and 'hysteria2' not in state.data['done']:
+            prepare_site(questionnaire, initial['VPN_PUBLIC_HOST'])
+        plan = build_plan(dict(state.data['answers'], **state.data['resolved']), chosen)
         remaining = [row for row in plan if row[2].split(':', 1)[0] not in state.data['done']]
         validate(remaining, occupied_ports())
         assigned = assigned_ipv4()

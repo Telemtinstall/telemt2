@@ -329,9 +329,9 @@ class QuestionnaireUXTests(unittest.TestCase):
         self.state.data['answers']={'VPN_PUBLIC_HOST':'8.8.8.8','VPN_INITIAL_CLIENT':'vpnuser1',
             'SERVER_CHANNEL_MBIT':'100','ADMIN_BOT':'1','BOT_TOKEN':'123:fixture','HY_PORT':'443',
             'HY_DOMAIN':'vpn.example.org','HY_MASQUERADE':'https://example.org'}
-        with patch('builtins.input',return_value='none') as prompt, contextlib.redirect_stdout(io.StringIO()) as output:
+        with patch('builtins.input',return_value='1') as prompt, contextlib.redirect_stdout(io.StringIO()) as output:
             Questionnaire(self.state).collect(['hysteria2'])
-        prompt.assert_called_once_with('Выберите none/salamander/gecko: ')
+        prompt.assert_called_once_with('Выберите 1/2/3: ')
         self.assertIn('none — обычный HTTP/3',output.getvalue())
         self.assertIn('salamander — пакеты выглядят как случайные данные',output.getvalue())
         self.assertIn('gecko — экспериментальный',output.getvalue())

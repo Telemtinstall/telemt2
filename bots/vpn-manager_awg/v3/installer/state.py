@@ -1,5 +1,6 @@
 """Private, atomic installer checkpoints; each answer survives a reboot."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import stat
@@ -52,8 +53,14 @@ class InstallState:
         return bool(PROTOCOL_STAGES.intersection(self.data['done'])
                     or self.data.get('running') in PROTOCOL_STAGES)
 
-    def merge(self, answers, protocols, silent=None):
+    def merge(self, answers, protocols, silent=None, force_keys=None):
         current = self.data['answers']
+        previous_inputs = self.data.setdefault('input_hashes', {})
+        incoming_hashes = {key: hashlib.sha256(str(value).encode()).hexdigest() for key, value in answers.items()}
+        explicit = set(answers) if force_keys is None else set(force_keys)
+        # An unchanged INI must not replace a site the user corrected interactively.
+        answers = {key: value for key, value in answers.items()
+                   if key in explicit or previous_inputs.get(key) != incoming_hashes[key] or key not in current}
         changed = {key for key, value in answers.items() if current.get(key) != value}
         different_protocols = protocols is not None and set(protocols) != set(self.data.get('protocols', []))
         if self.started_vpn() and (changed or different_protocols):
@@ -61,9 +68,12 @@ class InstallState:
                              'используйте прежние ответы до завершения или сверки сервера')
         for key in changed:
             self.data['resolved'].pop(key, None)
+        if changed.intersection({'HY_DOMAIN', 'HY_OBFS', 'HY_MASQUERADE', 'HY_MASQUERADE_MODE'}):
+            self.data['resolved'].pop('HY_MASQUERADE_MODE', None)
         if 'SERVER_CHANNEL_MBIT' in changed:
             self.data.setdefault('detection', {}).pop('channel_source', None)
         current.update(answers)
+        previous_inputs.update(incoming_hashes)
         if protocols is not None:
             self.data['protocols'] = list(dict.fromkeys(protocols))
         if silent is not None:
