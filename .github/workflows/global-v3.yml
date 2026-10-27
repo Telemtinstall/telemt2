@@ -39,4 +39,13 @@ jobs:
           find bots/vpn-manager_awg/v3 -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
       - name: Run regression and simulated installation tests
         working-directory: bots/vpn-manager_awg/v3/bots/vpn-manager_awg
-        run: /usr/bin/python3 -m unittest discover -s tests -q
+        run: |
+          /usr/bin/python3 - <<'PYTEST'
+          import sys, unittest
+          suite = unittest.defaultTestLoader.discover('tests')
+          result = unittest.TextTestRunner(verbosity=1).run(suite)
+          for test, trace in result.failures + result.errors:
+              message = trace.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::error title=' + test.id() + '::' + message)
+          sys.exit(0 if result.wasSuccessful() else 1)
+          PYTEST
