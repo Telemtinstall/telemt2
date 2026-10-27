@@ -132,10 +132,10 @@ class FlowTests(unittest.TestCase):
 
     def test_interrupted_questionnaire_does_not_repeat_accepted_choices(self):
         state = InstallState(self.path)
-        with patch('builtins.input', side_effect=['нет', 'нет', KeyboardInterrupt()]):
+        with patch('builtins.input', side_effect=['n', 'n', KeyboardInterrupt()]):
             with self.assertRaises(KeyboardInterrupt): Questionnaire(state).select_protocols()
         reloaded = InstallState(self.path)
-        with patch('builtins.input', side_effect=['да', '2']) as ask:
+        with patch('builtins.input', side_effect=['y', '2']) as ask:
             self.assertEqual(Questionnaire(reloaded).select_protocols(), ['amnezia31', 'hysteria2'])
         self.assertEqual(ask.call_count, 2)
 
@@ -306,5 +306,35 @@ class ReconciliationTests(unittest.TestCase):
         queue.enqueue.assert_called_once()
         self.assertEqual(queue.enqueue.call_args.args[3], 'toggle_protocol')
         self.assertEqual(queue.enqueue.call_args.args[4], [1,'hy',True,'1'])
+
+
+class QuestionnaireUXTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.state=InstallState(Path(self.temp.name)/'state.json')
+    def test_yes_no_and_numbered_protocol_prompt_have_no_default(self):
+        with patch('builtins.input',side_effect=['','y','2']) as prompt, contextlib.redirect_stdout(io.StringIO()) as output:
+            chosen=Questionnaire(self.state).select_protocols()
+        self.assertEqual(chosen,['amnezia20','amnezia31','hysteria2'])
+        self.assertTrue(prompt.call_args_list[0].args[0].endswith('? y/n: '))
+        self.assertEqual(prompt.call_args.args[0],'Выберите 1/2: ')
+        self.assertIn('1 — VLESS\n2 — Hysteria 2\n',output.getvalue())
+    def test_saved_russian_answers_resume_without_repeating_questions(self):
+        self.state.data['selection']={'all':'да'};self.state.save()
+        with patch('builtins.input',return_value='1') as prompt, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(Questionnaire(self.state).select_protocols(),['amnezia20','amnezia31','vless'])
+        prompt.assert_called_once_with('Выберите 1/2: ')
+        self.assertEqual(self.state.data['selection']['all'],'y')
+    def test_hysteria_modes_are_explained_before_input(self):
+        self.state.data['answers']={'VPN_PUBLIC_HOST':'8.8.8.8','VPN_INITIAL_CLIENT':'vpnuser1',
+            'SERVER_CHANNEL_MBIT':'100','ADMIN_BOT':'1','BOT_TOKEN':'123:fixture','HY_PORT':'443',
+            'HY_DOMAIN':'vpn.example.org','HY_MASQUERADE':'https://example.org'}
+        with patch('builtins.input',return_value='none') as prompt, contextlib.redirect_stdout(io.StringIO()) as output:
+            Questionnaire(self.state).collect(['hysteria2'])
+        prompt.assert_called_once_with('Выберите none/salamander/gecko: ')
+        self.assertIn('none — обычный HTTP/3',output.getvalue())
+        self.assertIn('salamander — пакеты выглядят как случайные данные',output.getvalue())
+        self.assertIn('gecko — экспериментальный',output.getvalue())
+        self.assertEqual(self.state.data['answers']['HY_OBFS'],'none')
 
 if __name__ == '__main__': unittest.main()

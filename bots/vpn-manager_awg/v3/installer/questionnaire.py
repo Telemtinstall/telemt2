@@ -50,15 +50,26 @@ class Questionnaire:
                 return value
             print('Нужно явно выбрать: ' + ', '.join(sorted(choices)))
 
+    def yes_no(self, key, label):
+        # Keep already accepted answers from the first v3 builds after a restart.
+        previous = self.state.data['selection'].get(key)
+        if previous in {'да', 'нет'}:
+            self.state.data['selection'][key] = {'да': 'y', 'нет': 'n'}[previous]
+            self.state.save()
+        return self.choose(key, label + '? y/n', {'y', 'n'}) == 'y'
+
     def select_protocols(self):
         if self.state.data.get('protocols'):
             return selected_valid(self.state.data['protocols'])
-        all_awg = self.choose('all', 'Установить все совместимые VPN (оба AWG и один из VLESS/Hysteria 2)? да/нет', {'да', 'нет'}) == 'да'
+        all_awg = self.yes_no('all', 'Установить все совместимые VPN (оба AWG и один из VLESS/Hysteria 2)')
         chosen = []
         for name in PROTOCOLS[:2]:
-            if all_awg or self.choose(name, 'Установить ' + LABELS[name] + '? да/нет', {'да', 'нет'}) == 'да':
+            if all_awg or self.yes_no(name, 'Установить ' + LABELS[name]):
                 chosen.append(name)
-        alternative = self.choose('alternative', 'VLESS / Hysteria 2? 1 — VLESS, 2 — Hysteria 2', {'1', '2'})
+        if not self.silent and 'alternative' not in self.state.data['selection']:
+            print('1 — VLESS')
+            print('2 — Hysteria 2')
+        alternative = self.choose('alternative', 'Выберите 1/2', {'1', '2'})
         chosen.append({'1': 'vless', '2': 'hysteria2'}[alternative])
         self.state.data['protocols'] = selected_valid(chosen)
         self.state.save()
@@ -73,7 +84,8 @@ class Questionnaire:
         for name, key, default in [('amnezia20', 'AWG20_PORT', '1234'), ('amnezia31', 'AWG31_PORT', '1235'),
                                    ('vless', 'VLESS_PORT', '443'), ('hysteria2', 'HY_PORT', '443')]:
             if name in chosen:
-                self.ask(key, LABELS[name] + ': внешний порт', default)
+                transport = 'TCP' if name == 'vless' else 'UDP'
+                self.ask(key, LABELS[name] + ': внешний ' + transport + '-порт VPN', default)
         if 'vless' in chosen:
             mode = self.ask('VLESS_MODE', 'Режим VLESS: reality / direct / mask', choices={'reality', 'direct', 'mask'})
             if mode == 'mask':
@@ -82,8 +94,17 @@ class Questionnaire:
                 self.ask('REALITY_TARGET', 'Reality target', 'www.google.com:443')
                 self.ask('REALITY_SERVER_NAME', 'Reality SNI', 'www.google.com')
         if 'hysteria2' in chosen:
+            if not self.silent and not self.answers.get('HY_DOMAIN'):
+                print('Домен нужен для TLS-сертификата во всех режимах Hysteria 2.')
+                print('A-запись должна вести на IPv4 сервера; получение и продление сертификата используют TCP-порт 80.')
             self.ask('HY_DOMAIN', 'Домен Hysteria 2 (A-запись должна вести на сервер)')
-            mode = self.ask('HY_OBFS', 'Режим Hysteria: none / salamander / gecko', choices={'none', 'salamander', 'gecko'})
+            if not self.silent and not self.answers.get('HY_OBFS'):
+                print('Маскировка Hysteria 2:')
+                print('none — обычный HTTP/3 с сайтом-маскировкой, как в инструкции VDSina.')
+                print('salamander — пакеты выглядят как случайные данные; нужен пароль обфускации.')
+                print('gecko — экспериментальный: Salamander с фрагментацией и дополнением пакетов рукопожатия.')
+                print('При Salamander/Gecko обычная HTTP/3-маскировка недоступна; проверьте поддержку режима в клиенте.')
+            mode = self.ask('HY_OBFS', 'Выберите none/salamander/gecko', choices={'none', 'salamander', 'gecko'})
             if mode == 'none':
                 self.ask('HY_MASQUERADE', 'URL сайта-маскировки')
             else:
