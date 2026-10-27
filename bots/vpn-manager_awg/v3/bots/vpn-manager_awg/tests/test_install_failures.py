@@ -62,7 +62,7 @@ save_pending_token
 BOT_TOKEN=''
 load_pending_token
 [[ "$BOT_TOKEN" == '123:fixture-secret' ]]
-[[ $(stat -f %Lp "${{INSTALL_RESUME_CONFIG}}.token" 2>/dev/null || stat -c %a "${{INSTALL_RESUME_CONFIG}}.token") == 600 ]]
+python3 -c 'import os, stat, sys; assert stat.S_IMODE(os.stat(sys.argv[1]).st_mode) == 0o600' "${{INSTALL_RESUME_CONFIG}}.token"
 finish_installation_tracking
 """)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -1,6 +1,6 @@
 # Global v3
 
-Сборка для испытаний `global-v3-2026.10.27.3`, основа — неизменённый каталог
+Сборка для испытаний `global-v3-2026.10.27.4`, основа — неизменённый каталог
 `global-vpnbot` (Global v2). Личная версия и работающие серверы не затронуты.
 На сервер сборка не устанавливалась; импорт и подключение на устройствах ещё
 не проверены. Установка предусмотрена на отдельный чистый Debian 13 / Ubuntu 24+.
@@ -218,11 +218,11 @@ https://v2.hysteria.network/docs/advanced/Traffic-Stats-API/
 ## Публикация v3 на GitHub
 
 Отдельный каталог репозитория: `bots/vpn-manager_awg/v3/`.
-Тег сборки: `global-v3-2026.10.27.3`. Существующие v2 и основной установщик не заменяются.
+Тег сборки: `global-v3-2026.10.27.4`. Существующие v2 и основной установщик не заменяются.
 Отдельная команда для подготовленного Debian 13 / Ubuntu 24+ (root):
 
 ```bash
-curl -fL https://raw.githubusercontent.com/Telemtinstall/telemt2/global-v3-2026.10.27.3/install-v3.sh -o /root/install-v3.sh
+curl -fL https://raw.githubusercontent.com/Telemtinstall/telemt2/global-v3-2026.10.27.4/install-v3.sh -o /root/install-v3.sh
 bash /root/install-v3.sh --check
 bash /root/install-v3.sh
 ```
@@ -231,7 +231,7 @@ bash /root/install-v3.sh
 `apt-get update` и `apt-get install -y ca-certificates curl python3`.
 Загрузчик получает закреплённый тег, извлекает только каталог v3, запрещает
 symlink/path traversal и проверяет SHA256SUMS перед запуском. Пакет хранится в
-`/root/vpnbot-global-v3-2026.10.27.3`; повторная команда использует эту же копию.
+`/root/vpnbot-global-v3-2026.10.27.4`; повторная команда использует эту же копию.
 Находясь внутри полного пакета, `bash install-v3.sh` вызывает локальный установщик.
 
 GitHub Actions проверяет пакет и тесты в Debian 13 и Ubuntu 24.04, включая реальное
