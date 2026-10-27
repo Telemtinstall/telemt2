@@ -1,0 +1,14 @@
+[Unit]
+Description=Global v3 durable VPN task worker
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+WorkingDirectory=/root/vpnbot
+ExecStart=/usr/bin/python3 /root/vpnbot/worker.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+TimeoutStopSec=150
+[Install]
+WantedBy=multi-user.target

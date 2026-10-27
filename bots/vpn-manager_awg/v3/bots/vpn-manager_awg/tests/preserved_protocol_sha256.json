@@ -1,0 +1,10 @@
+{
+  "baseline": "Global v2 local source, 2026-10-27",
+  "sha256": {
+    "vpn/amneziawg/install_amneziawg.sh": "75c5e2766e1baecd006f1d17ce972d2566c8bbf6920b1080af73fdcd9b551e10",
+    "vpn/amneziawg/awgctl.sh": "dd8d19faa165e8757f2c6c7c0446cc22172cceede5e771443f050c20b56d2ac4",
+    "vpn/vless/install_vless.sh": "007b078b36c43696f26a5d92351c06d6cd0ee480953ef306366d5a82cc67015f",
+    "vpn/vless/vlessctl.sh": "3f949a6e7b108af420683e896145a32eb4c1daeeb0d53c6162f144dbb9d3da47",
+    "bots/vpn-manager_awg/app/actions.py": "448e3ca41d29fe4bd916ca8b58a18aaa80f983558015e69120002363492d3693"
+  }
+}

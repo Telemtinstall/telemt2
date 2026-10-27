@@ -1,0 +1,42 @@
+name: Global v3 validation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bots/vpn-manager_awg/v3/**'
+      - 'install-v3.sh'
+      - '.github/workflows/global-v3.yml'
+  pull_request:
+    paths:
+      - 'bots/vpn-manager_awg/v3/**'
+      - 'install-v3.sh'
+      - '.github/workflows/global-v3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['debian:13-slim', 'ubuntu:24.04']
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Prepare test runtime
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates git python3 python3-pil fonts-dejavu-core qrencode jq util-linux
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check the package and INI template
+        run: |
+          bash bots/vpn-manager_awg/v3/install-global.sh --check --config bots/vpn-manager_awg/v3/silent.example.ini
+          bash -n install-v3.sh
+          find bots/vpn-manager_awg/v3 -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+      - name: Run regression and simulated installation tests
+        working-directory: bots/vpn-manager_awg/v3/bots/vpn-manager_awg
+        run: /usr/bin/python3 -m unittest discover -s tests -q
