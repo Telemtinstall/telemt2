@@ -37,6 +37,8 @@ jobs:
           bash bots/vpn-manager_awg/v3/install-global.sh --check --config bots/vpn-manager_awg/v3/silent.example.ini
           bash -n install-v3.sh
           find bots/vpn-manager_awg/v3 -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+      - name: Verify and launch the official Hysteria binary
+        run: /usr/bin/python3 bots/vpn-manager_awg/v3/tools/check-hysteria-release.py --execute
       - name: Run regression and simulated installation tests
         working-directory: bots/vpn-manager_awg/v3/bots/vpn-manager_awg
         run: |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pinned Global v3 downloader; keeps v2 and default installers unchanged.
 set -Eeuo pipefail
-VERSION=global-v3-2026.10.27.6
+VERSION=global-v3-2026.10.27.7
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$HERE/install-global.sh" && -f "$HERE/bots/vpn-manager_awg/SHA256SUMS" ]]; then
   exec bash "$HERE/install-global.sh" "$@"

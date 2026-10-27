@@ -18,6 +18,41 @@ import urllib.parse
 import urllib.request
 from hysteria2ctl import write_json
 
+class ReleaseIntegrityError(ValueError):
+    """Release rejected before any persistent installation writes."""
+    pass
+
+
+def expected_sha256(hashes, asset):
+    matches = set()
+    for line in hashes.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        name = fields[1].lstrip('*')
+        if name.startswith('./'):
+            name = name[2:]
+        # Official hashes.txt names artifacts as build/hysteria-linux-amd64.
+        if name not in {asset, 'build/' + asset}:
+            continue
+        if not re.fullmatch(r'[0-9a-fA-F]{64}', fields[0]):
+            raise ReleaseIntegrityError('Некорректная SHA256 в hashes.txt для ' + asset)
+        matches.add(fields[0].lower())
+    if not matches:
+        raise ReleaseIntegrityError('В официальном hashes.txt не найдена SHA256 для ' + asset)
+    if len(matches) != 1:
+        raise ReleaseIntegrityError('В hashes.txt несколько разных SHA256 для ' + asset)
+    return matches.pop()
+
+
+def verify_binary(binary, hashes, asset):
+    expected = expected_sha256(hashes, asset)
+    observed = hashlib.sha256(Path(binary).read_bytes()).hexdigest()
+    if observed != expected:
+        raise ReleaseIntegrityError('SHA256 Hysteria не совпадает: ожидалось ' + expected + ', получено ' + observed)
+    return observed
+
+
 def build_config(s):
     config={'listen':s['bind_ip']+':'+str(s['port']),
       'acme':{'domains':[s['domain']],'ca':'letsencrypt','type':'http','listenHost':s['bind_ip'],'dir':'/etc/hysteria/acme'},
@@ -77,11 +112,7 @@ def main():
         binary=Path(td)/asset
         urllib.request.urlretrieve(url+asset,binary)
         with urllib.request.urlopen(url+'hashes.txt',timeout=30) as response:hashes=response.read().decode()
-        expected=None
-        for line in hashes.splitlines():
-            parts=line.split()
-            if len(parts)==2 and parts[1].lstrip('*')==asset:expected=parts[0]
-        if not expected or hashlib.sha256(binary.read_bytes()).hexdigest()!=expected:raise ValueError('SHA256 Hysteria не совпадает')
+        verify_binary(binary, hashes, asset)
         shutil.copyfile(binary,'/usr/local/bin/hysteria');os.chmod('/usr/local/bin/hysteria',0o755)
     # No stopping other web servers; TCP 80 must have passed central preflight.
     root.mkdir(mode=0o700)
@@ -135,4 +166,5 @@ WantedBy=multi-user.target
 
 if __name__=='__main__':
     try:main()
+    except ReleaseIntegrityError as exc:print('Ошибка проверки релиза Hysteria: '+str(exc),file=sys.stderr);sys.exit(78)
     except Exception as exc:print('Ошибка установки Hysteria: '+str(exc),file=sys.stderr);sys.exit(1)

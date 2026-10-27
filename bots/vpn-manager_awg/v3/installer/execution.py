@@ -32,6 +32,10 @@ class StageRunner:
         try:
             if protocol:
                 result = self._protocol(command)
+                if name == 'hysteria2' and result == 78:
+                    data.pop('running', None)
+                    self.state.save()
+                    raise ValueError('Проверка релиза Hysteria не пройдена; установка протокола ещё не начиналась. Повтор разрешён после устранения причины')
                 if result == 75:
                     data.pop('running', None)
                     self.state.save()

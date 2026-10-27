@@ -15,6 +15,7 @@ from ports import occupied_ports, validate
 from masquerade import normalize_url, prepare_site
 from questionnaire import Questionnaire, PROTOCOLS
 from state import InstallState, atomic_json
+from recovery import hysteria_untouched
 from system_prepare import PACKAGES, install_speedtest, kernel_preflight, kernel_ready, require_platform, run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +99,9 @@ def install(args, supplied, protocols):
             raise ValueError('--stage-result используется только вместе с --resolve-stage')
         explicit_keys = {key for option, key in OPTIONS.items() if getattr(args, option.replace('-', '_')) is not None}
         state.merge(supplied, protocols, args.silent, force_keys=explicit_keys)
+        if state.data.get('running') == 'hysteria2' and hysteria_untouched():
+            state.resolve_stage('hysteria2', 'retry')
+            print('Подготовка Hysteria была прервана до установки: конфигурации, CLI, бинарника и службы нет. Повтор разрешён.')
         silent = bool(state.data.get('silent'))
         chosen = state.data.get('protocols')
         if silent:
