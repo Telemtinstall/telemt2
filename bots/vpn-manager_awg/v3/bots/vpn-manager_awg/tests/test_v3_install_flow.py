@@ -80,7 +80,7 @@ class FlowTests(unittest.TestCase):
             stack.enter_context(patch('detection.public_ipv4', return_value='8.8.8.8'))
             speed = stack.enter_context(patch('detection.channel_speed', return_value=('100', 'fallback')))
             stack.enter_context(patch('install.kernel_preflight', side_effect=kernel or (lambda *a: events.append('kernel'))))
-            stack.enter_context(patch('execution.subprocess.run', side_effect=lambda command, **kw: events.append(command)))
+            stack.enter_context(patch('execution.run_process', side_effect=lambda command, **kw: events.append(command)))
             protocol = stack.enter_context(patch.object(StageRunner, '_protocol', side_effect=lambda command: events.append(str(command[-1])) or 0))
             stack.enter_context(patch('builtins.input', side_effect=AssertionError('unexpected question')))
             stack.enter_context(patch('getpass.getpass', side_effect=AssertionError('unexpected secret question')))
@@ -142,7 +142,7 @@ class FlowTests(unittest.TestCase):
     def test_protocol_crash_requires_explicit_resolution(self):
         state = InstallState(self.path); state.data['running'] = 'hysteria2'; state.save()
         runner = StageRunner(state, {})
-        with patch('execution.subprocess.run') as command:
+        with patch('execution.run_process') as command:
             with self.assertRaisesRegex(ValueError, 'сверьте'): runner.run('bot', ['echo', 'never'])
             command.assert_not_called()
         state.resolve_stage('hysteria2', 'retry')
@@ -151,10 +151,10 @@ class FlowTests(unittest.TestCase):
 
     def test_safe_package_failure_can_resume_without_editing_state(self):
         state = InstallState(self.path)
-        with patch('execution.subprocess.run', side_effect=subprocess.CalledProcessError(1, 'apt')):
+        with patch('execution.run_process', side_effect=subprocess.CalledProcessError(1, 'apt')):
             with self.assertRaises(subprocess.CalledProcessError): StageRunner(state, {}).run('packages', ['apt'])
         self.assertNotIn('running', InstallState(self.path).data)
-        with patch('execution.subprocess.run'): StageRunner(state, {}).run('packages', ['apt'])
+        with patch('execution.run_process'): StageRunner(state, {}).run('packages', ['apt'])
         self.assertIn('packages', state.data['done'])
 
     def test_output_filter_suppresses_profiles_and_credentials(self):
@@ -236,7 +236,7 @@ class KernelAndVerificationTests(unittest.TestCase):
             self.assertFalse(any('awgctl' in str(c) or 'vlessctl' in str(c) for c in commands))
     def test_optional_speedtest_package_failure_is_nonfatal(self):
         from system_prepare import install_speedtest
-        with patch('system_prepare.shutil.which', return_value=None), patch('system_prepare.subprocess.run', side_effect=subprocess.CalledProcessError(100,'apt')), contextlib.redirect_stdout(io.StringIO()) as output:
+        with patch('system_prepare.shutil.which', return_value=None), patch('system_prepare.run_process', side_effect=subprocess.CalledProcessError(100,'apt')), contextlib.redirect_stdout(io.StringIO()) as output:
             install_speedtest({})
         self.assertIn('100 Мбит/с',output.getvalue())
     def test_changing_auto_before_vpn_resets_resolution_but_after_vpn_is_rejected(self):

@@ -16,9 +16,11 @@ from masquerade import normalize_url, prepare_site
 from questionnaire import Questionnaire, PROTOCOLS
 from state import InstallState, atomic_json
 from recovery import hysteria_untouched
+from progress import activity
 from system_prepare import PACKAGES, install_speedtest, kernel_preflight, kernel_ready, require_platform, run
 
 ROOT = Path(__file__).resolve().parents[1]
+CURRENT_RESUME = None
 OPTIONS = {'bot-token': 'BOT_TOKEN', 'admin-bot': 'ADMIN_BOT', 'public-ip': 'VPN_PUBLIC_HOST',
            'initial-client': 'VPN_INITIAL_CLIENT', 'channel-mbit': 'SERVER_CHANNEL_MBIT',
            'vless-domain': 'VLESS_DOMAIN', 'vless-mode': 'VLESS_MODE', 'reality-target': 'REALITY_TARGET',
@@ -65,7 +67,10 @@ def resume_command(state_path):
 
 
 def verify_package():
-    run(['sha256sum', '--check', '--quiet', 'SHA256SUMS'], cwd=ROOT / 'bots/vpn-manager_awg')
+    result = subprocess.run(['sha256sum', '--check', '--quiet', 'SHA256SUMS'],
+                            cwd=ROOT / 'bots/vpn-manager_awg', capture_output=True, text=True)
+    if result.returncode:
+        raise ValueError('Пакет установщика повреждён: проверка SHA256 не пройдена. Загрузите пакет заново')
 
 
 def reject_opposite(chosen):
@@ -113,7 +118,7 @@ def install(args, supplied, protocols):
                              'после неё используйте --resolve-stage и --stage-result')
         # No questionnaire before the kernel stage, including on interrupted runs.
         if not chosen or any(name.startswith('amnezia') for name in chosen):
-            kernel_preflight(resume_command(state.path))
+            kernel_preflight(resume_command(state.path), state)
         base_env = dict(os.environ, DEBIAN_FRONTEND='noninteractive', NEEDRESTART_MODE='l')
         runner = StageRunner(state, base_env)
         runner.run('dependencies', ['apt-get', 'update'])
@@ -126,22 +131,26 @@ def install(args, supplied, protocols):
         chosen = questionnaire.select_protocols()
         reject_opposite(chosen)
         questionnaire.collect(chosen)
-        initial = resolve_auto(state, include_speed=False)
+        with activity('Идёт определение публичного IPv4'):
+            initial = resolve_auto(state, report=lambda message: None, include_speed=False)
         if 'hysteria2' in chosen and 'hysteria2' not in state.data['done']:
             prepare_site(questionnaire, initial['VPN_PUBLIC_HOST'])
         plan = build_plan(dict(state.data['answers'], **state.data['resolved']), chosen)
         remaining = [row for row in plan if row[2].split(':', 1)[0] not in state.data['done']]
-        validate(remaining, occupied_ports())
-        assigned = assigned_ipv4()
+        with activity('Идёт проверка портов и сетевых интерфейсов'):
+            validate(remaining, occupied_ports())
+            assigned = assigned_ipv4()
         explicit_ip = state.data['answers']['VPN_PUBLIC_HOST']
         if explicit_ip != 'auto' and explicit_ip not in assigned:
             raise ValueError('Выбранный публичный IPv4 не назначен интерфейсу сервера')
-        effective = resolve_auto(state)
+        reports = []
+        with activity('Идёт проверка скорости канала'):
+            effective = resolve_auto(state, report=reports.append)
+        for message in reports:
+            print(message)
         validate_common(effective, chosen, require=True)
         if effective['VPN_PUBLIC_HOST'] not in assigned:
             raise ValueError('Выбранный публичный IPv4 больше не назначен интерфейсу сервера')
-        print('Выбраны протоколы: ' + ', '.join(chosen))
-        print('IPv4: ' + effective['VPN_PUBLIC_HOST'] + '; скорость: ' + effective['SERVER_CHANNEL_MBIT'] + ' Мбит/с')
         env = dict(base_env, **effective, ASSUME_YES='1', V3_SELECTED=','.join(chosen),
                    AWG_RESUME_COMMAND=resume_command(state.path))
         runner = StageRunner(state, env)
@@ -155,7 +164,9 @@ def install(args, supplied, protocols):
 
 
 def main(argv=None):
+    global CURRENT_RESUME
     args = parser().parse_args(argv)
+    CURRENT_RESUME = None if args.check else resume_command(args.state_file)
     supplied, protocols = input_settings(args)
     verify_package()
     if args.check:
@@ -177,10 +188,12 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         print('Установка остановлена. Принятые ответы сохранены.', file=sys.stderr)
+        if CURRENT_RESUME: print('Продолжение: ' + CURRENT_RESUME, file=sys.stderr)
         sys.exit(130)
     except EOFError:
         print('ОШИБКА: ввод недоступен. Используйте --silent --config или интерактивный терминал.', file=sys.stderr)
         sys.exit(1)
     except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as exc:
         print('ОШИБКА: ' + str(exc), file=sys.stderr)
+        if CURRENT_RESUME: print('Продолжение: ' + CURRENT_RESUME, file=sys.stderr)
         sys.exit(1)

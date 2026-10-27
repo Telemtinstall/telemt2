@@ -2,7 +2,7 @@
 import getpass
 import secrets
 from masquerade import normalize_url
-from ini_config import selected_valid, validate_answers, validate_common
+from ini_config import domain_name, selected_valid, validate_answers, validate_common
 
 PROTOCOLS = ('amnezia20', 'amnezia31', 'vless', 'hysteria2')
 LABELS = dict(zip(PROTOCOLS, ('AmneziaWG 2.0', 'AmneziaWG 3.1', 'VLESS', 'Hysteria 2')))
@@ -13,27 +13,53 @@ class Questionnaire:
         self.state, self.silent = state, silent
         self.answers = state.data['answers']
 
-    def ask(self, key, label, default=None, secret=False, choices=None):
-        value = self.answers.get(key)
+    def validate_value(self, key, value, choices):
         if not value:
-            if self.silent:
-                if default is None:
-                    raise ValueError('Для --silent требуется ' + key)
-                value = default() if callable(default) else default
-            else:
-                hint = f' [{default}]' if default is not None and not secret and not callable(default) else ''
-                value = (getpass.getpass(label + hint + ': ') if secret else input(label + hint + ': ')).strip()
-                if not value and default is not None:
-                    value = default() if callable(default) else default
-            if not value:
-                raise ValueError('Не заполнено: ' + label)
-            if choices and value not in choices:
-                raise ValueError(key + ': допустимо ' + ', '.join(sorted(choices)))
-            self.answers[key] = str(value)
-            self.state.save()
+            raise ValueError('Ответ не должен быть пустым')
         if choices and value not in choices:
             raise ValueError(key + ': допустимо ' + ', '.join(sorted(choices)))
-        return str(value)
+        validate_common({key: value}, [])
+        if key == 'BOT_TOKEN' and value == 'REPLACE_BOT_TOKEN':
+            raise ValueError('Введите реальный токен BotFather')
+        if key in {'HY_DOMAIN', 'VLESS_DOMAIN'}:
+            domain_name(value)
+        if key in {'AWG20_PORT', 'AWG31_PORT', 'VLESS_PORT', 'HY_PORT'}:
+            if not value.isdigit() or not 1 <= int(value) <= 65535:
+                raise ValueError('Порт должен быть целым числом от 1 до 65535')
+        if key in {'HY_MIN_PACKET', 'HY_MAX_PACKET'}:
+            if not value.isdigit() or not 1 <= int(value) <= 2048:
+                raise ValueError('Размер Gecko: целое число от 1 до 2048')
+            if key == 'HY_MAX_PACKET' and int(value) < int(self.answers.get('HY_MIN_PACKET', '1')):
+                raise ValueError('Максимальный размер Gecko должен быть не меньше минимального')
+
+    def ask(self, key, label, default=None, secret=False, choices=None):
+        while True:
+            value = self.answers.get(key)
+            saved = bool(value)
+            if not value:
+                if self.silent:
+                    if default is None:
+                        raise ValueError('Для --silent требуется ' + key)
+                    value = default() if callable(default) else default
+                else:
+                    hint = f' [{default}]' if default is not None and not secret and not callable(default) else ''
+                    value = (getpass.getpass(label + hint + ': ') if secret else input(label + hint + ': ')).strip()
+                    if not value and default is not None:
+                        value = default() if callable(default) else default
+            value = str(value or '')
+            try:
+                self.validate_value(key, value, choices)
+            except ValueError as error:
+                if self.silent or self.state.started_vpn():
+                    raise
+                print(str(error))
+                self.answers.pop(key, None)
+                self.state.save()
+                continue
+            if not saved:
+                self.answers[key] = value
+                self.state.save()
+            return value
 
     def choose(self, key, label, choices):
         saved = self.state.data['selection'].get(key)

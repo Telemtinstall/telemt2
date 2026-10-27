@@ -5,6 +5,7 @@ import platform
 import re
 import shutil
 import subprocess
+from progress import run_process
 
 PACKAGES = ('python3', 'python3-pil', 'fonts-dejavu-core', 'curl', 'openssl', 'qrencode', 'jq',
             'git', 'logrotate', 'util-linux', 'nftables', 'conntrack', 'iproute2',
@@ -12,7 +13,7 @@ PACKAGES = ('python3', 'python3-pil', 'fonts-dejavu-core', 'curl', 'openssl', 'q
 
 
 def run(args, **kwargs):
-    subprocess.run([str(a) for a in args], check=True, **kwargs)
+    return run_process(args, title=('Идёт обновление списка пакетов' if args[:2] == ['apt-get', 'update'] else 'Идёт установка ядра и зависимостей'), **kwargs)
 
 
 def require_platform():
@@ -31,14 +32,23 @@ def kernel_ready(release, headers):
     return bool(numbers and tuple(map(int, numbers.groups())) >= (6, 7) and headers)
 
 
-def kernel_preflight(resume='повторите ту же команду установки'):
+def kernel_preflight(resume='повторите ту же команду установки', state=None):
     release = platform.release()
     headers = Path('/lib/modules') / release / 'build/Makefile'
     if kernel_ready(release, headers.exists()):
+        if state and state.data.pop('kernel_pending', None): state.save()
         return
+    boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip() if state else None
+    pending = state.data.get('kernel_pending') if state else None
+    if pending:
+        if pending['boot_id'] == boot_id:
+            print('Ядро уже подготовлено. Выполните reboot.\nПродолжение: ' + resume)
+            raise SystemExit(75)
+        raise ValueError('После перезагрузки ядро ' + release + ' не готово для AWG. '
+                         'Проверьте выбранное ядро в загрузчике и headers. '
+                         'Подготовлены: ' + ', '.join(pending['candidates']))
     if not re.match(r'\d+\.\d+', release):
         raise ValueError('Не удалось определить версию ядра')
-    print('Подготовка ядра и headers перед анкетой. Автоперезагрузка отключена.', flush=True)
     env = dict(os.environ, DEBIAN_FRONTEND='noninteractive', NEEDRESTART_MODE='l')
     run(['apt-get', 'update'], env=env)
     osinfo = platform.freedesktop_os_release()
@@ -52,7 +62,7 @@ def kernel_preflight(resume='повторите ту же команду уст�
     else:
         raise ValueError('Поддерживаются Debian 13 и Ubuntu 24+')
     if kernel_ready(release, True):
-        result = subprocess.run(['apt-get', 'install', '-y', 'linux-headers-' + release], env=env)
+        result = run_process(['apt-get', 'install', '-y', 'linux-headers-' + release], env=env, check=False, title='Идёт установка headers текущего ядра')
         if result.returncode == 0 and headers.exists():
             return
     run(['apt-get', 'install', '-y', *packages], env=env)
@@ -63,6 +73,9 @@ def kernel_preflight(resume='повторите ту же команду уст�
         return
     if not candidates:
         raise ValueError('Подходящее загрузочное ядро с headers не найдено после установки')
+    if state:
+        state.data['kernel_pending'] = {'boot_id': boot_id, 'candidates': candidates}
+        state.save()
     print('Требуется перезагрузка. Выполните reboot.\nПродолжение: ' + resume +
           '\nПараметры сохранены; вопросы о боте и VPN ещё не задавались.')
     raise SystemExit(75)
@@ -71,10 +84,9 @@ def kernel_preflight(resume='повторите ту же команду уст�
 def install_speedtest(env):
     if shutil.which('speedtest-cli'):
         return
-    print('Проверка доступности Speedtest...', flush=True)
     try:
         # Speedtest is optional: its package availability must not block VPN installation.
-        subprocess.run(['apt-get', 'install', '-y', 'speedtest-cli'], env=env, check=True,
-                       capture_output=True, text=True, timeout=120)
-    except (subprocess.SubprocessError, OSError):
+        run_process(['apt-get', 'install', '-y', 'speedtest-cli'], env=env,
+                    title='Идёт установка Speedtest', timeout=120)
+    except (RuntimeError, subprocess.SubprocessError, OSError):
         print('Пакет Speedtest недоступен. При автоматическом замере будет использовано 100 Мбит/с.')

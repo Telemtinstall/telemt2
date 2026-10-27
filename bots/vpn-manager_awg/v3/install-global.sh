@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$ROOT_DIR/installer/progress.sh"
 if ! command -v python3 >/dev/null 2>&1; then
   for argument in "$@"; do
     case "$argument" in
@@ -17,7 +18,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   (cd "$ROOT_DIR/bots/vpn-manager_awg" && sha256sum --check --quiet SHA256SUMS)
   echo 'Подготовка Python 3 перед проверкой ядра. Вопросы о VPN пока не задаются.'
   export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
-  apt-get update
-  apt-get install -y python3
+  v3_progress_run 'Идёт обновление списка пакетов' apt-get update
+  v3_progress_run 'Идёт установка Python 3' apt-get install -y python3
 fi
 exec python3 "$ROOT_DIR/installer/install.py" "$@"

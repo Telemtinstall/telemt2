@@ -1,17 +1,8 @@
 """Resumable stage runner. Uncertain VPN changes need explicit server verification."""
-import re
-import os
-import signal
+from progress import LABELS, run_process, safe_output
 import subprocess
 
 SAFE_RETRY = {'dependencies', 'packages', 'verification'}
-SENSITIVE = re.compile(r'(?i)(?:vless://|vpn://|hysteria2://|hy2://|private.?key|preshared.?key|password|token|secret|uuid)')
-
-
-def safe_output(line, secrets=()):
-    return not (SENSITIVE.search(line) or '\x1b' in line
-                or any(0x2580 <= ord(c) <= 0x259f for c in line)
-                or any(value and value in line for value in secrets))
 
 
 class StageRunner:
@@ -28,7 +19,7 @@ class StageRunner:
                              'автоматический повтор запрещён. Используйте --resolve-stage после проверки')
         data['running'] = name
         self.state.save()
-        print('Этап: ' + name, flush=True)
+        self.current_stage = name
         try:
             if protocol:
                 result = self._protocol(command)
@@ -44,8 +35,8 @@ class StageRunner:
                 if result:
                     raise ValueError('Этап ' + name + ' не завершён; требуется сверка состояния сервера')
             else:
-                subprocess.run([str(v) for v in command], env=self.env, check=True)
-        except (subprocess.SubprocessError, OSError):
+                run_process(command, env=self.env, title=LABELS.get(name, name))
+        except (RuntimeError, subprocess.SubprocessError, OSError):
             if name in SAFE_RETRY:
                 data.pop('running', None)
                 self.state.save()
@@ -55,20 +46,5 @@ class StageRunner:
         self.state.save()
 
     def _protocol(self, command):
-        secrets = [self.env.get(key) for key in ('BOT_TOKEN', 'HY_OBFS_PASSWORD')]
-        process = subprocess.Popen([str(v) for v in command], env=self.env, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace', start_new_session=True)
-        try:
-            for line in process.stdout:
-                if safe_output(line, secrets):
-                    print(line, end='', flush=True)
-            return process.wait()
-        finally:
-            process.stdout.close()
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
+        return run_process(command, env=self.env, check=False,
+                           title=LABELS.get(self.current_stage, self.current_stage)).returncode

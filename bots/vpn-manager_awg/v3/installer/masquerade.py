@@ -2,6 +2,7 @@
 import ipaddress
 import socket
 import ssl
+from progress import activity
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -71,9 +72,11 @@ def prepare_site(questionnaire, ip):
         state.save()
         host = urlsplit(url).hostname
         local = resolved.get('HY_MASQUERADE_MODE', answers.get('HY_MASQUERADE_MODE', 'proxy')) == 'local'
-        if not local and https_available(url):
+        with activity('Идёт проверка HTTPS сайта-маскировки'):
+            available = not local and https_available(url)
+            owned = False if available else points_to_server(host, ip)
+        if available:
             return
-        owned = points_to_server(host, ip)
         # A local certificate is only possible for a name verified by ACME on this server.
         try:
             ipaddress.ip_address(host)
