@@ -48,12 +48,13 @@ def main():
     if any(name in selected for name,_ in awg):
         checker=Path('/usr/local/sbin/vpnbot-kernel-check.py')
         shutil.copy2(ROOT/'bots/vpn-manager_awg/server/kernel_check.py',checker);checker.chmod(0o755)
-        # Header installation may have prepared an additional bootable kernel.
-        for image in Path('/boot').glob('vmlinuz-*'):
-            kernel=image.name.removeprefix('vmlinuz-');numbers=re.match(r'(\d+)\.(\d+)',kernel)
-            if not numbers or tuple(map(int,numbers.groups()))<(6,7):continue
+        sys.path.insert(0,str(checker.parent))
+        from kernel_check import required_boot_kernels
+        for kernel in required_boot_kernels():
             if not (Path('/lib/modules')/kernel/'build/Makefile').exists():
-                raise ValueError('Нет headers загрузочного ядра '+kernel+'; не перезагружайте до исправления')
+                subprocess.run(['apt-get','install','-y','linux-headers-'+kernel],check=True)
+            if not (Path('/lib/modules')/kernel/'build/Makefile').exists():
+                raise ValueError('Нет headers обязательного ядра '+kernel+'; не перезагружайте до исправления')
             subprocess.run(['dkms','autoinstall','-k',kernel],check=True)
         for name,iface in awg:
             if name not in selected:continue

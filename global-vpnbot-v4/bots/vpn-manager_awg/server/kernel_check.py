@@ -12,6 +12,23 @@ def run(args):
     return subprocess.run(args, check=True, capture_output=True, text=True, timeout=90).stdout.strip()
 
 
+def required_boot_kernels(release=None, boot=None):
+    """Keep current/newest boot targets safe without requiring all old fallbacks."""
+    release = release or platform.release()
+    boot = boot or Path('/boot')
+    kernels = [p.name.removeprefix('vmlinuz-') for p in boot.glob('vmlinuz-*')]
+    supported = [k for k in kernels if tuple(map(int,re.findall(r'\d+',k)[:2])) >= (6,7)]
+    required = {release}
+    if supported:
+        required.add(max(supported,key=lambda k:tuple(map(int,re.findall(r'\d+',k)))))
+    for link in (boot/'vmlinuz', Path('/vmlinuz') if boot == Path('/boot') else boot/'default-vmlinuz'):
+        if link.is_symlink():
+            target = link.resolve().name
+            if target.startswith('vmlinuz-'):
+                required.add(target.removeprefix('vmlinuz-'))
+    return sorted(required)
+
+
 def check(iface=None, prepare=False, all_boot=False):
     release = platform.release()
     headers = Path('/lib/modules') / release / 'build/Makefile'
@@ -30,10 +47,7 @@ def check(iface=None, prepare=False, all_boot=False):
         if not data or data[0].get('linkinfo',{}).get('info_kind') != 'amneziawg':
             raise ValueError(iface+' не работает через модуль ядра. Go fallback не считается успешной установкой')
     if all_boot:
-        for image in Path('/boot').glob('vmlinuz-*'):
-            kernel = image.name.removeprefix('vmlinuz-')
-            numbers = re.match(r'(\d+)\.(\d+)',kernel)
-            if not numbers or tuple(map(int,numbers.groups())) < (6,7): continue
+        for kernel in required_boot_kernels(release):
             if not (Path('/lib/modules')/kernel/'build/Makefile').exists():
                 raise ValueError('Перед reboot установите headers загрузочного ядра '+kernel)
             run(['modinfo','-k',kernel,'amneziawg'])

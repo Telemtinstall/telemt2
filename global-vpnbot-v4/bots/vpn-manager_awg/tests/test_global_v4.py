@@ -134,6 +134,17 @@ class FinalVerificationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Не подтверждён выход'):verify.verify_egress('1.1.1.1')
         self.assertEqual(call.call_count,2)
         self.assertIn('1.1.1.1',call.call_args.args[0])
+    def test_old_fallback_without_headers_does_not_block_boot_targets(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            boot=Path(directory)
+            for k in ('6.12.85+deb13-amd64','6.12.117+deb13-amd64','6.12.99+deb13-amd64'):
+                (boot/('vmlinuz-'+k)).touch()
+            self.assertEqual(kernel_check.required_boot_kernels('6.12.99+deb13-amd64',boot),
+                             ['6.12.117+deb13-amd64','6.12.99+deb13-amd64'])
+            (boot/'vmlinuz').symlink_to('vmlinuz-6.12.85+deb13-amd64')
+            self.assertIn('6.12.85+deb13-amd64',kernel_check.required_boot_kernels('6.12.99+deb13-amd64',boot))
+
     def test_egress_uses_independent_fallback(self):
         import verify
         with patch.object(verify.subprocess,'run',side_effect=[SimpleNamespace(returncode=28,stdout=''),SimpleNamespace(returncode=0,stdout='1.1.1.1\n')]) as call:
