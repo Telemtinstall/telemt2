@@ -1,14 +1,10 @@
-Global v4, Debian 13 (Trixie), только отдельный чистый сервер.
-1. Распакуйте полный архив vpnbot-global-v4-2026.11.15.1.tar.gz.
-2. cd bots/vpn-manager_awg/v4
-3. bash install-global.sh --check
-4. sudo bash install-global.sh --onlyprotocol amnezia31
-   Либо sudo bash install-global.sh для меню выбора протоколов.
-5. Укажите исходящий IPv4 и домен VPN (A-запись настраивается вручную).
-6. Если код75 — установщик попросит reboot и напечатает команду продолжения.
-7. При успехе sudo bash check-server.sh, затем внешний тест на телефоне.
+Global v4: новая установка на чистый Debian 13 / Ubuntu 24+, под root.
 
-Не запускайте bots/vpn-manager_awg/install.sh напрямую: это библиотека функций v2.
-Не устанавливайте поверх Personal, Global v2/v3 и настроенных чужих VPN.
-Секреты/API регистратора в пакет не входят; токен Telegram вводится вами.
-Подробности и ограничения — README_RU.md.
+apt-get update &&
+apt-get install -y --no-install-recommends ca-certificates curl python3 &&
+curl -fL --retry 3 https://raw.githubusercontent.com/Telemtinstall/telemt2/main/install-v4.sh -o /root/install-v4.sh &&
+chmod 700 /root/install-v4.sh &&
+/root/install-v4.sh
+
+Полная инструкция, вопросы и продолжение: README.md.
+После ошибки не удаляйте состояние /root/.vpnbot-global-v4.json.

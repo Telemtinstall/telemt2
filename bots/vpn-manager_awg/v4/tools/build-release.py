@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 BOT=ROOT/'bots/vpn-manager_awg'
 BANNED_NAMES={'private_dns.py','domeny_api.py','netnum_personal_api.py','domeny.env','netnum.env','README_PRIVATE_RU.md'}
 BANNED_TEXT=('sec.vpnbot.dev','domeny_api','netnum_personal_api','DOMENY_PASSWORD','NETNUM_API_TOKEN')
-ROOT_NAMES={'AGENTS.md','README_RU.md','INSTALL_DEBIAN13_RU.txt','install-global.sh','install-v4.sh','check-server.sh','silent.example.ini','VALIDATION_RU.txt','PROFILE_FORMAT_CONTRACT_RU.md'}
+ROOT_NAMES={'README.md','AGENTS.md','README_RU.md','INSTALL_DEBIAN13_RU.txt','install-global.sh','install-v4.sh','check-server.sh','silent.example.ini','VALIDATION_RU.txt','PROFILE_FORMAT_CONTRACT_RU.md'}
 
 def files():
     result=[]
