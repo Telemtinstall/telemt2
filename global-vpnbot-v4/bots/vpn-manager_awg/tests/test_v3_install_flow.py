@@ -319,6 +319,23 @@ class QuestionnaireUXTests(unittest.TestCase):
         self.assertTrue(prompt.call_args_list[0].args[0].endswith('? y/n: '))
         self.assertEqual(prompt.call_args.args[0],'Выберите 1/2: ')
         self.assertIn('1 — VLESS\n2 — Hysteria 2\n',output.getvalue())
+    def test_awg_only_skips_both_alternatives_and_resumes(self):
+        with patch('builtins.input',side_effect=['n','n','y','0']) as prompt, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(Questionnaire(self.state).select_protocols(),['amnezia31'])
+        self.assertEqual(prompt.call_args.args[0],'Выберите 0/1/2: ')
+        self.assertIn('0 — Ничего не устанавливать',output.getvalue())
+        self.assertEqual(self.state.data['selection']['alternative'],'0')
+        resumed=InstallState(self.state.path)
+        with patch('builtins.input') as prompt:
+            self.assertEqual(Questionnaire(resumed).select_protocols(),['amnezia31'])
+        prompt.assert_not_called()
+
+    def test_zero_does_not_allow_installing_no_vpn_at_all(self):
+        with patch('builtins.input',side_effect=['n','n','n','0']), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError,'хотя бы один VPN'):
+                Questionnaire(self.state).select_protocols()
+        self.assertFalse(self.state.data.get('protocols'))
+
     def test_saved_russian_answers_resume_without_repeating_questions(self):
         self.state.data['selection']={'all':'да'};self.state.save()
         with patch('builtins.input',return_value='1') as prompt, contextlib.redirect_stdout(io.StringIO()):

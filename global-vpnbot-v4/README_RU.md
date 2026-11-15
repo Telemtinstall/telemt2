@@ -143,3 +143,7 @@ sudo bash install-global.sh --resolve-stage amnezia31 --stage-result done
 только чтение эталонной конфигурации. Существующие серверы и версии не обновлялись.
 Тест генерации PNG требует qrencode/Pillow; на локальном macOS он может быть пропущен.
 Смотрите также `PROFILE_FORMAT_CONTRACT_RU.md` и `VALIDATION_RU.txt` в корне пакета.
+
+При отказе от установки всех VPN в меню VLESS/Hysteria доступен пункт
+`0 — Ничего не устанавливать`: будут установлены только выбранные AWG.
+Хотя бы один VPN должен быть выбран.

@@ -94,10 +94,14 @@ class Questionnaire:
             if all_awg or self.yes_no(name, 'Установить ' + LABELS[name]):
                 chosen.append(name)
         if not self.silent and 'alternative' not in self.state.data['selection']:
+            if not all_awg:
+                print('0 — Ничего не устанавливать (без VLESS и Hysteria 2)')
             print('1 — VLESS')
             print('2 — Hysteria 2')
-        alternative = self.choose('alternative', 'Выберите 1/2', {'1', '2'})
-        chosen.append({'1': 'vless', '2': 'hysteria2'}[alternative])
+        alternative = self.choose('alternative', 'Выберите 1/2' if all_awg else 'Выберите 0/1/2',
+                                  {'1', '2'} if all_awg else {'0', '1', '2'})
+        if alternative != '0':
+            chosen.append({'1': 'vless', '2': 'hysteria2'}[alternative])
         self.state.data['protocols'] = selected_valid(chosen)
         self.state.save()
         return chosen
