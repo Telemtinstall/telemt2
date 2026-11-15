@@ -1,0 +1,11 @@
+[Unit]
+Description=Capture VDS network channel load every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00 UTC
+Persistent=true
+AccuracySec=5s
+Unit=vpnbot-channel.service
+
+[Install]
+WantedBy=timers.target

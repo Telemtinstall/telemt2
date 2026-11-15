@@ -1,0 +1,11 @@
+[Unit]
+Description=Minute VDS network channel snapshot
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/vpnbot
+ExecStart=/usr/bin/python3 /root/vpnbot/channel_collect.py
+User=root
+Group=root
+UMask=0077

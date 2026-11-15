@@ -1,0 +1,9 @@
+Global v4 — локальная проверка сборки, 15.11.2026.
+База: Global v3. Эталон USA прочитан по SSH без изменений.
+281 тест пройдён, 1 тест реальной PNG генерации пропущен: локально нет qrencode/Pillow.
+Полный прогон после финальных правок: 281 тест, OK, 1 пропущен (8,424 с).
+Проверки: kernel/header/meta, conntrackpressure, sourceboundprobes, pinnedDNS,
+TLS verification, allingress/fixedegress, HYTLSdomainpreservation, rollback,
+resumableinstallation, packageintegrity, Telegramretries, profilepayloadroundtrip.
+Полная установка на чистый Linux и проверка на телефоне пока не выполнены.
+USA/Personal/Globalv2v3 не обновлялись. Сборка в GitHub не публиковалась.

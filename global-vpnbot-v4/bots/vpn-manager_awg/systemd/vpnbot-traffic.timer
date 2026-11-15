@@ -1,0 +1,11 @@
+[Unit]
+Description=Capture VPN traffic every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00 UTC
+Persistent=true
+AccuracySec=1s
+Unit=vpnbot-traffic.service
+
+[Install]
+WantedBy=timers.target

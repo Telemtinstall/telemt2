@@ -1,0 +1,1 @@
+"""AmneziaWG Telegram bot package."""

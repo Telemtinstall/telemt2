@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+LOCK_PATH = Path(os.environ.get("VPN_SPEEDTEST_LOCK", "/run/lock/vpn-speedtest.lock"))
+
+
+def find_speedtest() -> str:
+    configured = os.environ.get("SPEEDTEST_CLI", "").strip()
+    if configured:
+        return configured
+    detected = shutil.which("speedtest-cli")
+    if not detected:
+        raise RuntimeError("speedtest-cli не установлен")
+    return detected
+
+
+def run_speedtest(timeout: int) -> dict:
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_PATH.open("w", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("замер скорости уже выполняется") from exc
+
+        proc = subprocess.run(
+            [find_speedtest(), "--json", "--secure"],
+            text=True,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=timeout,
+        )
+    raw = proc.stdout.strip() or proc.stderr.strip()
+    try:
+        source = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(raw or f"speedtest-cli завершился с кодом {proc.returncode}") from exc
+    if proc.returncode != 0:
+        raise RuntimeError(source.get("error") or f"speedtest-cli завершился с кодом {proc.returncode}")
+
+    server = source.get("server") or {}
+    client = source.get("client") or {}
+    return {
+        "ok": True,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "download_bps": round(float(source.get("download") or 0), 3),
+        "upload_bps": round(float(source.get("upload") or 0), 3),
+        "ping_ms": round(float(source.get("ping") or 0), 3),
+        "bytes_sent": int(source.get("bytes_sent") or 0),
+        "bytes_received": int(source.get("bytes_received") or 0),
+        "server": {
+            "id": str(server.get("id") or ""),
+            "name": str(server.get("name") or ""),
+            "country": str(server.get("country") or ""),
+            "sponsor": str(server.get("sponsor") or ""),
+            "distance_km": round(float(server.get("d") or 0), 1),
+        },
+        "client": {
+            "isp": str(client.get("isp") or ""),
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run speedtest-cli and return normalized JSON")
+    parser.add_argument("-j", "--json", action="store_true", help="print JSON")
+    parser.add_argument("--timeout", type=int, default=180)
+    args = parser.parse_args()
+    if not args.json:
+        parser.error("use -j/--json")
+    try:
+        result = run_speedtest(max(30, min(args.timeout, 300)))
+        exit_code = 0
+    except Exception as exc:
+        result = {"ok": False, "error": str(exc)}
+        exit_code = 1
+    print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

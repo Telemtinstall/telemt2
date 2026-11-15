@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import socket
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def read_cpu() -> tuple[int, int]:
+    fields = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0].split()[1:]
+    values = [int(value) for value in fields]
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    return sum(values), idle
+
+
+def cpu_usage(before: tuple[int, int], after: tuple[int, int]) -> float:
+    total_delta = after[0] - before[0]
+    idle_delta = after[1] - before[1]
+    if total_delta <= 0:
+        return 0.0
+    return round(max(0.0, min(100.0, (total_delta - idle_delta) * 100 / total_delta)), 1)
+
+
+def default_interface() -> str:
+    for line in Path("/proc/net/route").read_text(encoding="utf-8").splitlines()[1:]:
+        fields = line.split()
+        if len(fields) >= 4 and fields[1] == "00000000" and int(fields[3], 16) & 1:
+            return fields[0]
+    for line in Path("/proc/net/dev").read_text(encoding="utf-8").splitlines()[2:]:
+        interface = line.split(":", 1)[0].strip()
+        if interface and interface != "lo":
+            return interface
+    raise RuntimeError("основной сетевой интерфейс не найден")
+
+
+def read_network(interface: str) -> dict[str, int]:
+    for line in Path("/proc/net/dev").read_text(encoding="utf-8").splitlines()[2:]:
+        name, raw = line.split(":", 1)
+        if name.strip() != interface:
+            continue
+        values = [int(value) for value in raw.split()]
+        return {
+            "rx_bytes": values[0],
+            "rx_errors": values[2],
+            "rx_dropped": values[3],
+            "tx_bytes": values[8],
+            "tx_errors": values[10],
+            "tx_dropped": values[11],
+        }
+    raise RuntimeError(f"интерфейс {interface} отсутствует в /proc/net/dev")
+
+
+def memory_status() -> dict[str, int | float]:
+    values = {}
+    for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+        key, raw = line.split(":", 1)
+        values[key] = int(raw.strip().split()[0]) * 1024
+    total = values["MemTotal"]
+    available = values.get("MemAvailable", values.get("MemFree", 0))
+    used = max(0, total - available)
+    return {
+        "total_bytes": total,
+        "used_bytes": used,
+        "available_bytes": available,
+        "usage_percent": round(used * 100 / total, 1) if total else 0.0,
+    }
+
+
+def disk_status(mountpoint: str = "/") -> dict[str, int | float | str]:
+    stat = os.statvfs(mountpoint)
+    total = stat.f_blocks * stat.f_frsize
+    free = stat.f_bavail * stat.f_frsize
+    used = max(0, total - free)
+    return {
+        "mountpoint": mountpoint,
+        "total_bytes": total,
+        "used_bytes": used,
+        "free_bytes": free,
+        "usage_percent": round(used * 100 / total, 1) if total else 0.0,
+    }
+
+
+def collect(sample_seconds: float) -> dict:
+    interface = default_interface()
+    cpu_before = read_cpu()
+    network_before = read_network(interface)
+    started = time.monotonic()
+    time.sleep(sample_seconds)
+    elapsed = max(0.001, time.monotonic() - started)
+    cpu_after = read_cpu()
+    network_after = read_network(interface)
+    load_1m, load_5m, load_15m = os.getloadavg()
+    rx_delta = max(0, network_after["rx_bytes"] - network_before["rx_bytes"])
+    tx_delta = max(0, network_after["tx_bytes"] - network_before["tx_bytes"])
+    rx_errors_delta = max(0, network_after["rx_errors"] - network_before["rx_errors"])
+    tx_errors_delta = max(0, network_after["tx_errors"] - network_before["tx_errors"])
+    rx_dropped_delta = max(0, network_after["rx_dropped"] - network_before["rx_dropped"])
+    tx_dropped_delta = max(0, network_after["tx_dropped"] - network_before["tx_dropped"])
+    uptime_seconds = int(float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0]))
+    return {
+        "ok": True,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "hostname": socket.gethostname(),
+        "uptime_seconds": uptime_seconds,
+        "cpu": {
+            "cores": os.cpu_count() or 1,
+            "usage_percent": cpu_usage(cpu_before, cpu_after),
+            "load_1m": round(load_1m, 2),
+            "load_5m": round(load_5m, 2),
+            "load_15m": round(load_15m, 2),
+        },
+        "memory": memory_status(),
+        "disks": [disk_status("/")],
+        "network": {
+            "interface": interface,
+            "sample_seconds": round(elapsed, 3),
+            "rx_bytes_per_second": int(rx_delta / elapsed),
+            "tx_bytes_per_second": int(tx_delta / elapsed),
+            "rx_total_bytes": network_after["rx_bytes"],
+            "tx_total_bytes": network_after["tx_bytes"],
+            "rx_errors": rx_errors_delta,
+            "tx_errors": tx_errors_delta,
+            "rx_dropped": rx_dropped_delta,
+            "tx_dropped": tx_dropped_delta,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Return current server status as JSON")
+    parser.add_argument("-j", "--json", action="store_true", help="print JSON")
+    parser.add_argument(
+        "--sample-seconds",
+        type=float,
+        default=float(os.environ.get("SERVER_STATUS_SAMPLE_SECONDS", "2")),
+    )
+    args = parser.parse_args()
+    if not args.json:
+        parser.error("use -j/--json")
+    sample_seconds = max(0.2, min(args.sample_seconds, 10.0))
+    try:
+        result = collect(sample_seconds)
+        exit_code = 0
+    except Exception as exc:
+        result = {"ok": False, "error": str(exc)}
+        exit_code = 1
+    print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,18 @@
+[Unit]
+Description=Multi-protocol Telegram VPN bot
+After=network-online.target awg-quick@awg0.service xray.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/vpnbot
+ExecStart=/usr/bin/python3 /root/vpnbot/bot.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=LOG_LEVEL=WARNING
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

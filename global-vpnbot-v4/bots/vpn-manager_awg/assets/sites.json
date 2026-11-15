@@ -1,0 +1,1890 @@
+[
+  {
+    "hostname": "1337x.to",
+    "ip": ""
+  },
+  {
+    "hostname": "*.1337x.to",
+    "ip": ""
+  },
+  {
+    "hostname": "1e100.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.1e100.net",
+    "ip": ""
+  },
+  {
+    "hostname": "a2z.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.a2z.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ads-twitter.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ads-twitter.com",
+    "ip": ""
+  },
+  {
+    "hostname": "adswag.nl",
+    "ip": ""
+  },
+  {
+    "hostname": "*.adswag.nl",
+    "ip": ""
+  },
+  {
+    "hostname": "amazon.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amazon.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amazonaws.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amazonaws.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amazonpay.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amazonpay.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amazontrust.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amazontrust.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amazonvideo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amazonvideo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amplitude.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amplitude.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amzn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amzn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "amzn.to",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amzn.to",
+    "ip": ""
+  },
+  {
+    "hostname": "anthropic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.anthropic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "app-measurement.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.app-measurement.com",
+    "ip": ""
+  },
+  {
+    "hostname": "appsflyersdk.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.appsflyersdk.com",
+    "ip": ""
+  },
+  {
+    "hostname": "auth0.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.auth0.com",
+    "ip": ""
+  },
+  {
+    "hostname": "awsglobalaccelerator.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.awsglobalaccelerator.com",
+    "ip": ""
+  },
+  {
+    "hostname": "awsstatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.awsstatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bcccdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bcccdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bcvcdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bcvcdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bing.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bing.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bitpay.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bitpay.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bongacams.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bongacams.com",
+    "ip": ""
+  },
+  {
+    "hostname": "booktracker.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.booktracker.org",
+    "ip": ""
+  },
+  {
+    "hostname": "browser-intake-datadoghq.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.browser-intake-datadoghq.com",
+    "ip": ""
+  },
+  {
+    "hostname": "browser-intake-us5-datadoghq.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.browser-intake-us5-datadoghq.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bunkr.si",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bunkr.si",
+    "ip": ""
+  },
+  {
+    "hostname": "bunkr.sk",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bunkr.sk",
+    "ip": ""
+  },
+  {
+    "hostname": "canva.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.canva.com",
+    "ip": ""
+  },
+  {
+    "hostname": "cdninstagram.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.cdninstagram.com",
+    "ip": ""
+  },
+  {
+    "hostname": "celeb.st",
+    "ip": ""
+  },
+  {
+    "hostname": "*.celeb.st",
+    "ip": ""
+  },
+  {
+    "hostname": "chargebee.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.chargebee.com",
+    "ip": ""
+  },
+  {
+    "hostname": "chargebeestaticv2.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.chargebeestaticv2.com",
+    "ip": ""
+  },
+  {
+    "hostname": "chatgpt.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.chatgpt.com",
+    "ip": ""
+  },
+  {
+    "hostname": "claude.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "*.claude.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "claude.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.claude.com",
+    "ip": ""
+  },
+  {
+    "hostname": "claude.site",
+    "ip": ""
+  },
+  {
+    "hostname": "*.claude.site",
+    "ip": ""
+  },
+  {
+    "hostname": "cloudflare-ech.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.cloudflare-ech.com",
+    "ip": ""
+  },
+  {
+    "hostname": "cloudflare.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.cloudflare.com",
+    "ip": ""
+  },
+  {
+    "hostname": "cloudflareinsights.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.cloudflareinsights.com",
+    "ip": ""
+  },
+  {
+    "hostname": "cloudfront.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.cloudfront.net",
+    "ip": ""
+  },
+  {
+    "hostname": "consentmanager.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.consentmanager.net",
+    "ip": ""
+  },
+  {
+    "hostname": "cookielaw.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.cookielaw.org",
+    "ip": ""
+  },
+  {
+    "hostname": "ctfassets.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ctfassets.net",
+    "ip": ""
+  },
+  {
+    "hostname": "datacenterdynamics.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.datacenterdynamics.com",
+    "ip": ""
+  },
+  {
+    "hostname": "datadoghq.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.datadoghq.com",
+    "ip": ""
+  },
+  {
+    "hostname": "deepl.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.deepl.com",
+    "ip": ""
+  },
+  {
+    "hostname": "discord.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.discord.com",
+    "ip": ""
+  },
+  {
+    "hostname": "discord.gg",
+    "ip": ""
+  },
+  {
+    "hostname": "*.discord.gg",
+    "ip": ""
+  },
+  {
+    "hostname": "discord.media",
+    "ip": ""
+  },
+  {
+    "hostname": "*.discord.media",
+    "ip": ""
+  },
+  {
+    "hostname": "dns.google",
+    "ip": ""
+  },
+  {
+    "hostname": "*.dns.google",
+    "ip": ""
+  },
+  {
+    "hostname": "doubleclick.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.doubleclick.net",
+    "ip": ""
+  },
+  {
+    "hostname": "elevenlabs.io",
+    "ip": ""
+  },
+  {
+    "hostname": "*.elevenlabs.io",
+    "ip": ""
+  },
+  {
+    "hostname": "exainfra.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.exainfra.net",
+    "ip": ""
+  },
+  {
+    "hostname": "facebook.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.facebook.com",
+    "ip": ""
+  },
+  {
+    "hostname": "facebook.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.facebook.net",
+    "ip": ""
+  },
+  {
+    "hostname": "fb.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.fb.com",
+    "ip": ""
+  },
+  {
+    "hostname": "fbcdn.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.fbcdn.net",
+    "ip": ""
+  },
+  {
+    "hostname": "fbsbx.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.fbsbx.com",
+    "ip": ""
+  },
+  {
+    "hostname": "filmitorrent.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.filmitorrent.net",
+    "ip": ""
+  },
+  {
+    "hostname": "flagsmith.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.flagsmith.com",
+    "ip": ""
+  },
+  {
+    "hostname": "freetp.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.freetp.org",
+    "ip": ""
+  },
+  {
+    "hostname": "gamee.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.gamee.com",
+    "ip": ""
+  },
+  {
+    "hostname": "geekbench.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.geekbench.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ggpht.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ggpht.com",
+    "ip": ""
+  },
+  {
+    "hostname": "google-analytics.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.google-analytics.com",
+    "ip": ""
+  },
+  {
+    "hostname": "google.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.google.com",
+    "ip": ""
+  },
+  {
+    "hostname": "google.rs",
+    "ip": ""
+  },
+  {
+    "hostname": "*.google.rs",
+    "ip": ""
+  },
+  {
+    "hostname": "google.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "*.google.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "googleadservices.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googleadservices.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googleapis.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googleapis.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googlesyndication.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googlesyndication.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googletagmanager.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googletagmanager.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googletagservices.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googletagservices.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googleusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googleusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googlevideo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googlevideo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googlezip.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googlezip.net",
+    "ip": ""
+  },
+  {
+    "hostname": "grammarly.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.grammarly.com",
+    "ip": ""
+  },
+  {
+    "hostname": "grok.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.grok.com",
+    "ip": ""
+  },
+  {
+    "hostname": "grokipedia.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.grokipedia.com",
+    "ip": ""
+  },
+  {
+    "hostname": "grokusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.grokusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "gstatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.gstatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "gvt1.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.gvt1.com",
+    "ip": ""
+  },
+  {
+    "hostname": "gvt2.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.gvt2.com",
+    "ip": ""
+  },
+  {
+    "hostname": "gvt3.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.gvt3.com",
+    "ip": ""
+  },
+  {
+    "hostname": "hcaptcha.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hcaptcha.com",
+    "ip": ""
+  },
+  {
+    "hostname": "hs-analytics.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hs-analytics.net",
+    "ip": ""
+  },
+  {
+    "hostname": "hs-banner.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hs-banner.com",
+    "ip": ""
+  },
+  {
+    "hostname": "hs-scripts.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hs-scripts.com",
+    "ip": ""
+  },
+  {
+    "hostname": "hsadspixel.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hsadspixel.net",
+    "ip": ""
+  },
+  {
+    "hostname": "hscollectedforms.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hscollectedforms.net",
+    "ip": ""
+  },
+  {
+    "hostname": "hsforms.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hsforms.com",
+    "ip": ""
+  },
+  {
+    "hostname": "hubapi.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hubapi.com",
+    "ip": ""
+  },
+  {
+    "hostname": "hubspot.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.hubspot.com",
+    "ip": ""
+  },
+  {
+    "hostname": "icann.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.icann.org",
+    "ip": ""
+  },
+  {
+    "hostname": "igcdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.igcdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "impactradius-event.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.impactradius-event.com",
+    "ip": ""
+  },
+  {
+    "hostname": "insided.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.insided.com",
+    "ip": ""
+  },
+  {
+    "hostname": "instagram.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.instagram.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ipv4.global",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ipv4.global",
+    "ip": ""
+  },
+  {
+    "hostname": "ipxo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ipxo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "istories.media",
+    "ip": ""
+  },
+  {
+    "hostname": "*.istories.media",
+    "ip": ""
+  },
+  {
+    "hostname": "jivosite.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.jivosite.com",
+    "ip": ""
+  },
+  {
+    "hostname": "jsdelivr.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.jsdelivr.net",
+    "ip": ""
+  },
+  {
+    "hostname": "kilo.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "*.kilo.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "kinozal.me",
+    "ip": ""
+  },
+  {
+    "hostname": "*.kinozal.me",
+    "ip": ""
+  },
+  {
+    "hostname": "licdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.licdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "linkedin.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.linkedin.com",
+    "ip": ""
+  },
+  {
+    "hostname": "matomo.cloud",
+    "ip": ""
+  },
+  {
+    "hostname": "*.matomo.cloud",
+    "ip": ""
+  },
+  {
+    "hostname": "me-talk.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "*.me-talk.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "melbicom.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.melbicom.net",
+    "ip": ""
+  },
+  {
+    "hostname": "messenger.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.messenger.com",
+    "ip": ""
+  },
+  {
+    "hostname": "myip.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "*.myip.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "myipv4.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "*.myipv4.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "mzstatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.mzstatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "nel.goog",
+    "ip": ""
+  },
+  {
+    "hostname": "*.nel.goog",
+    "ip": ""
+  },
+  {
+    "hostname": "newstudio.tv",
+    "ip": ""
+  },
+  {
+    "hostname": "*.newstudio.tv",
+    "ip": ""
+  },
+  {
+    "hostname": "nltimes.nl",
+    "ip": ""
+  },
+  {
+    "hostname": "*.nltimes.nl",
+    "ip": ""
+  },
+  {
+    "hostname": "nnmclub.to",
+    "ip": ""
+  },
+  {
+    "hostname": "*.nnmclub.to",
+    "ip": ""
+  },
+  {
+    "hostname": "oaistatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.oaistatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "oaiusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.oaiusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "okta.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.okta.com",
+    "ip": ""
+  },
+  {
+    "hostname": "oktacdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.oktacdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "openai.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.openai.com",
+    "ip": ""
+  },
+  {
+    "hostname": "orangepi.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.orangepi.org",
+    "ip": ""
+  },
+  {
+    "hostname": "outbrain.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.outbrain.com",
+    "ip": ""
+  },
+  {
+    "hostname": "payssion.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.payssion.com",
+    "ip": ""
+  },
+  {
+    "hostname": "periscope.tv",
+    "ip": ""
+  },
+  {
+    "hostname": "*.periscope.tv",
+    "ip": ""
+  },
+  {
+    "hostname": "perplexity.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "*.perplexity.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "pollo.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "*.pollo.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "primevideo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.primevideo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "pscp.tv",
+    "ip": ""
+  },
+  {
+    "hostname": "*.pscp.tv",
+    "ip": ""
+  },
+  {
+    "hostname": "recaptcha.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.recaptcha.net",
+    "ip": ""
+  },
+  {
+    "hostname": "refinery89.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.refinery89.com",
+    "ip": ""
+  },
+  {
+    "hostname": "replain.cc",
+    "ip": ""
+  },
+  {
+    "hostname": "*.replain.cc",
+    "ip": ""
+  },
+  {
+    "hostname": "ruscams.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ruscams.com",
+    "ip": ""
+  },
+  {
+    "hostname": "rusdosug.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.rusdosug.com",
+    "ip": ""
+  },
+  {
+    "hostname": "rustorka.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.rustorka.com",
+    "ip": ""
+  },
+  {
+    "hostname": "rutor.info",
+    "ip": ""
+  },
+  {
+    "hostname": "*.rutor.info",
+    "ip": ""
+  },
+  {
+    "hostname": "rutracker.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.rutracker.org",
+    "ip": ""
+  },
+  {
+    "hostname": "sentry.io",
+    "ip": ""
+  },
+  {
+    "hostname": "*.sentry.io",
+    "ip": ""
+  },
+  {
+    "hostname": "sextalk.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "*.sextalk.ru",
+    "ip": ""
+  },
+  {
+    "hostname": "shapr3d.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.shapr3d.com",
+    "ip": ""
+  },
+  {
+    "hostname": "signal.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.signal.org",
+    "ip": ""
+  },
+  {
+    "hostname": "skilljar.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.skilljar.com",
+    "ip": ""
+  },
+  {
+    "hostname": "smilewanted.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.smilewanted.com",
+    "ip": ""
+  },
+  {
+    "hostname": "sotaproject.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.sotaproject.com",
+    "ip": ""
+  },
+  {
+    "hostname": "stripe.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.stripe.com",
+    "ip": ""
+  },
+  {
+    "hostname": "stripe.network",
+    "ip": ""
+  },
+  {
+    "hostname": "*.stripe.network",
+    "ip": ""
+  },
+  {
+    "hostname": "stripecdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.stripecdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "t.co",
+    "ip": ""
+  },
+  {
+    "hostname": "*.t.co",
+    "ip": ""
+  },
+  {
+    "hostname": "t.me",
+    "ip": ""
+  },
+  {
+    "hostname": "*.t.me",
+    "ip": ""
+  },
+  {
+    "hostname": "taboola.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.taboola.com",
+    "ip": ""
+  },
+  {
+    "hostname": "tdesktop.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.tdesktop.com",
+    "ip": ""
+  },
+  {
+    "hostname": "telegra.ph",
+    "ip": ""
+  },
+  {
+    "hostname": "*.telegra.ph",
+    "ip": ""
+  },
+  {
+    "hostname": "telegram.me",
+    "ip": ""
+  },
+  {
+    "hostname": "*.telegram.me",
+    "ip": ""
+  },
+  {
+    "hostname": "telegram.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.telegram.org",
+    "ip": ""
+  },
+  {
+    "hostname": "telesco.pe",
+    "ip": ""
+  },
+  {
+    "hostname": "*.telesco.pe",
+    "ip": ""
+  },
+  {
+    "hostname": "the.hosting",
+    "ip": ""
+  },
+  {
+    "hostname": "*.the.hosting",
+    "ip": ""
+  },
+  {
+    "hostname": "thepiratebay.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.thepiratebay.org",
+    "ip": ""
+  },
+  {
+    "hostname": "torrent.by",
+    "ip": ""
+  },
+  {
+    "hostname": "*.torrent.by",
+    "ip": ""
+  },
+  {
+    "hostname": "triple-a.io",
+    "ip": ""
+  },
+  {
+    "hostname": "*.triple-a.io",
+    "ip": ""
+  },
+  {
+    "hostname": "tronlink.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.tronlink.org",
+    "ip": ""
+  },
+  {
+    "hostname": "tronscan.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.tronscan.org",
+    "ip": ""
+  },
+  {
+    "hostname": "twimg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.twimg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "twitter.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.twitter.com",
+    "ip": ""
+  },
+  {
+    "hostname": "unpkg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.unpkg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "vdsina.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.vdsina.com",
+    "ip": ""
+  },
+  {
+    "hostname": "viber.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.viber.com",
+    "ip": ""
+  },
+  {
+    "hostname": "vimeo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.vimeo.com",
+    "ip": ""
+  },
+  {
+    "hostname": "vimeocdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.vimeocdn.com",
+    "ip": ""
+  },
+  {
+    "hostname": "whatsapp-cdn.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.whatsapp-cdn.net",
+    "ip": ""
+  },
+  {
+    "hostname": "whatsapp.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.whatsapp.com",
+    "ip": ""
+  },
+  {
+    "hostname": "whatsapp.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.whatsapp.net",
+    "ip": ""
+  },
+  {
+    "hostname": "withgoogle.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.withgoogle.com",
+    "ip": ""
+  },
+  {
+    "hostname": "x.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "*.x.ai",
+    "ip": ""
+  },
+  {
+    "hostname": "x.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.x.com",
+    "ip": ""
+  },
+  {
+    "hostname": "xe.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.xe.com",
+    "ip": ""
+  },
+  {
+    "hostname": "xfree.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.xfree.com",
+    "ip": ""
+  },
+  {
+    "hostname": "youtu.be",
+    "ip": ""
+  },
+  {
+    "hostname": "*.youtu.be",
+    "ip": ""
+  },
+  {
+    "hostname": "youtube.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.youtube.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ytimg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ytimg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "zello.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.zello.com",
+    "ip": ""
+  },
+  {
+    "hostname": "zendesk.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.zendesk.com",
+    "ip": ""
+  },
+  {
+    "hostname": "103.4.96.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "129.134.0.0/16",
+    "ip": ""
+  },
+  {
+    "hostname": "147.75.0.0/16",
+    "ip": ""
+  },
+  {
+    "hostname": "149.154.160.0/20",
+    "ip": ""
+  },
+  {
+    "hostname": "157.240.0.0/16",
+    "ip": ""
+  },
+  {
+    "hostname": "163.70.0.0/17",
+    "ip": ""
+  },
+  {
+    "hostname": "185.76.151.0/24",
+    "ip": ""
+  },
+  {
+    "hostname": "31.13.64.0/18",
+    "ip": ""
+  },
+  {
+    "hostname": "57.144.0.0/14",
+    "ip": ""
+  },
+  {
+    "hostname": "66.220.144.0/20",
+    "ip": ""
+  },
+  {
+    "hostname": "69.63.176.0/20",
+    "ip": ""
+  },
+  {
+    "hostname": "74.119.76.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "91.105.192.0/23",
+    "ip": ""
+  },
+  {
+    "hostname": "91.108.12.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "91.108.16.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "91.108.20.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "91.108.4.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "91.108.56.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "91.108.8.0/22",
+    "ip": ""
+  },
+  {
+    "hostname": "*.amnezia.org",
+    "ip": ""
+  },
+  {
+    "hostname": "*.armbian.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.atl-paas.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.atlassian.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.bebeez.eu",
+    "ip": ""
+  },
+  {
+    "hostname": "*.castle.io",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ebay-us.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ebay.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ebaycdn.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ebayimg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.ebaystatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.github.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.githubassets.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.githubusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.gravatar.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.nowpayments.io",
+    "ip": ""
+  },
+  {
+    "hostname": "*.paypal.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.paypal.me",
+    "ip": ""
+  },
+  {
+    "hostname": "*.paypalobjects.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.prostitutki.company",
+    "ip": ""
+  },
+  {
+    "hostname": "*.prostitutkipiteralist.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.proton.me",
+    "ip": ""
+  },
+  {
+    "hostname": "*.recordedfuture.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.segment.io",
+    "ip": ""
+  },
+  {
+    "hostname": "*.trello.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.typekit.net",
+    "ip": ""
+  },
+  {
+    "hostname": "*.worldometers.info",
+    "ip": ""
+  },
+  {
+    "hostname": "*.zine-lyke.biz",
+    "ip": ""
+  },
+  {
+    "hostname": "*.zoho.eu",
+    "ip": ""
+  },
+  {
+    "hostname": "3ds.ipc.kg",
+    "ip": ""
+  },
+  {
+    "hostname": "amnezia.org",
+    "ip": ""
+  },
+  {
+    "hostname": "armbian.com",
+    "ip": ""
+  },
+  {
+    "hostname": "atl-paas.net",
+    "ip": ""
+  },
+  {
+    "hostname": "atlassian.com",
+    "ip": ""
+  },
+  {
+    "hostname": "bebeez.eu",
+    "ip": ""
+  },
+  {
+    "hostname": "castle.io",
+    "ip": ""
+  },
+  {
+    "hostname": "ebay-us.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ebay.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ebaycdn.net",
+    "ip": ""
+  },
+  {
+    "hostname": "ebayimg.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ebaystatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "github.com",
+    "ip": ""
+  },
+  {
+    "hostname": "githubassets.com",
+    "ip": ""
+  },
+  {
+    "hostname": "githubusercontent.com",
+    "ip": ""
+  },
+  {
+    "hostname": "gravatar.com",
+    "ip": ""
+  },
+  {
+    "hostname": "nowpayments.io",
+    "ip": ""
+  },
+  {
+    "hostname": "paypal.com",
+    "ip": ""
+  },
+  {
+    "hostname": "paypal.me",
+    "ip": ""
+  },
+  {
+    "hostname": "paypalobjects.com",
+    "ip": ""
+  },
+  {
+    "hostname": "prostitutki.company",
+    "ip": ""
+  },
+  {
+    "hostname": "prostitutkipiteralist.net",
+    "ip": ""
+  },
+  {
+    "hostname": "proton.me",
+    "ip": ""
+  },
+  {
+    "hostname": "recordedfuture.com",
+    "ip": ""
+  },
+  {
+    "hostname": "segment.io",
+    "ip": ""
+  },
+  {
+    "hostname": "trello.com",
+    "ip": ""
+  },
+  {
+    "hostname": "typekit.net",
+    "ip": ""
+  },
+  {
+    "hostname": "worldometers.info",
+    "ip": ""
+  },
+  {
+    "hostname": "zine-lyke.biz",
+    "ip": ""
+  },
+  {
+    "hostname": "zoho.eu",
+    "ip": ""
+  },
+  {
+    "hostname": "ab.chatgpt.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ios.chat.openai.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ws.chatgpt.com",
+    "ip": ""
+  },
+  {
+    "hostname": "persistent.oaistatic.com",
+    "ip": ""
+  },
+  {
+    "hostname": "codex-cloud-backend.chatgpt.com",
+    "ip": ""
+  },
+  {
+    "hostname": "files.openai.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googledrive.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googledrive.com",
+    "ip": ""
+  },
+  {
+    "hostname": "googlegroups.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.googlegroups.com",
+    "ip": ""
+  },
+  {
+    "hostname": "android.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.android.com",
+    "ip": ""
+  },
+  {
+    "hostname": "youtubeeducation.com",
+    "ip": ""
+  },
+  {
+    "hostname": "*.youtubeeducation.com",
+    "ip": ""
+  },
+  {
+    "hostname": "securegateway.goog",
+    "ip": ""
+  },
+  {
+    "hostname": "*.securegateway.goog",
+    "ip": ""
+  },
+  {
+    "hostname": "google.co.uk",
+    "ip": ""
+  },
+  {
+    "hostname": "*.google.co.uk",
+    "ip": ""
+  },
+  {
+    "hostname": "google.com.au",
+    "ip": ""
+  },
+  {
+    "hostname": "*.google.com.au",
+    "ip": ""
+  },
+  {
+    "hostname": "cros-omahaproxy.appspot.com",
+    "ip": ""
+  },
+  {
+    "hostname": "gweb-gettingstartedguide.appspot.com",
+    "ip": ""
+  },
+  {
+    "hostname": "omahaproxy.appspot.com",
+    "ip": ""
+  },
+  {
+    "hostname": "ingress.cloudproxy.app",
+    "ip": ""
+  }
+]

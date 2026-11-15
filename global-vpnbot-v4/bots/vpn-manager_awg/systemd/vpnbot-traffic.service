@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily VPN user traffic snapshot
+After=network-online.target awg-quick@awg0.service xray.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/vpnbot
+ExecStart=/usr/bin/python3 /root/vpnbot/traffic_collect.py
+User=root
+Group=root
+UMask=0077
