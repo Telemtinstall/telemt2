@@ -2,6 +2,7 @@
 """Finish the selected protocols with the same routing and kernel policy as USA."""
 from pathlib import Path
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -13,6 +14,13 @@ import sys
 from runtime_safety import configure_conntrack, verify_conntrack
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_kernel_checker(path):
+    spec = importlib.util.spec_from_file_location('vpnbot_installed_kernel_check', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def set_flags(text):
@@ -48,9 +56,8 @@ def main():
     if any(name in selected for name,_ in awg):
         checker=Path('/usr/local/sbin/vpnbot-kernel-check.py')
         shutil.copy2(ROOT/'bots/vpn-manager_awg/server/kernel_check.py',checker);checker.chmod(0o755)
-        sys.path.insert(0,str(checker.parent))
-        from kernel_check import required_boot_kernels
-        for kernel in required_boot_kernels():
+        kernel_checker = load_kernel_checker(checker)
+        for kernel in kernel_checker.required_boot_kernels():
             if not (Path('/lib/modules')/kernel/'build/Makefile').exists():
                 subprocess.run(['apt-get','install','-y','linux-headers-'+kernel],check=True)
             if not (Path('/lib/modules')/kernel/'build/Makefile').exists():

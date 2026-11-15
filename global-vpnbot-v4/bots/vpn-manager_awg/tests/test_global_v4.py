@@ -134,6 +134,16 @@ class FinalVerificationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Не подтверждён выход'):verify.verify_egress('1.1.1.1')
         self.assertEqual(call.call_count,2)
         self.assertIn('1.1.1.1',call.call_args.args[0])
+    def test_load_checker_under_actual_installed_filename(self):
+        import tempfile
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            installed=Path(directory)/'vpnbot-kernel-check.py'
+            shutil.copy2(kernel_check.__file__,installed)
+            loaded=network_setup.load_kernel_checker(installed)
+            self.assertEqual(loaded.required_boot_kernels('6.12.117+deb13-amd64',Path(directory)),
+                             ['6.12.117+deb13-amd64'])
+
     def test_old_fallback_without_headers_does_not_block_boot_targets(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
