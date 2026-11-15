@@ -9,7 +9,7 @@
 
 ```bash
 tar -xzf vpnbot-global-v4-2026.11.15.1.tar.gz
-cd global-vpnbot-v4
+cd bots/vpn-manager_awg/v4
 bash install-global.sh --check
 sudo bash install-global.sh
 ```

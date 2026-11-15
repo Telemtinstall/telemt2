@@ -1,6 +1,6 @@
 Global v4, Debian 13 (Trixie), только отдельный чистый сервер.
 1. Распакуйте полный архив vpnbot-global-v4-2026.11.15.1.tar.gz.
-2. cd global-vpnbot-v4
+2. cd bots/vpn-manager_awg/v4
 3. bash install-global.sh --check
 4. sudo bash install-global.sh --onlyprotocol amnezia31
    Либо sudo bash install-global.sh для меню выбора протоколов.
