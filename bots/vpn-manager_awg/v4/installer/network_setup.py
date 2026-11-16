@@ -52,7 +52,7 @@ def main():
     if os.geteuid()!=0 or sys.platform!='linux':raise ValueError('root/Linux required')
     configure_conntrack();verify_conntrack()
     selected=os.environ['V3_SELECTED'].split(',')
-    awg = [('amnezia20','awg0'),('amnezia31','awg3')]
+    awg = [('amnezia31','awg3')]
     if any(name in selected for name,_ in awg):
         checker=Path('/usr/local/sbin/vpnbot-kernel-check.py')
         shutil.copy2(ROOT/'bots/vpn-manager_awg/server/kernel_check.py',checker);checker.chmod(0o755)

@@ -8,7 +8,7 @@ import subprocess
 import sys
 from runtime_safety import verify_conntrack
 
-IDS = {'amnezia20': 'amneziawg', 'amnezia31': 'amneziawg3', 'vless': 'vless', 'hysteria2': 'hysteria2'}
+IDS = {'amnezia31': 'amneziawg3', 'vless': 'vless', 'hysteria2': 'hysteria2'}
 
 
 def expected_enabled(database, server_id):
@@ -70,7 +70,7 @@ def verify(directory, selected):
         if active != expected_enabled(directory / 'access.sqlite3', entry['id']):
             raise ValueError('Состояние службы не совпадает с настройками бота: ' + entry['service'])
     verify_network(directory, registry)
-    for name, iface in [('amnezia20','awg0'),('amnezia31','awg3')]:
+    for name, iface in [('amnezia31','awg3')]:
         if name in selected:
             subprocess.run(['/usr/bin/python3','/usr/local/sbin/vpnbot-kernel-check.py',iface,'--all-boot'],check=True,timeout=120)
     for service in ('vpnbot.service', 'vpnbot-worker.service', 'vpnbot-traffic.timer', 'vpnbot-channel.timer'):

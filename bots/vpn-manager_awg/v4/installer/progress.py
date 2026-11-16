@@ -15,7 +15,7 @@ import threading
 
 SENSITIVE = re.compile(r'(?i)(?:vless://|vpn://|hysteria2://|hy2://|private.?key|preshared.?key|password|token|secret|uuid|BEGIN .*KEY)')
 LABELS = {'dependencies':'Идёт обновление списка пакетов', 'packages':'Идёт установка системных пакетов',
-          'backup':'Идёт сохранение резервной копии', 'amnezia20':'Идёт установка AmneziaWG 2.0',
+          'backup':'Идёт сохранение резервной копии',
           'amnezia31':'Идёт установка AmneziaWG 3.1', 'vless':'Идёт установка VLESS',
           'hysteria2':'Идёт установка Hysteria 2', 'bot':'Идёт установка бота и очереди задач',
           'verification':'Идёт проверка VPN, бота и служб'}

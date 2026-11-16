@@ -208,8 +208,8 @@ class IniTests(unittest.TestCase):
         self.assertEqual(merge_protocols(['hysteria2'],['hysteria2','hysteria2']),['hysteria2'])
     def test_protocol_choice_requires_one_or_two(self):
         from ini_config import load_ini
-        for value in ['','0','1,2','vless']:
-            path=self.write('[protocols]\namnezia20=no\namnezia31=yes\nvless_or_hysteria2='+value)
+        for value in ['','1,2','vless']:
+            path=self.write('[protocols]\namnezia31=yes\nvless_or_hysteria2='+value)
             with self.assertRaisesRegex(ValueError,'1 или 2'):load_ini(path)
     def test_duplicate_and_unknown_options_rejected(self):
         from ini_config import load_ini

@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.env
+*.local.ini
+install.ini
+*.sqlite3*
+*.db
+*.key
+*.pem

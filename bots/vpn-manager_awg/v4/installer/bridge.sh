@@ -9,7 +9,6 @@ LOCAL_SOURCE=1
 bot_resume_command() { printf '%s' "$AWG_RESUME_COMMAND"; }
 case "${1:-}" in
   backup) backup_endpoint_components; backup_existing_bot ;;
-  amnezia20) export AWG_PORT="${AWG20_PORT:-1234}"; ensure_awg ;;
   vless)
     export HTTPS_PORT="${VLESS_PORT:-443}"
     if [[ "$VLESS_MODE" == mask ]]; then
@@ -29,7 +28,7 @@ case "${1:-}" in
     python3 - "$SCRIPT_DIR/servers.json" "$INSTALL_DIR/servers.json" "$V3_SELECTED" <<'PY'
 import json,sys
 from pathlib import Path
-names={'amnezia20':'amneziawg','amnezia31':'amneziawg3','vless':'vless','hysteria2':'hysteria2'}
+names={'amnezia31':'amneziawg3','vless':'vless','hysteria2':'hysteria2'}
 selected={names[x] for x in sys.argv[3].split(',')}
 p=Path(sys.argv[2]); servers=json.loads(Path(sys.argv[1]).read_text())
 servers.append({'id':'hysteria2','title':'Hysteria 2','protocol':'hysteria2','transport':'local','command':'/usr/local/sbin/hysteria2ctl','service':'hysteria2.service'})

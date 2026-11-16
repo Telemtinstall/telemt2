@@ -24,7 +24,7 @@ CURRENT_RESUME = None
 OPTIONS = {'endpoint-domain': 'VPN_ENDPOINT_DOMAIN', 'bot-token': 'BOT_TOKEN', 'admin-bot': 'ADMIN_BOT', 'public-ip': 'VPN_PUBLIC_HOST',
            'initial-client': 'VPN_INITIAL_CLIENT', 'channel-mbit': 'SERVER_CHANNEL_MBIT',
            'vless-domain': 'VLESS_DOMAIN', 'vless-mode': 'VLESS_MODE', 'reality-target': 'REALITY_TARGET',
-           'reality-server-name': 'REALITY_SERVER_NAME', 'awg20-port': 'AWG20_PORT', 'awg31-port': 'AWG31_PORT',
+           'reality-server-name': 'REALITY_SERVER_NAME', 'awg31-port': 'AWG31_PORT',
            'vless-port': 'VLESS_PORT', 'hysteria-port': 'HY_PORT', 'hysteria-domain': 'HY_DOMAIN',
            'hysteria-obfs': 'HY_OBFS', 'hysteria-obfs-password': 'HY_OBFS_PASSWORD',
            'hysteria-masquerade-mode': 'HY_MASQUERADE_MODE', 'hysteria-masquerade-url': 'HY_MASQUERADE', 'hysteria-version': 'HY_VERSION',
@@ -96,6 +96,8 @@ def install(args, supplied, protocols):
     with open('/run/lock/vpnbot-global-v4.lock', 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         state = InstallState(args.state_file)
+        if state.data.get('protocols'):
+            selected_valid(state.data['protocols'])
         existing = ['/etc/amnezia/amneziawg/awgctl.env','/etc/amnezia/amneziawg/awg3ctl.env',
                     '/usr/local/etc/xray/config.json','/etc/hysteria/settings.json']
         if not state.started_vpn() and any(Path(path).exists() for path in existing):

@@ -630,27 +630,7 @@ bot_resume_command() {
 }
 
 ensure_awg() {
-  if valid_ctl "$AWGCTL_PATH"; then
-    if ! cmp -s "$AWGCTL_PATH" "$REPO_DIR/vpn/amneziawg/awgctl.sh"; then
-      update_controller "awgctl" "$REPO_DIR/vpn/amneziawg/awgctl.sh" \
-        "$AWGCTL_PATH" "/usr/local/bin/awgctl"
-    else
-      echo "AmneziaWG уже готов: $AWGCTL_PATH"
-    fi
-    return 0
-  fi
-  [[ ! -e /etc/amnezia/amneziawg/awg0.conf && ! -e /etc/amnezia/amneziawg/awgctl.env ]] || incomplete_protocol_install /root/.install_amneziawg.state /root/.install_amneziawg.config || die "AWG0 уже настроен, но контроллер не прошёл проверку. Автоматическая переустановка запрещена: сначала восстановите контроллер."
-  [[ "$SKIP_AWG" != "1" ]] || die "--skip-awg указан, но рабочий awgctl не найден"
-  step "Установка AmneziaWG с DNS-профилем"
-  chmod +x "$REPO_DIR/vpn/amneziawg/install_amneziawg.sh" "$REPO_DIR/vpn/amneziawg/awgctl.sh"
-  (cd "$REPO_DIR/vpn/amneziawg" && \
-    ASSUME_YES=1 \
-    AWG_OBFS_PROFILE=dns \
-    PUBLIC_ENDPOINT="$VPN_PUBLIC_HOST" \
-    CLIENT_NAME="$VPN_INITIAL_CLIENT" \
-    AWG_RESUME_COMMAND="$(bot_resume_command)" \
-    ./install_amneziawg.sh)
-  valid_ctl "$AWGCTL_PATH" || die "awgctl не прошёл JSON-проверку"
+  die "AmneziaWG 2.0 удалена из Global v4"
 }
 
 ensure_awg3() {
@@ -1000,6 +980,7 @@ verify_installation() {
 }
 
 main() {
+  die "Для Global v4 используйте корневой install-v4.sh или install-global.sh"
   parse_args "$@"
   LOCAL_SOURCE=1
   REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"

@@ -7,7 +7,6 @@ import stat
 FIELDS={
  'server':{'public_ip':'VPN_PUBLIC_HOST','initial_client':'VPN_INITIAL_CLIENT','channel_mbit':'SERVER_CHANNEL_MBIT','endpoint_domain':'VPN_ENDPOINT_DOMAIN'},
  'telegram':{'bot_token':'BOT_TOKEN','admin_ids':'ADMIN_BOT'},
- 'amnezia20':{'port':'AWG20_PORT'},
  'amnezia31':{'port':'AWG31_PORT'},
  'vless':{'port':'VLESS_PORT','mode':'VLESS_MODE','domain':'VLESS_DOMAIN','reality_target':'REALITY_TARGET','reality_sni':'REALITY_SERVER_NAME'},
  'hysteria2':{'port':'HY_PORT','domain':'HY_DOMAIN','obfs':'HY_OBFS','obfs_password':'HY_OBFS_PASSWORD',
@@ -25,19 +24,19 @@ def load_ini(path):
     if parser.defaults():raise ValueError('Секция DEFAULT запрещена: указывайте ответы в соответствующих секциях')
     answers={};protocols=None
     for section in parser.sections():
-        allowed={'amnezia20','amnezia31','vless_or_hysteria2'} if section=='protocols' else FIELDS.get(section)
+        allowed={'amnezia31','vless_or_hysteria2'} if section=='protocols' else FIELDS.get(section)
         if allowed is None:raise ValueError('Неизвестная секция INI: '+section)
         for key in parser[section]:
             if key not in allowed:raise ValueError('Неизвестная переменная INI: '+section+'.'+key)
         if section=='protocols':
             protocols=[]
-            for name in ('amnezia20','amnezia31'):
+            for name in ('amnezia31',):
                 value=parser[section].get(name,'').strip().lower()
                 if value not in {'yes','no'}:raise ValueError('protocols.'+name+': требуется yes или no')
                 if value=='yes':protocols.append(name)
             alternative=parser[section].get('vless_or_hysteria2','').strip()
-            if alternative not in {'1','2'}:raise ValueError('VLESS / Hysteria 2? Укажите protocols.vless_or_hysteria2 = 1 или 2')
-            protocols.append({'1':'vless','2':'hysteria2'}[alternative])
+            if alternative not in {'0','1','2'}:raise ValueError('VLESS / Hysteria 2? Укажите protocols.vless_or_hysteria2 = 0, 1 или 2')
+            if alternative!='0':protocols.append({'1':'vless','2':'hysteria2'}[alternative])
         else:
             for key,env in FIELDS[section].items():
                 value=parser[section].get(key,'').strip()
@@ -57,7 +56,9 @@ def merge_protocols(configured,cli):
 
 
 def selected_valid(values):
-    allowed = {'amnezia20', 'amnezia31', 'vless', 'hysteria2'}
+    allowed = {'amnezia31', 'vless', 'hysteria2'}
+    if 'amnezia20' in values:
+        raise ValueError('AmneziaWG 2.0 удалена из Global v4. Старый план не изменён; продолжите его прежним установщиком')
     if not values:
         raise ValueError('Нужно выбрать хотя бы один VPN')
     if set(values) - allowed:
@@ -71,7 +72,7 @@ def build_plan(answers, protocols):
     if not protocols:
         return []
     plan = []
-    ports = {'amnezia20': ('AWG20_PORT', 1234, 'udp'), 'amnezia31': ('AWG31_PORT', 1235, 'udp'),
+    ports = {'amnezia31': ('AWG31_PORT', 1235, 'udp'),
              'vless': ('VLESS_PORT', 443, 'tcp'), 'hysteria2': ('HY_PORT', 443, 'udp')}
     for name in selected_valid(protocols):
         key, default, transport = ports[name]

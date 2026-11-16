@@ -4,8 +4,8 @@ import secrets
 from masquerade import normalize_url
 from ini_config import domain_name, selected_valid, validate_answers, validate_common
 
-PROTOCOLS = ('amnezia20', 'amnezia31', 'vless', 'hysteria2')
-LABELS = dict(zip(PROTOCOLS, ('AmneziaWG 2.0', 'AmneziaWG 3.1', 'VLESS', 'Hysteria 2')))
+PROTOCOLS = ('amnezia31', 'vless', 'hysteria2')
+LABELS = dict(zip(PROTOCOLS, ('AmneziaWG 3.1', 'VLESS', 'Hysteria 2')))
 
 
 class Questionnaire:
@@ -23,7 +23,7 @@ class Questionnaire:
             raise ValueError('Введите реальный токен BotFather')
         if key in {'HY_DOMAIN', 'VLESS_DOMAIN'} or (key=='VPN_ENDPOINT_DOMAIN' and value!='-'):
             domain_name(value)
-        if key in {'AWG20_PORT', 'AWG31_PORT', 'VLESS_PORT', 'HY_PORT'}:
+        if key in {'AWG31_PORT', 'VLESS_PORT', 'HY_PORT'}:
             if not value.isdigit() or not 1 <= int(value) <= 65535:
                 raise ValueError('Порт должен быть целым числом от 1 до 65535')
         if key in {'HY_MIN_PACKET', 'HY_MAX_PACKET'}:
@@ -88,9 +88,9 @@ class Questionnaire:
     def select_protocols(self):
         if self.state.data.get('protocols'):
             return selected_valid(self.state.data['protocols'])
-        all_awg = self.yes_no('all', 'Установить все совместимые VPN (оба AWG и один из VLESS/Hysteria 2)')
+        all_awg = self.yes_no('all', 'Установить все совместимые VPN (AmneziaWG 3.1 и один из VLESS/Hysteria 2)')
         chosen = []
-        for name in PROTOCOLS[:2]:
+        for name in PROTOCOLS[:1]:
             if all_awg or self.yes_no(name, 'Установить ' + LABELS[name]):
                 chosen.append(name)
         if not self.silent and 'alternative' not in self.state.data['selection']:
@@ -113,7 +113,7 @@ class Questionnaire:
         self.ask('ADMIN_BOT', 'Telegram ID администраторов через запятую')
         self.ask('BOT_TOKEN', 'Токен Telegram-бота', secret=True)
         self.ask('SERVER_CHANNEL_MBIT', 'Скорость канала, Мбит/с, или auto (Speedtest)', 'auto')
-        for name, key, default in [('amnezia20', 'AWG20_PORT', '1234'), ('amnezia31', 'AWG31_PORT', '1235'),
+        for name, key, default in [('amnezia31', 'AWG31_PORT', '1235'),
                                    ('vless', 'VLESS_PORT', '443'), ('hysteria2', 'HY_PORT', '443')]:
             if name in chosen:
                 transport = 'TCP' if name == 'vless' else 'UDP'

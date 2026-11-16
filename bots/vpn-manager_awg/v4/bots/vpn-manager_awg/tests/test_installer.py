@@ -137,10 +137,10 @@ headers_kernel_from_apt_simulation linux-headers-amd64
 
         registry = json.loads((ROOT / "servers.json").read_text(encoding="utf-8"))
         self.assertEqual(
-            ["AmneziaWG 2.0", "AmneziaWG 3.1", "VLESS"],
+            ["AmneziaWG 3.1", "VLESS"],
             [item["title"] for item in registry],
         )
-        self.assertEqual("/usr/local/sbin/awg3ctl", registry[1]["command"])
+        self.assertEqual("/usr/local/sbin/awg3ctl", registry[0]["command"])
 
     def test_awg3_profile_has_required_generation_fields(self):
         script = f'''\
@@ -181,20 +181,10 @@ printf '%s|%s|%s|%s|%s|%s\n' \
         self.assertIn("Telegram token check failed: {type(exc).__name__}", source)
         self.assertIn("Telegram webhook cleanup failed: {type(exc).__name__}", source)
 
-    def test_dry_run_is_non_mutating_and_complete(self):
-        result = subprocess.run(
-            ["bash", str(INSTALLER), "--dry-run"],
-            cwd=ROOT,
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-        self.assertIn("DRY RUN", result.stdout)
-        self.assertIn("AmneziaWG", result.stdout)
-        self.assertIn("VLESS", result.stdout)
-        self.assertIn("SQLite traffic", result.stdout)
-        self.assertIn("SQLite access", result.stdout)
-        self.assertIn("максимум 7 дней", result.stdout)
+    def test_legacy_entry_cannot_install_removed_protocol(self):
+        result = subprocess.run(["bash", str(INSTALLER), "--dry-run"], text=True, capture_output=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn("install-v4.sh",result.stderr)
 
     def test_installer_contains_current_components(self):
         required = [

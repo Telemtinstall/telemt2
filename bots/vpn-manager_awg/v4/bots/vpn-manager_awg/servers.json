@@ -1,13 +1,5 @@
 [
   {
-    "id": "amneziawg",
-    "title": "AmneziaWG 2.0",
-    "protocol": "amneziawg",
-    "transport": "local",
-    "command": "/usr/local/sbin/awgctl",
-    "service": "awg-quick@awg0.service"
-  },
-  {
     "id": "amneziawg3",
     "title": "AmneziaWG 3.1",
     "protocol": "amneziawg",

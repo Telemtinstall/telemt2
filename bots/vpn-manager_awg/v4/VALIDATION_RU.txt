@@ -1,9 +1,10 @@
-Global v4 — локальная проверка сборки, 15.11.2026.
-База: Global v3. Эталон USA прочитан по SSH без изменений.
-285 тест пройдён, 1 тест реальной PNG генерации пропущен: локально нет qrencode/Pillow.
-Полный прогон с исправлением проверки резервных ядер: 285 тест, OK, 1 пропущен .
-Проверки: kernel/header/meta, conntrackpressure, sourceboundprobes, pinnedDNS,
-TLS verification, allingress/fixedegress, HYTLSdomainpreservation, rollback,
-resumableinstallation, packageintegrity, Telegramretries, profilepayloadroundtrip.
-Полная установка на чистый Linux и проверка на телефоне пока не выполнены.
-USA/Personal/Globalv2v3 не обновлялись. Сборка в GitHub не публиковалась.
+Global v4 — 16.11.2026, global-v4-2026.11.16.1.
+AWG 2.0 убрана из анкеты, CLI, INI, модуля установки и реестра бота.
+Старый план с AWG 2.0 отклоняется без изменения состава и без системных команд.
+Оставлены AWG 3.1 и по выбору VLESS либо Hysteria 2; INI поддерживает 0.
+289 тестов, OK, 1 пропущен: локально нет qrencode/Pillow для реальной PNG-проверки.
+Проверены: продолжение установки, блокировка старого плана, выбранные модули,
+форматы профилей, ядро/headers, сеть и rollback, отсутствие частных API.
+Изменений работающих VPN, Personal, Global v2/v3 нет.
+Полная установка этой сборки на чистый Linux и проверка подключения телефоном
+в этой задаче не выполнялись. Генераторы VPN-профилей не изменены.
